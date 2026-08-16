@@ -1,0 +1,3 @@
+[submodule "mc-edge-runtime"]
+	path = mc-edge-runtime
+	url = git@github.com:mmcgill/mc-edge-runtime.git
