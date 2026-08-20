@@ -1,0 +1,31 @@
+{
+  "name": "@cobbleware/hello-world",
+  "version": "0.1.0",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "imports": {
+    "@cobbleware/core": "../cobbleware/src/mod.ts",
+    "flatbuffers": "npm:flatbuffers@25.9.23"
+  },
+  "nodeModulesDir": "auto",
+  "tasks": {
+    "test": "deno test --no-prompt",
+    "check": "deno check src/index.ts tests/**/*.ts",
+    "fmt": "deno fmt",
+    "bundle": "deno run --allow-env --allow-run scripts/bundle.ts",
+    "package": "deno task bundle",
+    "serve": "deno task package && deno run --allow-read=hello-world.eszip --allow-net=127.0.0.1:8000 scripts/serve.ts"
+  },
+  "fmt": {
+    "useTabs": false,
+    "lineWidth": 100,
+    "indentWidth": 2,
+    "singleQuote": true,
+    "proseWrap": "preserve"
+  },
+  "compilerOptions": {
+    "strict": true,
+    "noImplicitOverride": true
+  }
+}
