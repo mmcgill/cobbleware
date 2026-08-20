@@ -1,0 +1,15 @@
+include "events.fbs";
+
+namespace Cobbleware.Internal;
+
+table EventSeq {
+    puter_id: Common.UUID (required);
+    initial_state:[ubyte];
+    events:[Events.Event];
+}
+
+table EffectSeq {
+    puter_id: Common.UUID (required);
+    final_state:[ubyte];
+    effects:[Effects.Effect];
+}

@@ -1,0 +1,20 @@
+include "common.fbs";
+
+namespace Cobbleware.Events;
+
+// Events
+
+/// The Cobbleputer has just powered on, either for the first time or after a reset.
+table PuterReset {
+    tick:ulong;
+}
+
+/// The Cobbleputer has just been placed in a new location.
+table PuterPlaced {
+    level_key:Common.Identifier (required);
+    pos:Common.Vec3 (required);
+}
+
+union Event {
+    PuterPlaced
+}

@@ -1,0 +1,9 @@
+namespace Cobbleware.Effects;
+
+table SendChat {
+    msg:string (required);
+}
+
+union Effect {
+    SendChat
+}
