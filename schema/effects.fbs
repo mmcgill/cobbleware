@@ -4,6 +4,11 @@ table SendChat {
     msg:string (required);
 }
 
+table EmitBeep {
+    millis:uint16;
+}
+
 union Effect {
-    SendChat
+    SendChat,
+    EmitBeep
 }

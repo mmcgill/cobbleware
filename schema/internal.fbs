@@ -4,12 +4,12 @@ namespace Cobbleware.Internal;
 
 table EventSeq {
     puter_id: Common.UUID (required);
-    initial_state:[ubyte];
-    events:[Events.Event];
+    initial_state:[ubyte] (required);
+    events:[Events.Event] (required);
 }
 
 table EffectSeq {
     puter_id: Common.UUID (required);
-    final_state:[ubyte];
-    effects:[Effects.Effect];
+    final_state:[ubyte] (required);
+    effects:[Effects.Effect] (required);
 }

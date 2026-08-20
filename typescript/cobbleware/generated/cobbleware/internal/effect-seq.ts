@@ -6,6 +6,7 @@ import * as flatbuffers from 'flatbuffers';
 
 import { UUID, UUIDT } from '../../cobbleware/common/uuid.ts';
 import { Effect, unionToEffect, unionListToEffect } from '../../cobbleware/effects/effect.ts';
+import { EmitBeep, EmitBeepT } from '../../cobbleware/effects/emit-beep.ts';
 import { SendChat, SendChatT } from '../../cobbleware/effects/send-chat.ts';
 
 
@@ -131,6 +132,9 @@ static startEffectsVector(builder:flatbuffers.Builder, numElems:number) {
 static endEffectSeq(builder:flatbuffers.Builder):flatbuffers.Offset {
   const offset = builder.endObject();
   builder.requiredField(offset, 4) // puter_id
+  builder.requiredField(offset, 6) // final_state
+  builder.requiredField(offset, 8) // effects_type
+  builder.requiredField(offset, 10) // effects
   return offset;
 }
 
@@ -149,7 +153,7 @@ unpack(): EffectSeqT {
     this.bb!.createScalarList<number>(this.finalState.bind(this), this.finalStateLength()),
     this.bb!.createScalarList<Effect>(this.effectsType.bind(this), this.effectsTypeLength()),
     (() => {
-    const ret: (SendChatT)[] = [];
+    const ret: (EmitBeepT|SendChatT)[] = [];
     for(let targetEnumIndex = 0; targetEnumIndex < this.effectsTypeLength(); ++targetEnumIndex) {
       const targetEnum = this.effectsType(targetEnumIndex);
       if(targetEnum === null || Effect[targetEnum!] === 'NONE') { continue; }
@@ -169,7 +173,7 @@ unpackTo(_o: EffectSeqT): void {
   _o.finalState = this.bb!.createScalarList<number>(this.finalState.bind(this), this.finalStateLength());
   _o.effectsType = this.bb!.createScalarList<Effect>(this.effectsType.bind(this), this.effectsTypeLength());
   _o.effects = (() => {
-    const ret: (SendChatT)[] = [];
+    const ret: (EmitBeepT|SendChatT)[] = [];
     for(let targetEnumIndex = 0; targetEnumIndex < this.effectsTypeLength(); ++targetEnumIndex) {
       const targetEnum = this.effectsType(targetEnumIndex);
       if(targetEnum === null || Effect[targetEnum!] === 'NONE') { continue; }
@@ -188,7 +192,7 @@ constructor(
   public puterId: UUIDT|null = null,
   public finalState: (number)[] = [],
   public effectsType: (Effect)[] = [],
-  public effects: (SendChatT)[] = []
+  public effects: (EmitBeepT|SendChatT)[] = []
 ){}
 
 

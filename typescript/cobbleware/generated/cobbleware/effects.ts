@@ -3,4 +3,5 @@
 /* eslint-disable @typescript-eslint/no-unused-vars, @typescript-eslint/no-explicit-any, @typescript-eslint/no-non-null-assertion */
 
 export { Effect } from './effects/effect.ts';
+export { EmitBeep, EmitBeepT } from './effects/emit-beep.ts';
 export { SendChat, SendChatT } from './effects/send-chat.ts';

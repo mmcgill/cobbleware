@@ -131,6 +131,9 @@ static startEventsVector(builder:flatbuffers.Builder, numElems:number) {
 static endEventSeq(builder:flatbuffers.Builder):flatbuffers.Offset {
   const offset = builder.endObject();
   builder.requiredField(offset, 4) // puter_id
+  builder.requiredField(offset, 6) // initial_state
+  builder.requiredField(offset, 8) // events_type
+  builder.requiredField(offset, 10) // events
   return offset;
 }
 
