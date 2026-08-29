@@ -5,30 +5,21 @@ It runs as a privilged V8 isolate in the Edge Runtime. Cobbleputer programs are 
 in their own V8 isolates, with CPU/memory limits and other sandbox controls managed by
 the Main Worker.
 
-The Main Worker presents an authenticated HTTP API to the Mod. API calls are authenticated
+The Main Worker presents an authenticated HTTP API to the Mod. Mod API calls are authenticated
 via a shared secret supplied to the Main Worker at startup via the `COBBLEWARE_API_KEY` env var
-and expected to be supplied as a bearer token to all API calls. A request to the API that
-does not have the expected authorization header receives a 401 response.
+and expected to be supplied as a bearer token. A Mod API request that does not have the expected
+authorization header receives a 401 response.
+
+Player API calls use an HttpOnly `cobbleware_session` cookie created by exchanging a short-lived
+Minecraft auth code. Player sessions last 30 days, are persisted below `COBBLEWARE_GAME_DIR`, and
+are not marked `Secure` because the API supports plaintext HTTP.
 
 The Main Worker stores user programs in the Minecraft game directory. It expects
 `COBBLEWARE_GAME_DIR` to be set to the Minecraft game directory (e.g. obtained by
 `FabricLoader.getGameDir()`). If not supplied at startup it falls back on the CWD,
 but this is primarily to facilitate local testing.
 
-In the description of the API endpoints below, see [internal.fbs](../../schema/internal.fbs) for request/response FlatBuffer schemas.
-
-## Programs
-
-
-
-The `POST /programs` endpoint is used by the Mod to trigger the download and validation
-of a Cobbleware program.
-
-The body of the request is a FlatBuffers `DownloadProgramReq` buffer.
-
-The first time a request is received for a given URL, the worker attempts to GET
-the file at the given URL. The 
-
+See [Main Worker API](../../docs/api.md) for API documentation.
 
 ## Future Work / TODO
 

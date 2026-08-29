@@ -1,11 +1,14 @@
 {
   "name": "@cobbleware/main-worker",
   "version": "0.1.0",
+  "imports": {
+    "zod": "npm:zod@4"
+  },
   "exports": {
     ".": "./src/index.ts"
   },
   "tasks": {
-    "test": "deno test --no-prompt",
+    "test": "deno test --no-prompt --allow-env --allow-read --allow-write",
     "check": "deno check src/index.ts tests/**/*.ts",
     "fmt": "deno fmt",
     "bundle": "deno run --allow-env --allow-run scripts/bundle.ts",

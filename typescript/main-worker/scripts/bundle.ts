@@ -9,6 +9,8 @@ const command = new Deno.Command(runtimeBinary, {
     'bundle',
     '--entrypoint',
     'src/index.ts',
+    '--static',
+    'static/*.html',
     '--output',
     'main-worker.eszip',
   ],

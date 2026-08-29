@@ -1,7 +1,7 @@
 import { handleRequest } from '../src/index.ts';
 
 Deno.test('/hello returns the static JSON response', async () => {
-  const response = handleRequest(new Request('http://localhost/hello'));
+  const response = await handleRequest(new Request('http://localhost/hello'));
 
   if (response.status !== 200) {
     throw new Error(`expected status 200, got ${response.status}`);
@@ -17,10 +17,10 @@ Deno.test('/hello returns the static JSON response', async () => {
   }
 });
 
-Deno.test('unknown paths return 404', () => {
-  const response = handleRequest(new Request('http://localhost/unknown'));
+Deno.test('unknown API paths return 401 without a Player session', async () => {
+  const response = await handleRequest(new Request('http://localhost/playerapi/v1/unknown'));
 
-  if (response.status !== 404) {
-    throw new Error(`expected status 404, got ${response.status}`);
+  if (response.status !== 401) {
+    throw new Error(`expected status 401, got ${response.status}`);
   }
 });

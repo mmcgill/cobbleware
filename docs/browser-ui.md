@@ -20,7 +20,7 @@ available to the player.
 
 The `/auth.html` page serves a page that:
 
-* randomly generates an 8-digit base-32 auth code
+* randomly generates an 8-character uppercase alphanumeric auth code
 * presents the player with a slash command embedding that code to be run on the Minecraft server
 * polls the `/playerapi/v1/authenticate` endpoint with the auth code
 * on success, redirects to `/index.html`

@@ -30,23 +30,26 @@ configured to perform TLS termination. Some popular Minecraft hosting providers 
 
 ## Authentication and Authorization
 
-Mod API endpoints are authenticated via a shared secret passed to the runtime from the Mod as an env var, at startup time.
-The Mod authenticates by passing the shared secret as a Bearer token.
+Mod API endpoints are authenticated via the shared secret passed to the Runtime from the Mod as the
+`COBBLEWARE_API_KEY` environment variable at startup. The Mod supplies this value as an
+`Authorization: Bearer <key>` header.
 
-Player API endpoints (and requests for HTML content) are authenticated via session cookie.
-When the session cookie is not present in a request, the
-request is denied with a 401 and a WWW-Authenticate header redirecting to an `/authenticate` URL. This
-endpoint displays a slash comamnd with an embedded short-lived one-time-use code that can be run by the player on the
-server to link their Minecraft UUID to a session cookie.
+Player API endpoints and protected HTML content are authenticated with an opaque HttpOnly
+`cobbleware_session` cookie. The cookie is intentionally not marked `Secure`, because the API supports
+plaintext HTTP. Sessions last 30 days from creation, are persisted across Runtime restarts, and are not
+extended by ordinary requests.
+
+The canonical authentication page is `/auth.html`. A request for protected HTML without a valid session
+receives `302 Location: /auth.html`. A request for a protected API endpoint without a valid session
+receives `401` with a `WWW-Authenticate` header pointing to `/auth.html`.
 
 ## Player API
 
-The Player API is intended for direct use by Players, typically via a web browser
-acting as the user agent.
+The Player API is intended for direct use by Players, typically via a web browser acting as the user agent.
 
 ### Authenticate
 
-The `POST /playerapi/v1/authenticate` endpoint accepts a JSON body like:
+The unauthenticated `POST /playerapi/v1/authenticate` endpoint accepts:
 
 ```json
 {
@@ -54,23 +57,19 @@ The `POST /playerapi/v1/authenticate` endpoint accepts a JSON body like:
 }
 ```
 
-When the server has previously received a successful `/modapi/v1/authentication` request
-for the given code, the server responds with a 201 with no response body
-and a `set-cookie` header with a session cookie tied to the identity of the player
-that successfully authenticated via the Mod. The server "forgets" the code after the
-first successful `/playerapi/v1/authenticate` response for that code. Subsequent
-requests with the same code behave as if the code has never been used to authenticate.
+When the Runtime has previously received a successful `/modapi/v1/authentication` request for the code,
+it responds with `201`, no response body, and a `Set-Cookie` header. The cookie has `Path=/`, `HttpOnly`,
+`SameSite=Lax`, and `Max-Age=2592000`.
 
-When the server has not received a successful `/modapi/v1/authentication` request for the `"code"`,
-the server responds with a `400` and a JSON error body.
-
-The call succeeds when the server has previously received a `/modapi/v1/authentication` 
+The Runtime forgets the pending code after the first successful exchange. Pending codes expire after five
+minutes and are held in memory only; they do not survive a Runtime restart. Malformed, unknown, expired,
+or already-consumed codes receive `400` with a JSON body containing an `"error"` property.
 
 ## Mod API
 
 ### Player Authentication
 
-The `POST /modapi/v1/authentication` endpoint accepts a JSON body like:
+The authenticated `POST /modapi/v1/authentication` endpoint accepts:
 
 ```json
 {
@@ -81,6 +80,10 @@ The `POST /modapi/v1/authentication` endpoint accepts a JSON body like:
 ```
 
 The Mod calls this endpoint when the player executes the `/cobbleware auth XAU1-98B1` slash command.
-In the case where the code has not already been used by a different player, the endpoint returns 201 on success.
-The endpoint returns 400 with a JSON response body containing an `"error"` property in the case where the code
-has already been used with another playerUUID.
+The code may be supplied with or without its presentation hyphen and is normalized case-insensitively.
+The documented code format is eight uppercase alphanumeric characters, displayed as `XXXX-XXXX`.
+
+If the code is new, or is retried for the same player UUID, the endpoint returns `201` with no body.
+If the code is already pending for another player UUID, it returns `400` with a JSON response body
+containing an `"error"` property. The Runtime trusts `playerProfileName` as supplied by the Mod and does
+not validate its contents.
