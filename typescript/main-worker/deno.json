@@ -1,0 +1,25 @@
+{
+  "name": "@cobbleware/main-worker",
+  "version": "0.1.0",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "tasks": {
+    "test": "deno test --no-prompt",
+    "check": "deno check src/index.ts tests/**/*.ts",
+    "fmt": "deno fmt",
+    "bundle": "deno run --allow-env --allow-run scripts/bundle.ts",
+    "start": "deno task bundle && deno run --allow-env --allow-run scripts/start.ts"
+  },
+  "fmt": {
+    "useTabs": false,
+    "lineWidth": 100,
+    "indentWidth": 2,
+    "singleQuote": true,
+    "proseWrap": "preserve"
+  },
+  "compilerOptions": {
+    "strict": true,
+    "noImplicitOverride": true
+  }
+}
