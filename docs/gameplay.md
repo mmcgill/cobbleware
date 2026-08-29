@@ -2,93 +2,86 @@
 
 The mod introduces:
 
-* A Mainframe block for storing and executing functions.
-* A Microcontroller item that can be attached to supported items/blocks to make them wirelessly controllable from a Mainframe.
-* A Debug tool that can be used to view Mainframe outputs.
+* Cobbleware _programs_, immutable ESZip-bundled JS/TS programs uploaded and owned by Players.
+* A Cobbleputer ('puter) block for executing programs.
+* A Wireless Redstone block that acts as both a sensor and a switchable Redstone signal source.
+* A Debug tool that can be used to view 'puter outputs.
 
-## Mainframes
+## Programs
 
-A Mainframe block stores and executes functions written in Typescript. Mainframe functions are event handlers.
-They are invoked by the Mainframe as a result of events that happen in the Minecraft world, and they can return
+Programs are ESZip-bundled JS/TS programs uploaded by players externally via a browser-based UI.
+Programs are not first-class from a gameplay standpoint. They have no explicit
+in-game representation as blocks, items or entities.
+
+## Cobbleputers
+
+A Cobbleputer block executes Programs. Cobbleputer programs are event handlers.
+They are invoked by the 'puter as a result of Events that happen in the Minecraft world, and they can return
 Effects to be processed by the Mainframe as output.
 
-Each Mainframe block has a unique, persistent identity. When the block is broken, the resulting item
-retains all Mainframe state. Distinct Mainframe items do not stack. Each Mainframe has a name.
+Each 'puter block has a unique, persistent identity. When the block is broken, the resulting item
+retains all 'puter state. Distinct 'puter items do not stack. Each 'puter has a name.
 Its name is initially auto-generated, but may be changed via Nametag in the usual way.
 
-A player programs a Mainframe by:
-* using the Mainframe block to open a UI element with a URL text input
-* entering a URL and pressing "Download"
+A player loads a program on a placed `puter block by right-clicking and selecting one of their
+programs in the in-game UI. Loading a new program causes it to begin executing immediately.
+A 'puter can also be _reset_ in its UI, without reloading the current program.
 
-The mod then attempts to download the current contents of the URL and typecheck them.
-If the response body is larger than a server-configured maximum, an error is sent to
-the player in chat
-and the Mainframe state is unaffected. If the contents do not type check, the first
-type error is sent to the player in chat and the Mainframe state is unaffected.
-If the contents typecheck, the Mainframe state is reset and the newly installed
-code begins to respond to events.
+The Mod does not itself provide any notion of player ownership
+of 'puter blocks. Once a 'puter is placed, any player can interact with it.
+The 'puter _state_, however, remains associated with the player that loaded the
+associated program. Loading a new program creates a new execution state that is
+associated with the player doing the loading, even if the previous execution
+state was bound to a different player. Resetting a 'puter _preserves_ execution ownership.
 
 ### Execution Model
 
-A Mainframe is single-threaded, and executes events sequentially in the order they are produced.
+A Cobbleputer is single-threaded, and executes events sequentially in the order they are produced.
 
-A Mainframe is either `UNINITIALIZED`, `RUNNING`, `STOPPED` or `CRASHED`. A newly placed Mainframe
-is in the `UNINITIALIZED` state. A User can load code as described above for a Mainframe in any
-state. On successful load, the Mainframe's state set to `RUNNING`. The user may stop a running
-Mainframe via the use menu. If a function invocation throws an exception, the Mainframe enters
-the `CRASHED` state. The user can see the error in the use menu, and restart the Mainframe.
+A 'puter is either `UNINITIALIZED`, `RUNNING`, `STOPPED` or `CRASHED`. A newly placed 'puter
+is in the `UNINITIALIZED` state. A User can load a program as described above for a 'puter in any
+state. On successful load, the 'puter state set to `RUNNING`. The user may stop a running
+'puter via the use menu. If an unhandled exception bubbles up out of a Program's event handler function,
+the 'puter enters the `CRASHED` state. The user can see the error in the use menu, and restart the 'puter.
 
-A Mainframe has a maximum memory limit whose value is configurable by the server admin.
-If a function invocation exceeds the memory limit the function fails with a runtime error.
-
-Each Mainframe has a JSON-serializable state value that is provided as input to each event handler, and can
+Each 'puter has a JSON-serializable state value that is provided as input to each event handler, and can
 be arbitrarily modified by that event handler. The state value has a maximum size in bytes
 given as server configuration. If an event handler returns a state value larger than this size,
 the function fails with a runtime value and the returned state value is discarded.
 
-A Mainframe has a user-controllable setting (via the Use menu) for whether or not the Mainframe
-crashes when a runtime error is encountered. When true, any runtime error immediately transitions
-the Mainframe into the `CRASHED` state. No further functions are executed until the user restarts
-the Mainframe.
-
-Each Mainframe has an associated event queue whose length is determined by server configuration.
-If events are produced faster than the Mainframe can process them, the queue will eventually fill.
+Each 'puter has an associated event queue whose length is determined by server configuration.
+If events are produced faster than the 'puter can process them, the queue will eventually fill.
 When the event queue is full, new events are dropped.
 
 ### State Durability
 
-Once an event makes it into the Mainframe's queue, it is durable across Server restarts.
-Mainframe Queue state is persisted as part of the game state. A queued event will
+Once an event makes it into the puter's queue, it is durable across Server restarts.
+'puter Queue state is persisted as part of the game state. A queued event will
 be processed. If a function throws a runtime error while processing an event, that
 event is still considered processed. For every processed event that successfully produces
-a result, the effects on both Mainframe state and the game world itself are durable and
+a result, the effects on both 'puter state and the game world itself are durable and
 will be processed. An effect on the game world is considered processed if the Mod
 attempts to apply the effect; some effects may be not be _applicable_ by the time
-they are processed.
+they are processed. When a 'puter is reset or a new Program is loaded, its event queue is cleared.
 
-## Microcontrollers
+## Wireless Redstone
 
-Microcontrollers are items that act as wireless I/O devices for a Mainframe. A Microcontroller
-is initially unpaired. Unpaired Microcontrollers are unusable and inert.
-A Microcontroller may be paired to a specific Mainframe.
-Unpaired Microcontrollers stack with one another. Microcontrollers paired to the same
-Mainframe stack with one another. Microcontrollers paired to different mainframes do not
-stack with one another or unpaired Microcontrollers.
-
-Use a paired Microcontroller on a block of a supported type to attach it. An attached Microcontroller can be
-removed by using shears on the block to which it is attached.
-
-Not yet specified:
-
-* how to craft/obtain
-* how to tether to a Mainframe
-* how to attach a Microcontroller to an entity
+Wireless Redstone blocks allow a Cobbleputer to control Redstone-enabled blocks and Redstone circuits.
+Wireless Redstone blocks come in 16 colors, one for each of the 16 dye variants.
+A Wireless Redstone block is initially unpaired when placed, and breaking a paired Wireless Redstone block
+unpairs it.
+A Wireless Redstone block may be paired to a specific 'puter by using the block on the 'puter,
+or by using a paired Debug Tool on the placed Wireless Redstone block.
+Unpaired Wireless Redstone stack with one another. Wireless Redstone paired to the same
+'puter stack with one another. Wireless Redstone paired to different 'puters do not
+stack with one another or unpaired Wireless Redstone blocks.
 
 ## Debug Tool
 
-A Debug tool can be used by the player to troubleshoot a Mainframe. A Debug tool is initially
-unpaired. An unpaired Debug tool can be paired with a Mainframe by using it on that Mainframe.
+A Debug tool can be used by the player to troubleshoot a 'puter. A Debug tool is initially
+unpaired. An unpaired Debug tool can be paired with a 'puter by using it on that Mainframe.
 
-When the player holds a paired Debug tool and its paired Mainframe is being simulated by the
-Server (regardless of distance!), console output from that Mainframe's function executions is
-printed to the player's chat.
+When the player holds a paired Debug tool and its paired 'puter is being simulated by the
+Server (regardless of distance!), console output from that 'puter's function executions is
+printed to the player's chat. Similarly, while holding a paired Debug Tool the player can "see"
+the wireless transmission lines from the paired 'puter to its paired Wireless Redstone blocks.

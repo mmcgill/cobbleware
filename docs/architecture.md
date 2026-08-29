@@ -9,22 +9,26 @@ The mod comprises:
 The Mod bundles native binaries for the Runtime, and is responsible for unpacking the correct
 platform-specific version and maintaining the Runtime process.
 
-## IPC
+The Runtime is the [Edge Runtime](../mc-edge-runtime/) with minor modifications/extensions
+(like native Windows support). The Runtime runs a Main Worker that serves APIs targetted
+at the Mod and at Players, and is responsible for managing the User Workers that run player-supplied
+programs.
 
-The execution model for the code running on Mainframe blocks in the Mod is fundamentally asynchronous
-and decoupled from Minecraft server tick rate. Events are buffered during a tick, and then invoked
-as a batch. Similarly, each tick the Mod polls (in non-blocking fashion) for up to N results,
-and processes those results.
+Throughout the documentation and code, references to "the Runtime" should understood
+as references to the Main Worker running in the Runtime, unless specifically noted otherwise.
 
-The Runtime presents the Mod with a Protobuf-over-HTTP interface designed to support batch processing
-of asynchronously executing functions:
+All communication between the Mod and the Runtime is initiated by the Mod, which makes requests
+to a API served by the Runtime. The Runtime never initiates connections in the opposite direction.
 
-`POST /invokeBatch` allows the Mod to start an arbitrary number of asynchronous invocations, and returns immediately.
-`POST /poll` allows the Mod to retrieve results.
+The Main Worker is written in Typescript; its code is located in [typescript/main-worker](../typescript/main-worker/).
 
-The Runtime also presents the Mod with an endpoint that can be used to trigger installation of new code
-for a Mainframe:
+The [cobbleware](../typescript/cobbleware/) Typescript library contains type definitions and code
+useful for implementing Cobbleputer Programs.
 
- `POST /installFunction`
+## Flatbuffers Schemas
 
-The Runtime API is served unauthenticated/unencrypted on localhost.
+The Mod and Runtime depend on shared representations of key data structures. These are modeled
+as Flatbuffer schemas found in the [schema](../schema/) directory. Scripts are used to
+generate Typescript and Java code from these schemas to ensure that data can be efficiently
+transmitted between the Mod and Runtime, and saved/loaded to persistent game state, in a
+consistent and backward-compatible way.

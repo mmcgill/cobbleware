@@ -8,3 +8,8 @@ assume the implementation is wrong unless specifically instructed otherwise.
 
 * [Gameplay](docs/gameplay.md) describes intended gameplay mechanics, at the level a player would encounter/understand them.
 * [Architecture](docs/architecture.md) describes the high-level system architecture.
+* [Use Cases](docs/usecases.md) gives a more formal, labeled set of use cases that describe functionality
+  without specifying concrete design/implementation details.
+* [Main Worker API](docs/api.md) describes the Main Worker API, both the Mod-facing portion and the Player-facing portion.
+
+When working in the mc-edge-runtime submodule, be sure to check its AGENTS.md as well.
