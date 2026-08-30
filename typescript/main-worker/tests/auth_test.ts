@@ -4,7 +4,7 @@ import { createHandler } from '../src/index.ts';
 
 const MOD_AUTH_PATH = 'http://localhost/modapi/v1/authentication';
 const PLAYER_AUTH_PATH = 'http://localhost/playerapi/v1/authenticate';
-const PROTECTED_API_PATH = 'http://localhost/playerapi/v1/programs';
+const PROTECTED_API_PATH = 'http://localhost/playerapi/v1/unknown';
 const PROTECTED_HTML_PATH = 'http://localhost/index.html';
 const API_KEY = 'test-api-key';
 const PLAYER_UUID = '123e4567-e89b-12d3-a456-426614174000';

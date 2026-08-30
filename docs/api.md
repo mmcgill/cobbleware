@@ -65,6 +65,103 @@ The Runtime forgets the pending code after the first successful exchange. Pendin
 minutes and are held in memory only; they do not survive a Runtime restart. Malformed, unknown, expired,
 or already-consumed codes receive `400` with a JSON body containing an `"error"` property.
 
+### Programs
+
+All program operations require player authentication via session cookie.
+
+#### Upload
+
+The `POST /playerapi/v1/programs` operation uploads a new program. The request body is a
+`multipart/form-data` body with the following parts:
+
+* `program`: required, the ESZip bundle. The part should use `application/octet-stream` as its content type.
+* `name`: optional UTF-8 text containing the program name.
+
+The caller supplies the dropped file as the `program` part and its filename as the multipart filename.
+
+If `name` is omitted, the Runtime uses the multipart filename as the program name. Any directory components
+are removed, and the filename extension is retained. For example, a file named `hello-world.eszip` gets the
+program name `hello-world.eszip`. If no name is supplied, the `program` part must have a non-empty filename.
+An explicitly supplied name takes precedence over the filename.
+
+Program names are display metadata and are not used as storage paths. A name must be non-empty after trimming,
+must be no longer than 128 Unicode characters, and must not contain NUL or other control characters.
+Duplicate program names are allowed; program ids are the unique identifiers.
+
+The Runtime stores the uploaded bytes without validating the ESZip structure; validation is deferred until the
+program is loaded for execution. It enforces the player's remaining program quota, configured by the
+`COBBLEWARE_PLAYER_PROGRAM_QUOTA_BYTES` environment variable and defaulting to 10 MiB. The `sizeBytes` value
+and quota usage count only the ESZip payload, not multipart encoding overhead. The upload is atomic: an
+unsuccessful upload creates no program and consumes no quota.
+
+On success, the Runtime returns `201` with the created program's metadata and a `Location` header:
+
+```http
+Location: /playerapi/v1/programs/abc123
+Content-Type: application/json; charset=utf-8
+```
+
+```json
+{
+    "id": "abc123",
+    "name": "hello-world.eszip",
+    "uploadedAt": "2026-08-30T14:25:00Z",
+    "sizeBytes": 12345
+}
+```
+
+`uploadedAt` is an RFC 3339 timestamp in UTC. Upload failures use a JSON body containing an `error` property:
+
+* `400` for a malformed multipart request or missing required part
+* `403` for a request rejected by the browser-facing cross-origin request policy
+* `413` when the bundle exceeds the player's remaining quota
+* `415` when the request is not `multipart/form-data`
+* `409` when another program operation for the player is already in progress
+
+The program id is the uppercase, unpadded RFC 4648 Base32 encoding of the SHA-256 hash of the exact uploaded
+bytes. It is therefore 52 characters long and uses only `A-Z` and `2-7`. Re-uploading identical bytes for the
+same player addresses the existing program and returns `200` with its existing metadata; it does not consume
+additional quota or replace its name.
+
+#### List
+
+The `GET /playerapi/v1/programs` operation returns a JSON body listing metadata about the user's programs
+on the server. Programs are returned newest first. The response includes the player's quota usage:
+
+```json
+{
+    "programs": [
+        {
+            "id": "abc123",
+            "name": "hello-world.eszip",
+            "uploadedAt": "2026-08-30T14:25:00Z",
+            "sizeBytes": 12345
+        }
+    ],
+    "quotaBytes": 56789,
+    "usedBytes": 45678,
+    "remainingBytes": 11111
+}
+```
+
+The `id` field is a content-derived, opaque identifier. Program files are stored at
+`$COBBLEWARE_GAME_DIR/{playerUUID}/{program-id}.eszip`, with metadata stored in that player's manifest. A player
+can see only their own programs. The Player API does not provide an endpoint for downloading program contents.
+Listing returns `409` with a JSON `error` property if another program operation for the same player is in progress.
+
+#### Delete
+
+The `DELETE /playerapi/v1/programs/{id}` operation deletes a program by id. It returns `204` with no response
+body on success. The program is fully deleted and no longer counts against the player's quota.
+
+Deleting a nonexistent program, or a program belonging to another player, returns `404` with a JSON body
+containing an `error` property. The API does not disclose whether an inaccessible id belongs to another player.
+Deletion returns `409` with a JSON `error` property if another program operation for the same player is in progress.
+
+Because these operations authenticate with a cookie and are intended for browser use, the Runtime validates
+that upload and delete requests have a same-origin `Origin` header. Cross-origin requests are rejected with
+`403`; the API does not rely solely on the cookie's `SameSite` attribute for CSRF protection.
+
 ## Mod API
 
 ### Player Authentication
@@ -82,6 +179,9 @@ The authenticated `POST /modapi/v1/authentication` endpoint accepts:
 The Mod calls this endpoint when the player executes the `/cobbleware auth XAU1-98B1` slash command.
 The code may be supplied with or without its presentation hyphen and is normalized case-insensitively.
 The documented code format is eight uppercase alphanumeric characters, displayed as `XXXX-XXXX`.
+The Runtime treats `playerUUID` as an opaque value supplied by the Mod and does not validate that it has UUID
+syntax. It normalizes the value to lowercase before using it as the player's identity and program-directory
+component.
 
 If the code is new, or is retried for the same player UUID, the endpoint returns `201` with no body.
 If the code is already pending for another player UUID, it returns `400` with a JSON response body

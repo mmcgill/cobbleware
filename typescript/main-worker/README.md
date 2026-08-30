@@ -14,10 +14,14 @@ Player API calls use an HttpOnly `cobbleware_session` cookie created by exchangi
 Minecraft auth code. Player sessions last 30 days, are persisted below `COBBLEWARE_GAME_DIR`, and
 are not marked `Secure` because the API supports plaintext HTTP.
 
-The Main Worker stores user programs in the Minecraft game directory. It expects
+The Main Worker stores user programs in the Minecraft game directory at
+`$COBBLEWARE_GAME_DIR/{playerUUID}/{program-id}.eszip`, with per-player metadata stored alongside the program
+files. Program ids are uppercase, unpadded RFC 4648 Base32 encodings of the SHA-256 hash of the exact program
+bytes. It expects
 `COBBLEWARE_GAME_DIR` to be set to the Minecraft game directory (e.g. obtained by
 `FabricLoader.getGameDir()`). If not supplied at startup it falls back on the CWD,
-but this is primarily to facilitate local testing.
+but this is primarily to facilitate local testing. The per-player program quota is configured with
+`COBBLEWARE_PLAYER_PROGRAM_QUOTA_BYTES` and defaults to 10 MiB.
 
 See [Main Worker API](../../docs/api.md) for API documentation.
 
@@ -25,4 +29,3 @@ See [Main Worker API](../../docs/api.md) for API documentation.
 
 [ ] Ship Cobbleware/flatbuffers libs with Edge Runtime so programs don't have to bundle them.
 [ ] Experiment with `deno bundle` for minifying before building ESZip, to minimize file size.
-

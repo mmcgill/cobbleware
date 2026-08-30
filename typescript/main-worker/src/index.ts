@@ -5,12 +5,16 @@ import { DurableAuthStore } from './auth/store.ts';
 import type { AuthStore } from './auth/types.ts';
 import { serveStatic } from './static.ts';
 import { jsonError } from './auth/http.ts';
+import { handleProgramCollection, handleProgramDelete } from './programs/handlers.ts';
+import { DurableProgramStore } from './programs/store.ts';
+import type { ProgramStore } from './programs/types.ts';
 
 const HELLO_BODY = JSON.stringify({ message: 'hello' });
 
 export type AppOptions = {
   config?: AppConfig;
   store?: AuthStore;
+  programStore?: ProgramStore;
 };
 
 export async function createHandler(
@@ -18,10 +22,11 @@ export async function createHandler(
 ): Promise<(request: Request) => Promise<Response>> {
   const config = options.config ?? configFromEnv();
   const store = options.store ?? await DurableAuthStore.open(config);
+  const programStore = options.programStore ?? new DurableProgramStore(config);
 
   return async (request) => {
     try {
-      return await routeRequest(request, config, store);
+      return await routeRequest(request, config, store, programStore);
     } catch {
       return jsonError('internal server error', 500);
     }
@@ -32,6 +37,7 @@ async function routeRequest(
   request: Request,
   config: AppConfig,
   store: AuthStore,
+  programStore: ProgramStore,
 ): Promise<Response> {
   const { pathname } = new URL(request.url);
 
@@ -55,6 +61,29 @@ async function routeRequest(
 
   if (pathname === '/playerapi/v1/authenticate') {
     return handlePlayerAuthentication(request, config, store);
+  }
+
+  if (pathname === '/playerapi/v1/programs') {
+    const context: RequestContext = {};
+    const authError = await requirePlayerAuth(request, config, store, context, 'api');
+    return authError ?? handleProgramCollection(request, programStore, context.player!.playerUUID);
+  }
+
+  const programIdMatch = /^\/playerapi\/v1\/programs\/([^/]+)$/.exec(pathname);
+  if (programIdMatch !== null) {
+    const context: RequestContext = {};
+    const authError = await requirePlayerAuth(request, config, store, context, 'api');
+    if (authError !== null) {
+      return authError;
+    }
+
+    let programId: string;
+    try {
+      programId = decodeURIComponent(programIdMatch[1]);
+    } catch {
+      return jsonError('program not found', 404);
+    }
+    return handleProgramDelete(request, programStore, context.player!.playerUUID, programId);
   }
 
   if (pathname.startsWith('/modapi/v1/')) {

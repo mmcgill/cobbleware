@@ -11,7 +11,7 @@ A Program is an ESZip bundle and associated metadata. Programs belong to players
 A program has the following metadata:
 
 * program id (uniquely identifies the given program on the server that contains it)
-* program name (chosen by the user)
+* program name (chosen by the user, or derived from the uploaded filename)
 * upload date
 * size in bytes
 
@@ -21,9 +21,15 @@ A player can view only their programs. A player cannot see other players' progra
 
 **PG02**: As a Player, I want to upload a new program from my computer so that I can run it on Cobbleputers.
 
-The player provides the ESZip bundle for the program. The player may optionally provide a program name.
-The server auto-assigns a program id upon successful upload. After uploading, the program
-counts against the player's size quota.
+The player provides the ESZip bundle for the program, normally by dragging and dropping an ESZip file into
+the Browser UI. The player may optionally provide a program name; if they do not, the server uses the uploaded
+file's basename, retaining its extension. The server removes directory components from the filename before
+using it as a name.
+
+The server auto-assigns a program id upon successful upload and atomically stores the program and its metadata.
+The uploaded bytes are treated as opaque at upload time; validation is deferred until the program is loaded for
+execution. After uploading, the ESZip payload size counts against the player's size quota. An unsuccessful
+upload does not create a program or consume quota.
 
 ### Removing
 

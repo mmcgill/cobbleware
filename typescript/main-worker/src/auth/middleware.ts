@@ -8,6 +8,23 @@ export type RequestContext = {
 
 export type ProtectedRequestKind = 'api' | 'html';
 
+export function requireSameOrigin(request: Request): Response | null {
+  const origin = request.headers.get('origin');
+  if (origin === null) {
+    return jsonError('same-origin request required', 403);
+  }
+
+  try {
+    if (new URL(origin).origin !== new URL(request.url).origin) {
+      return jsonError('cross-origin request rejected', 403);
+    }
+  } catch {
+    return jsonError('cross-origin request rejected', 403);
+  }
+
+  return null;
+}
+
 export function requireModAuth(request: Request, config: AppConfig): Response | null {
   if (config.apiKey === undefined || config.apiKey === '') {
     return jsonError('server authentication is not configured', 500);

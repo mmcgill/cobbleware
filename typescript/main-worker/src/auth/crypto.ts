@@ -28,8 +28,13 @@ export function formatAuthCode(code: string): string {
 }
 
 export async function digest(value: string): Promise<string> {
-  const result = await crypto.subtle.digest('SHA-256', textEncoder.encode(value));
-  return bytesToHex(new Uint8Array(result));
+  return bytesToHex(await digestBytes(textEncoder.encode(value)));
+}
+
+export async function digestBytes(value: Uint8Array): Promise<Uint8Array> {
+  const bytes = new Uint8Array(value);
+  const result = await crypto.subtle.digest('SHA-256', bytes.buffer as ArrayBuffer);
+  return new Uint8Array(result);
 }
 
 function bytesToHex(bytes: Uint8Array): string {
@@ -43,6 +48,30 @@ function bytesToBase64Url(bytes: Uint8Array): string {
   }
 
   return btoa(binary).replaceAll('+', '-').replaceAll('/', '_').replaceAll('=', '');
+}
+
+export function bytesToBase32(bytes: Uint8Array): string {
+  const alphabet = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ234567';
+  let result = '';
+  let buffer = 0;
+  let bitCount = 0;
+
+  for (const byte of bytes) {
+    buffer = (buffer << 8) | byte;
+    bitCount += 8;
+
+    while (bitCount >= 5) {
+      bitCount -= 5;
+      result += alphabet[(buffer >> bitCount) & 0x1f];
+      buffer &= (1 << bitCount) - 1;
+    }
+  }
+
+  if (bitCount > 0) {
+    result += alphabet[(buffer << (5 - bitCount)) & 0x1f];
+  }
+
+  return result;
 }
 
 export function constantTimeEqual(left: string, right: string): boolean {
