@@ -30,4 +30,5 @@ export type AuthStore = {
   ): Promise<BindPendingResult>;
   consumePending(code: string, nowMs?: number): Promise<ConsumedAuthentication | null>;
   findSession(sessionToken: string, nowMs?: number): Promise<PlayerIdentity | null>;
+  revokeSession(sessionToken: string, nowMs?: number): Promise<void>;
 };

@@ -4,6 +4,7 @@ import type { AuthStore, PlayerIdentity } from './types.ts';
 
 export type RequestContext = {
   player?: PlayerIdentity;
+  sessionToken?: string;
 };
 
 export type ProtectedRequestKind = 'api' | 'html';
@@ -49,6 +50,7 @@ export async function requirePlayerAuth(
     const identity = await store.findSession(sessionToken);
     if (identity !== null) {
       context.player = identity;
+      context.sessionToken = sessionToken;
       return null;
     }
   }

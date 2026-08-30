@@ -1,5 +1,13 @@
 # Use Cases
 
+## Authentication
+
+### Logging out
+
+**AU01**: As a Player, I want to log out of the Browser UI so that my current browser session is no longer usable.
+
+After logging out, the Player must authenticate again before accessing the Browser UI or their programs.
+
 ## Programs
 
 ### Viewing

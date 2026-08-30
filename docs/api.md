@@ -65,6 +65,34 @@ The Runtime forgets the pending code after the first successful exchange. Pendin
 minutes and are held in memory only; they do not survive a Runtime restart. Malformed, unknown, expired,
 or already-consumed codes receive `400` with a JSON body containing an `"error"` property.
 
+The authenticated `GET /playerapi/v1/whoami` endpoint returns `200` with a JSON body containing the profile name
+associated with the current session:
+
+```json
+{
+    "playerProfileName": "<Minecraft profile name for logged-in player>"
+}
+```
+
+The endpoint does not extend the session lifetime. Calls without a valid session cookie receive `401` with the
+Player API `WWW-Authenticate` header. Other methods receive `405` with `Allow: GET`.
+
+### Session management
+
+The authenticated `POST /playerapi/v1/logout` endpoint accepts no request body. It requires a same-origin
+`Origin` header, removes the current session from the durable authentication store, and returns `204` with no
+response body. The response also clears the session cookie:
+
+```http
+Set-Cookie: cobbleware_session=; Path=/; HttpOnly; SameSite=Lax; Max-Age=0
+```
+
+The cookie name is the configured session cookie name. The cookie deletion is browser-side cleanup; the server-side
+session is invalidated as part of the same operation, so the old cookie cannot be used for subsequent
+authentication. Calls without a valid session cookie receive `401` with the Player API `WWW-Authenticate` header.
+Requests without the required same-origin `Origin` header, or with a different origin, receive `403` with a JSON
+error body. Other methods receive `405` with `Allow: POST`.
+
 ### Programs
 
 All program operations require player authentication via session cookie.
@@ -159,8 +187,8 @@ containing an `error` property. The API does not disclose whether an inaccessibl
 Deletion returns `409` with a JSON `error` property if another program operation for the same player is in progress.
 
 Because these operations authenticate with a cookie and are intended for browser use, the Runtime validates
-that upload and delete requests have a same-origin `Origin` header. Cross-origin requests are rejected with
-`403`; the API does not rely solely on the cookie's `SameSite` attribute for CSRF protection.
+that upload, delete, and logout requests have a same-origin `Origin` header. Cross-origin requests are rejected
+with `403`; the API does not rely solely on the cookie's `SameSite` attribute for CSRF protection.
 
 ## Mod API
 

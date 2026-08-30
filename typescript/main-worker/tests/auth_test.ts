@@ -4,6 +4,8 @@ import { createHandler } from '../src/index.ts';
 
 const MOD_AUTH_PATH = 'http://localhost/modapi/v1/authentication';
 const PLAYER_AUTH_PATH = 'http://localhost/playerapi/v1/authenticate';
+const WHOAMI_PATH = 'http://localhost/playerapi/v1/whoami';
+const LOGOUT_PATH = 'http://localhost/playerapi/v1/logout';
 const PROTECTED_API_PATH = 'http://localhost/playerapi/v1/unknown';
 const PROTECTED_HTML_PATH = 'http://localhost/index.html';
 const API_KEY = 'test-api-key';
@@ -191,6 +193,102 @@ Deno.test('Player and HTML protection use different unauthorized responses', asy
       new Request(PROTECTED_HTML_PATH, { headers: { cookie } }),
     );
     assertEquals(authenticatedIndex.status, 200, 'valid session should serve the index page');
+  } finally {
+    await app.cleanup();
+  }
+});
+
+Deno.test('whoami returns the logged-in player and logout revokes the durable session', async () => {
+  const app = await createTestApp({ tokenGenerator: () => 'session-token' });
+  try {
+    await authenticateMod(app.handler);
+    const playerResponse = await authenticatePlayer(app.handler);
+    const cookie = playerResponse.headers.get('set-cookie')?.split(';', 1)[0];
+    if (cookie === undefined) {
+      throw new Error('expected a session cookie');
+    }
+
+    const whoamiResponse = await app.handler(new Request(WHOAMI_PATH, { headers: { cookie } }));
+    assertEquals(whoamiResponse.status, 200, 'whoami should succeed');
+    assertEquals(
+      whoamiResponse.headers.get('content-type'),
+      'application/json; charset=utf-8',
+      'whoami should return JSON',
+    );
+    assertEquals(
+      JSON.stringify(await whoamiResponse.json()),
+      JSON.stringify({ playerProfileName: 'Alice' }),
+      'whoami should return the authenticated profile name',
+    );
+
+    const logoutResponse = await app.handler(
+      new Request(LOGOUT_PATH, { method: 'POST', headers: { cookie, origin: 'http://localhost' } }),
+    );
+    assertEquals(logoutResponse.status, 204, 'logout should succeed');
+    assertEquals(await logoutResponse.text(), '', 'logout should have no body');
+    assertEquals(
+      logoutResponse.headers.get('set-cookie'),
+      'cobbleware_session=; Path=/; HttpOnly; SameSite=Lax; Max-Age=0',
+      'logout should clear the session cookie',
+    );
+
+    await assertErrorResponse(
+      await app.handler(new Request(WHOAMI_PATH, { headers: { cookie } })),
+      401,
+    );
+    const reloadedStore = await DurableAuthStore.open(app.config);
+    assertEquals(
+      await reloadedStore.findSession('session-token'),
+      null,
+      'logout should persist session revocation',
+    );
+  } finally {
+    await app.cleanup();
+  }
+});
+
+Deno.test('whoami and logout enforce their methods and logout origin policy', async () => {
+  const app = await createTestApp({ tokenGenerator: () => 'session-token' });
+  try {
+    await authenticateMod(app.handler);
+    const playerResponse = await authenticatePlayer(app.handler);
+    const cookie = playerResponse.headers.get('set-cookie')?.split(';', 1)[0];
+    if (cookie === undefined) {
+      throw new Error('expected a session cookie');
+    }
+
+    const whoamiMethodResponse = await app.handler(
+      new Request(WHOAMI_PATH, { method: 'POST', headers: { cookie } }),
+    );
+    assertEquals(whoamiMethodResponse.status, 405, 'whoami should reject other methods');
+    assertEquals(whoamiMethodResponse.headers.get('allow'), 'GET', 'whoami should advertise GET');
+
+    await assertErrorResponse(
+      await app.handler(new Request(LOGOUT_PATH, { method: 'POST', headers: { cookie } })),
+      403,
+    );
+    await assertErrorResponse(
+      await app.handler(
+        new Request(LOGOUT_PATH, {
+          method: 'POST',
+          headers: { cookie, origin: 'https://attacker.example' },
+        }),
+      ),
+      403,
+    );
+
+    const logoutMethodResponse = await app.handler(
+      new Request(LOGOUT_PATH, { method: 'GET', headers: { cookie } }),
+    );
+    assertEquals(logoutMethodResponse.status, 405, 'logout should reject other methods');
+    assertEquals(logoutMethodResponse.headers.get('allow'), 'POST', 'logout should advertise POST');
+
+    const stillAuthenticated = await app.handler(new Request(WHOAMI_PATH, { headers: { cookie } }));
+    assertEquals(
+      stillAuthenticated.status,
+      200,
+      'rejected logout requests should preserve the session',
+    );
   } finally {
     await app.cleanup();
   }

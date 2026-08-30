@@ -1,7 +1,7 @@
 import type { AppConfig } from '../config.ts';
-import { emptyResponse, jsonError, readJson } from './http.ts';
-import { requireModAuth } from './middleware.ts';
-import type { AuthStore } from './types.ts';
+import { emptyResponse, jsonError, jsonResponse, readJson } from './http.ts';
+import { requireModAuth, requireSameOrigin } from './middleware.ts';
+import type { AuthStore, PlayerIdentity } from './types.ts';
 import {
   ModAuthenticationRequestSchema,
   normalizeAuthCode,
@@ -87,6 +87,39 @@ export async function handlePlayerAuthentication(
     });
   } catch {
     return jsonError('authentication request could not be completed', 500);
+  }
+}
+
+export function handlePlayerWhoAmI(request: Request, player: PlayerIdentity): Response {
+  if (request.method !== 'GET') {
+    return methodNotAllowed('GET');
+  }
+
+  return jsonResponse({ playerProfileName: player.playerProfileName });
+}
+
+export async function handlePlayerLogout(
+  request: Request,
+  config: AppConfig,
+  store: AuthStore,
+  sessionToken: string,
+): Promise<Response> {
+  if (request.method !== 'POST') {
+    return methodNotAllowed('POST');
+  }
+
+  const originError = requireSameOrigin(request);
+  if (originError !== null) {
+    return originError;
+  }
+
+  try {
+    await store.revokeSession(sessionToken);
+    return emptyResponse(204, {
+      'set-cookie': `${config.cookieName}=; Path=/; HttpOnly; SameSite=Lax; Max-Age=0`,
+    });
+  } catch {
+    return jsonError('logout request could not be completed', 500);
   }
 }
 

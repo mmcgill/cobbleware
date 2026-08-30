@@ -10,8 +10,10 @@ to `/auth.html`.
 
 ## Index page
 
-The `/index.html` page presents the user with a table that lists their programs. The table
-contains columns for program id, name, upload date, size, and an action to delete each program.
+The `/index.html` page presents the logged-in player's Minecraft profile name and a logout control, along with a
+table that lists their programs. The page loads the profile name from `/playerapi/v1/whoami` and loads the program
+list from `/playerapi/v1/programs`. The table contains columns for program id, name, upload date, size, and an
+action to delete each program.
 
 The page also shows a program quota usage bar showing the total used and remaining program space
 available to the player.
@@ -24,8 +26,11 @@ without removing existing programs from the table.
 
 Each program has a delete action. The UI asks for confirmation before sending
 `DELETE /playerapi/v1/programs/{id}`. After a successful deletion, the program list and quota usage are refreshed.
-The UI displays server/API errors and preserves the current list when an upload or deletion fails. An expired
-session redirects the player to `/auth.html`.
+The UI displays server/API errors and preserves the current list when an upload or deletion fails.
+
+Activating the logout control sends `POST /playerapi/v1/logout`. After a successful logout, the page redirects to
+`/auth.html`. A failed logout leaves the page and its current program list visible and shows the server or network
+error so the player can try again. An expired session redirects the player to `/auth.html`.
 
 ## Authentication Page
 

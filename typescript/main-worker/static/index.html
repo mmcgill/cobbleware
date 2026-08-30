@@ -5,290 +5,319 @@
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>Cobbleware programs</title>
     <style>
-      :root {
-        color-scheme: light dark;
-        font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-        background: #17212b;
-        color: #e8eef2;
-        --surface: #22313d;
-        --surface-subtle: #1c2a34;
-        --border: #405666;
-        --accent: #78c091;
-        --accent-strong: #9ce0ae;
-        --danger: #ff9c9c;
-        --muted: #b9c8d1;
-      }
+    :root {
+      color-scheme: light dark;
+      font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      background: #17212b;
+      color: #e8eef2;
+      --surface: #22313d;
+      --surface-subtle: #1c2a34;
+      --border: #405666;
+      --accent: #78c091;
+      --accent-strong: #9ce0ae;
+      --danger: #ff9c9c;
+      --muted: #b9c8d1;
+    }
 
-      * {
-        box-sizing: border-box;
-      }
+    * {
+      box-sizing: border-box;
+    }
 
-      body {
-        margin: 0;
-        min-width: 320px;
-      }
+    body {
+      margin: 0;
+      min-width: 320px;
+    }
 
+    main {
+      width: min(1100px, calc(100% - 2rem));
+      margin: 0 auto;
+      padding: 2rem 0 4rem;
+    }
+
+    h1,
+    h2,
+    p {
+      margin-top: 0;
+    }
+
+    h1 {
+      margin-bottom: 0.5rem;
+      font-size: clamp(2rem, 5vw, 3rem);
+    }
+
+    h2 {
+      margin-bottom: 1rem;
+      font-size: 1.25rem;
+    }
+
+    .intro,
+    .hint,
+    .muted {
+      color: var(--muted);
+    }
+
+    .intro {
+      max-width: 65ch;
+      margin-bottom: 2rem;
+    }
+
+    .page-header {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: flex-start;
+      justify-content: space-between;
+      gap: 1rem 2rem;
+    }
+
+    .page-header > div:first-child {
+      flex: 1 1 30rem;
+    }
+
+    .account-controls {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      justify-content: flex-end;
+      gap: 0.75rem;
+      margin-top: 0.5rem;
+    }
+
+    .card {
+      margin-top: 1.25rem;
+      padding: 1.25rem;
+      border: 1px solid var(--border);
+      border-radius: 0.75rem;
+      background: var(--surface);
+    }
+
+    .quota-summary {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.5rem 1.5rem;
+      margin-bottom: 0.75rem;
+    }
+
+    progress {
+      display: block;
+      width: 100%;
+      height: 1rem;
+      accent-color: var(--accent);
+    }
+
+    .quota-detail {
+      margin: 0.75rem 0 0;
+    }
+
+    .upload-form {
+      display: grid;
+      gap: 1rem;
+    }
+
+    .drop-zone {
+      display: grid;
+      justify-items: center;
+      gap: 0.5rem;
+      padding: 2rem 1rem;
+      border: 2px dashed var(--border);
+      border-radius: 0.5rem;
+      background: var(--surface-subtle);
+      text-align: center;
+      transition: border-color 120ms ease, background 120ms ease;
+    }
+
+    .drop-zone.drag-over,
+    .drop-zone:focus-visible {
+      border-color: var(--accent-strong);
+      background: #294337;
+    }
+
+    .drop-zone p {
+      margin-bottom: 0;
+    }
+
+    .field {
+      display: grid;
+      gap: 0.4rem;
+    }
+
+    input[type="text"] {
+      width: 100%;
+      max-width: 34rem;
+      padding: 0.65rem 0.75rem;
+      border: 1px solid var(--border);
+      border-radius: 0.35rem;
+      background: var(--surface-subtle);
+      color: inherit;
+      font: inherit;
+    }
+
+    button {
+      width: fit-content;
+      padding: 0.6rem 0.9rem;
+      border: 1px solid var(--accent);
+      border-radius: 0.35rem;
+      background: var(--accent);
+      color: #102118;
+      cursor: pointer;
+      font: inherit;
+      font-weight: 650;
+    }
+
+    button.secondary {
+      border-color: var(--border);
+      background: transparent;
+      color: inherit;
+    }
+
+    button.danger {
+      border-color: var(--danger);
+      background: transparent;
+      color: var(--danger);
+    }
+
+    button:disabled,
+    input:disabled {
+      cursor: not-allowed;
+      opacity: 0.55;
+    }
+
+    button:focus-visible,
+    input:focus-visible {
+      outline: 3px solid var(--accent-strong);
+      outline-offset: 2px;
+    }
+
+    .button-row {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 0.75rem;
+    }
+
+    .selected-file {
+      min-height: 1.5rem;
+      margin: 0;
+    }
+
+    .status {
+      min-height: 1.5rem;
+      margin: 0;
+      color: var(--muted);
+    }
+
+    .status.error {
+      color: var(--danger);
+    }
+
+    .status.success {
+      color: var(--accent-strong);
+    }
+
+    .table-header {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      justify-content: space-between;
+      gap: 0.75rem;
+    }
+
+    .table-header h2 {
+      margin-bottom: 0;
+    }
+
+    .table-wrapper {
+      overflow-x: auto;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-top: 1rem;
+    }
+
+    caption {
+      position: absolute;
+      width: 1px;
+      height: 1px;
+      padding: 0;
+      margin: -1px;
+      overflow: hidden;
+      clip: rect(0, 0, 0, 0);
+      white-space: nowrap;
+      border: 0;
+    }
+
+    th,
+    td {
+      padding: 0.75rem;
+      border-bottom: 1px solid var(--border);
+      text-align: left;
+      vertical-align: top;
+    }
+
+    th {
+      color: var(--muted);
+      font-size: 0.85rem;
+      font-weight: 650;
+      letter-spacing: 0.03em;
+      text-transform: uppercase;
+    }
+
+    td code {
+      display: inline-block;
+      max-width: 28rem;
+      overflow-wrap: anywhere;
+      font-size: 0.8rem;
+    }
+
+    .empty-state {
+      margin: 1rem 0 0;
+      color: var(--muted);
+    }
+
+    .visually-hidden {
+      position: absolute;
+      width: 1px;
+      height: 1px;
+      padding: 0;
+      margin: -1px;
+      overflow: hidden;
+      clip: rect(0, 0, 0, 0);
+      white-space: nowrap;
+      border: 0;
+    }
+
+    @media (max-width: 650px) {
       main {
-        width: min(1100px, calc(100% - 2rem));
-        margin: 0 auto;
-        padding: 2rem 0 4rem;
-      }
-
-      h1,
-      h2,
-      p {
-        margin-top: 0;
-      }
-
-      h1 {
-        margin-bottom: 0.5rem;
-        font-size: clamp(2rem, 5vw, 3rem);
-      }
-
-      h2 {
-        margin-bottom: 1rem;
-        font-size: 1.25rem;
-      }
-
-      .intro,
-      .hint,
-      .muted {
-        color: var(--muted);
-      }
-
-      .intro {
-        max-width: 65ch;
-        margin-bottom: 2rem;
+        width: min(100% - 1rem, 1100px);
+        padding-top: 1rem;
       }
 
       .card {
-        margin-top: 1.25rem;
-        padding: 1.25rem;
-        border: 1px solid var(--border);
-        border-radius: 0.75rem;
-        background: var(--surface);
-      }
-
-      .quota-summary {
-        display: flex;
-        flex-wrap: wrap;
-        gap: 0.5rem 1.5rem;
-        margin-bottom: 0.75rem;
-      }
-
-      progress {
-        display: block;
-        width: 100%;
-        height: 1rem;
-        accent-color: var(--accent);
-      }
-
-      .quota-detail {
-        margin: 0.75rem 0 0;
-      }
-
-      .upload-form {
-        display: grid;
-        gap: 1rem;
-      }
-
-      .drop-zone {
-        display: grid;
-        justify-items: center;
-        gap: 0.5rem;
-        padding: 2rem 1rem;
-        border: 2px dashed var(--border);
-        border-radius: 0.5rem;
-        background: var(--surface-subtle);
-        text-align: center;
-        transition: border-color 120ms ease, background 120ms ease;
-      }
-
-      .drop-zone.drag-over,
-      .drop-zone:focus-visible {
-        border-color: var(--accent-strong);
-        background: #294337;
-      }
-
-      .drop-zone p {
-        margin-bottom: 0;
-      }
-
-      .field {
-        display: grid;
-        gap: 0.4rem;
-      }
-
-      input[type="text"] {
-        width: 100%;
-        max-width: 34rem;
-        padding: 0.65rem 0.75rem;
-        border: 1px solid var(--border);
-        border-radius: 0.35rem;
-        background: var(--surface-subtle);
-        color: inherit;
-        font: inherit;
-      }
-
-      button {
-        width: fit-content;
-        padding: 0.6rem 0.9rem;
-        border: 1px solid var(--accent);
-        border-radius: 0.35rem;
-        background: var(--accent);
-        color: #102118;
-        cursor: pointer;
-        font: inherit;
-        font-weight: 650;
-      }
-
-      button.secondary {
-        border-color: var(--border);
-        background: transparent;
-        color: inherit;
-      }
-
-      button.danger {
-        border-color: var(--danger);
-        background: transparent;
-        color: var(--danger);
-      }
-
-      button:disabled,
-      input:disabled {
-        cursor: not-allowed;
-        opacity: 0.55;
-      }
-
-      button:focus-visible,
-      input:focus-visible {
-        outline: 3px solid var(--accent-strong);
-        outline-offset: 2px;
-      }
-
-      .button-row {
-        display: flex;
-        flex-wrap: wrap;
-        align-items: center;
-        gap: 0.75rem;
-      }
-
-      .selected-file {
-        min-height: 1.5rem;
-        margin: 0;
-      }
-
-      .status {
-        min-height: 1.5rem;
-        margin: 0;
-        color: var(--muted);
-      }
-
-      .status.error {
-        color: var(--danger);
-      }
-
-      .status.success {
-        color: var(--accent-strong);
-      }
-
-      .table-header {
-        display: flex;
-        flex-wrap: wrap;
-        align-items: center;
-        justify-content: space-between;
-        gap: 0.75rem;
-      }
-
-      .table-header h2 {
-        margin-bottom: 0;
-      }
-
-      .table-wrapper {
-        overflow-x: auto;
-      }
-
-      table {
-        width: 100%;
-        border-collapse: collapse;
-        margin-top: 1rem;
-      }
-
-      caption {
-        position: absolute;
-        width: 1px;
-        height: 1px;
-        padding: 0;
-        margin: -1px;
-        overflow: hidden;
-        clip: rect(0, 0, 0, 0);
-        white-space: nowrap;
-        border: 0;
+        padding: 1rem;
       }
 
       th,
       td {
-        padding: 0.75rem;
-        border-bottom: 1px solid var(--border);
-        text-align: left;
-        vertical-align: top;
+        padding: 0.6rem 0.45rem;
       }
-
-      th {
-        color: var(--muted);
-        font-size: 0.85rem;
-        font-weight: 650;
-        letter-spacing: 0.03em;
-        text-transform: uppercase;
-      }
-
-      td code {
-        display: inline-block;
-        max-width: 28rem;
-        overflow-wrap: anywhere;
-        font-size: 0.8rem;
-      }
-
-      .empty-state {
-        margin: 1rem 0 0;
-        color: var(--muted);
-      }
-
-      .visually-hidden {
-        position: absolute;
-        width: 1px;
-        height: 1px;
-        padding: 0;
-        margin: -1px;
-        overflow: hidden;
-        clip: rect(0, 0, 0, 0);
-        white-space: nowrap;
-        border: 0;
-      }
-
-      @media (max-width: 650px) {
-        main {
-          width: min(100% - 1rem, 1100px);
-          padding-top: 1rem;
-        }
-
-        .card {
-          padding: 1rem;
-        }
-
-        th,
-        td {
-          padding: 0.6rem 0.45rem;
-        }
-      }
+    }
     </style>
   </head>
   <body>
     <main>
-      <header>
-        <h1>Cobbleware programs</h1>
-        <p class="intro">Upload and manage the programs you own on this server. Programs are private to your
-          Minecraft player and can be loaded onto Cobbleputers in game.</p>
+      <header class="page-header">
+        <div>
+          <h1>Cobbleware programs</h1>
+          <p
+            class="intro">Upload and manage the programs you own on this server. Programs are private to your
+            Minecraft player and can be loaded onto Cobbleputers in game.</p>
+        </div>
+        <div class="account-controls" aria-label="Account controls">
+          <span class="visually-hidden">Logged in as </span>
+          <strong id="player-profile-name">Loading player...</strong>
+          <button id="logout-button" class="secondary" type="button">Log out</button>
+        </div>
       </header>
 
       <p id="page-status" class="status" role="status" aria-live="polite"></p>
@@ -299,8 +328,10 @@
           <strong id="quota-used">Loading storage...</strong>
           <span id="quota-remaining" class="muted"></span>
         </div>
-        <progress id="quota-progress" max="1" value="0" aria-label="Program storage used"></progress>
-        <p id="quota-detail" class="quota-detail muted">Storage details will appear after loading.</p>
+        <progress id="quota-progress" max="1" value="0"
+          aria-label="Program storage used"></progress>
+        <p id="quota-detail"
+          class="quota-detail muted">Storage details will appear after loading.</p>
       </section>
 
       <section class="card" aria-labelledby="programs-heading">
@@ -330,11 +361,13 @@
       <section class="card" aria-labelledby="upload-heading">
         <h2 id="upload-heading">Upload a program</h2>
         <form id="upload-form" class="upload-form">
-          <div id="drop-zone" class="drop-zone" tabindex="0" role="button" aria-describedby="drop-hint">
+          <div id="drop-zone" class="drop-zone" tabindex="0" role="button"
+            aria-describedby="drop-hint">
             <p><strong>Drop an ESZip bundle here</strong></p>
             <p id="drop-hint" class="hint">You can also choose a file from your device.</p>
             <button id="browse-button" class="secondary" type="button">Choose a file</button>
-            <input id="file-input" class="visually-hidden" type="file" accept=".eszip,application/octet-stream">
+            <input id="file-input" class="visually-hidden" type="file"
+              accept=".eszip,application/octet-stream">
           </div>
           <p id="selected-file" class="selected-file" aria-live="polite"></p>
 
@@ -342,7 +375,8 @@
             <span>Program name <span class="muted">(optional)</span></span>
             <input id="program-name" type="text" maxlength="128" autocomplete="off"
               aria-describedby="name-hint">
-            <span id="name-hint" class="hint">Leave blank to use the uploaded filename. Maximum 128 Unicode
+            <span id="name-hint"
+              class="hint">Leave blank to use the uploaded filename. Maximum 128 Unicode
               characters.</span>
           </label>
 
@@ -355,428 +389,496 @@
     </main>
 
     <script>
-      (() => {
-        'use strict';
+    (() => {
+      'use strict';
 
-        const elements = {
-          pageStatus: document.querySelector('#page-status'),
-          quotaUsed: document.querySelector('#quota-used'),
-          quotaRemaining: document.querySelector('#quota-remaining'),
-          quotaProgress: document.querySelector('#quota-progress'),
-          quotaDetail: document.querySelector('#quota-detail'),
-          uploadForm: document.querySelector('#upload-form'),
-          dropZone: document.querySelector('#drop-zone'),
-          browseButton: document.querySelector('#browse-button'),
-          fileInput: document.querySelector('#file-input'),
-          selectedFile: document.querySelector('#selected-file'),
-          programName: document.querySelector('#program-name'),
-          uploadButton: document.querySelector('#upload-button'),
-          uploadStatus: document.querySelector('#upload-status'),
-          refreshButton: document.querySelector('#refresh-button'),
-          programsLoading: document.querySelector('#programs-loading'),
-          emptyState: document.querySelector('#empty-state'),
-          programsTable: document.querySelector('#programs-table'),
-          programsBody: document.querySelector('#programs-body'),
+      const elements = {
+        pageStatus: document.querySelector('#page-status'),
+        playerProfileName: document.querySelector('#player-profile-name'),
+        logoutButton: document.querySelector('#logout-button'),
+        quotaUsed: document.querySelector('#quota-used'),
+        quotaRemaining: document.querySelector('#quota-remaining'),
+        quotaProgress: document.querySelector('#quota-progress'),
+        quotaDetail: document.querySelector('#quota-detail'),
+        uploadForm: document.querySelector('#upload-form'),
+        dropZone: document.querySelector('#drop-zone'),
+        browseButton: document.querySelector('#browse-button'),
+        fileInput: document.querySelector('#file-input'),
+        selectedFile: document.querySelector('#selected-file'),
+        programName: document.querySelector('#program-name'),
+        uploadButton: document.querySelector('#upload-button'),
+        uploadStatus: document.querySelector('#upload-status'),
+        refreshButton: document.querySelector('#refresh-button'),
+        programsLoading: document.querySelector('#programs-loading'),
+        emptyState: document.querySelector('#empty-state'),
+        programsTable: document.querySelector('#programs-table'),
+        programsBody: document.querySelector('#programs-body'),
+      };
+
+      const byteFormatter = new Intl.NumberFormat(undefined, { maximumFractionDigits: 1 });
+      const dateFormatter = new Intl.DateTimeFormat(undefined, {
+        dateStyle: 'medium',
+        timeStyle: 'short',
+      });
+
+      let programList = null;
+      let selectedFile = null;
+      let operation = 'idle';
+      let activeDeleteId = null;
+
+      function formatBytes(bytes) {
+        if (bytes === 0) {
+          return '0 B';
+        }
+        const units = ['B', 'KiB', 'MiB', 'GiB', 'TiB'];
+        const unitIndex = Math.min(Math.floor(Math.log(bytes) / Math.log(1024)), units.length - 1);
+        return `${byteFormatter.format(bytes / (1024 ** unitIndex))} ${units[unitIndex]}`;
+      }
+
+      function formatDate(value) {
+        const date = new Date(value);
+        return Number.isNaN(date.getTime()) ? value : dateFormatter.format(date);
+      }
+
+      function setMessage(message, kind = '') {
+        elements.pageStatus.textContent = message;
+        elements.pageStatus.className = `status${kind ? ` ${kind}` : ''}`;
+      }
+
+      function setUploadMessage(message) {
+        elements.uploadStatus.textContent = message;
+      }
+
+      function makeError(message, status = 0, redirected = false) {
+        const error = new Error(message);
+        error.status = status;
+        error.redirected = redirected;
+        return error;
+      }
+
+      function redirectToAuthentication() {
+        window.location.assign('/auth.html');
+        throw makeError('Authentication required.', 401, true);
+      }
+
+      async function errorFromResponse(response) {
+        let message = '';
+        try {
+          const body = await response.json();
+          if (body && typeof body.error === 'string') {
+            message = body.error;
+          }
+        } catch {
+          // Use the status-specific fallback below when the body is not JSON.
+        }
+
+        if (message) {
+          return makeError(message, response.status);
+        }
+
+        const fallbacks = {
+          400: 'The upload request or program name was invalid.',
+          403: 'The server rejected this same-origin request.',
+          404: 'The program was not found.',
+          409: 'Another program operation is in progress. Please try again shortly.',
+          413: 'The program is larger than the remaining storage quota.',
+          415: 'The upload must be sent as a multipart form.',
+          500: 'The server could not complete the request.',
         };
+        return makeError(
+          fallbacks[response.status] || `The server returned HTTP ${response.status}.`,
+          response.status,
+        );
+      }
 
-        const byteFormatter = new Intl.NumberFormat(undefined, { maximumFractionDigits: 1 });
-        const dateFormatter = new Intl.DateTimeFormat(undefined, {
-          dateStyle: 'medium',
-          timeStyle: 'short',
-        });
-
-        let programList = null;
-        let selectedFile = null;
-        let operation = 'idle';
-        let activeDeleteId = null;
-
-        function formatBytes(bytes) {
-          if (bytes === 0) {
-            return '0 B';
-          }
-          const units = ['B', 'KiB', 'MiB', 'GiB', 'TiB'];
-          const unitIndex = Math.min(Math.floor(Math.log(bytes) / Math.log(1024)), units.length - 1);
-          return `${byteFormatter.format(bytes / (1024 ** unitIndex))} ${units[unitIndex]}`;
-        }
-
-        function formatDate(value) {
-          const date = new Date(value);
-          return Number.isNaN(date.getTime()) ? value : dateFormatter.format(date);
-        }
-
-        function setMessage(message, kind = '') {
-          elements.pageStatus.textContent = message;
-          elements.pageStatus.className = `status${kind ? ` ${kind}` : ''}`;
-        }
-
-        function setUploadMessage(message) {
-          elements.uploadStatus.textContent = message;
-        }
-
-        function makeError(message, status = 0, redirected = false) {
-          const error = new Error(message);
-          error.status = status;
-          error.redirected = redirected;
-          return error;
-        }
-
-        function redirectToAuthentication() {
-          window.location.assign('/auth.html');
-          throw makeError('Authentication required.', 401, true);
-        }
-
-        async function errorFromResponse(response) {
-          let message = '';
-          try {
-            const body = await response.json();
-            if (body && typeof body.error === 'string') {
-              message = body.error;
-            }
-          } catch {
-            // Use the status-specific fallback below when the body is not JSON.
-          }
-
-          if (message) {
-            return makeError(message, response.status);
-          }
-
-          const fallbacks = {
-            400: 'The upload request or program name was invalid.',
-            403: 'The server rejected this same-origin request.',
-            404: 'The program was not found.',
-            409: 'Another program operation is in progress. Please try again shortly.',
-            413: 'The program is larger than the remaining storage quota.',
-            415: 'The upload must be sent as a multipart form.',
-            500: 'The server could not complete the request.',
-          };
-          return makeError(fallbacks[response.status] || `The server returned HTTP ${response.status}.`, response.status);
-        }
-
-        async function request(url, options = {}) {
-          let response;
-          try {
-            response = await fetch(url, { credentials: 'same-origin', ...options });
-          } catch {
-            throw makeError('The request could not reach the server. Check your connection and try again.');
-          }
-
-          if (response.status === 401) {
-            redirectToAuthentication();
-          }
-          if (!response.ok) {
-            throw await errorFromResponse(response);
-          }
-          return response;
-        }
-
-        function parseProgramList(body) {
-          if (!body || !Array.isArray(body.programs)) {
-            throw makeError('The server returned an invalid program list.');
-          }
-          const numericFields = ['quotaBytes', 'usedBytes', 'remainingBytes'];
-          if (numericFields.some((field) => !Number.isInteger(body[field]) || body[field] < 0)) {
-            throw makeError('The server returned invalid program quota data.');
-          }
-          for (const program of body.programs) {
-            if (
-              !program ||
-              typeof program.id !== 'string' ||
-              typeof program.name !== 'string' ||
-              typeof program.uploadedAt !== 'string' ||
-              !Number.isInteger(program.sizeBytes) ||
-              program.sizeBytes < 0
-            ) {
-              throw makeError('The server returned invalid program metadata.');
-            }
-          }
-          return body;
-        }
-
-        function renderQuota() {
-          if (programList === null) {
-            elements.quotaUsed.textContent = 'Loading storage...';
-            elements.quotaRemaining.textContent = '';
-            elements.quotaDetail.textContent = 'Storage details will appear after loading.';
-            elements.quotaProgress.max = '1';
-            elements.quotaProgress.value = '0';
-            return;
-          }
-
-          const quota = programList.quotaBytes;
-          const used = programList.usedBytes;
-          elements.quotaUsed.textContent = `${formatBytes(used)} used`;
-          elements.quotaRemaining.textContent = `${formatBytes(programList.remainingBytes)} remaining`;
-          elements.quotaDetail.textContent = `${formatBytes(used)} of ${formatBytes(quota)} total program storage`;
-          elements.quotaProgress.max = String(Math.max(quota, 1));
-          elements.quotaProgress.value = String(Math.min(used, Math.max(quota, 1)));
-          elements.quotaProgress.setAttribute(
-            'aria-label',
-            `${formatBytes(used)} of ${formatBytes(quota)} program storage used`,
+      async function request(url, options = {}) {
+        let response;
+        try {
+          response = await fetch(url, { credentials: 'same-origin', ...options });
+        } catch {
+          throw makeError(
+            'The request could not reach the server. Check your connection and try again.',
           );
         }
 
-        function renderPrograms() {
-          elements.programsLoading.hidden = programList !== null || operation !== 'loading';
-          elements.programsBody.replaceChildren();
-
-          if (programList === null) {
-            elements.programsTable.hidden = true;
-            elements.emptyState.hidden = true;
-            return;
-          }
-
-          const programs = programList.programs;
-          elements.emptyState.hidden = programs.length !== 0;
-          elements.programsTable.hidden = programs.length === 0;
-
-          for (const program of programs) {
-            const row = document.createElement('tr');
-
-            const idCell = document.createElement('td');
-            const idCode = document.createElement('code');
-            idCode.textContent = program.id;
-            idCell.append(idCode);
-            row.append(idCell);
-
-            const nameCell = document.createElement('td');
-            nameCell.textContent = program.name;
-            row.append(nameCell);
-
-            const dateCell = document.createElement('td');
-            const date = document.createElement('time');
-            date.dateTime = program.uploadedAt;
-            date.textContent = formatDate(program.uploadedAt);
-            date.title = program.uploadedAt;
-            dateCell.append(date);
-            row.append(dateCell);
-
-            const sizeCell = document.createElement('td');
-            sizeCell.textContent = formatBytes(program.sizeBytes);
-            row.append(sizeCell);
-
-            const actionCell = document.createElement('td');
-            const deleteButton = document.createElement('button');
-            deleteButton.type = 'button';
-            deleteButton.className = 'danger';
-            deleteButton.textContent = activeDeleteId === program.id ? 'Deleting...' : 'Delete';
-            deleteButton.disabled = operation !== 'idle';
-            deleteButton.addEventListener('click', () => deleteProgram(program));
-            actionCell.append(deleteButton);
-            row.append(actionCell);
-
-            elements.programsBody.append(row);
-          }
+        if (response.status === 401) {
+          redirectToAuthentication();
         }
-
-        function renderControls() {
-          const busy = operation !== 'idle';
-          elements.browseButton.disabled = busy;
-          elements.fileInput.disabled = busy;
-          elements.programName.disabled = busy;
-          elements.uploadButton.disabled = busy || selectedFile === null;
-          elements.refreshButton.disabled = busy;
-          elements.uploadButton.textContent = operation === 'uploading' ? 'Uploading...' : 'Upload program';
+        if (!response.ok) {
+          throw await errorFromResponse(response);
         }
+        return response;
+      }
 
-        function renderSelectedFile() {
-          if (selectedFile === null) {
-            elements.selectedFile.textContent = '';
-            return;
-          }
-          elements.selectedFile.textContent = `Selected: ${selectedFile.name} (${formatBytes(selectedFile.size)})`;
+      function parseProgramList(body) {
+        if (!body || !Array.isArray(body.programs)) {
+          throw makeError('The server returned an invalid program list.');
         }
-
-        function render() {
-          renderQuota();
-          renderPrograms();
-          renderControls();
-          renderSelectedFile();
+        const numericFields = ['quotaBytes', 'usedBytes', 'remainingBytes'];
+        if (numericFields.some((field) => !Number.isInteger(body[field]) || body[field] < 0)) {
+          throw makeError('The server returned invalid program quota data.');
         }
-
-        function displayError(error, action) {
-          if (error.redirected) {
-            return;
-          }
-          if (error.status === 413) {
-            setMessage('This program exceeds the storage space remaining in your quota.', 'error');
-          } else if (error.status === 409) {
-            setMessage('Another program operation is in progress. Please try again shortly.', 'error');
-          } else if (error.status === 404 && action === 'delete') {
-            setMessage('That program is no longer available. The list has been refreshed.', 'error');
-          } else {
-            setMessage(error.message || 'The request failed. Please try again.', 'error');
-          }
-        }
-
-        async function loadPrograms() {
-          operation = 'loading';
-          render();
-          try {
-            const response = await request('/playerapi/v1/programs');
-            programList = parseProgramList(await response.json());
-            return true;
-          } catch (error) {
-            displayError(error, 'list');
-            return false;
-          } finally {
-            operation = 'idle';
-            render();
-          }
-        }
-
-        function selectFile(file) {
-          selectedFile = file;
-          render();
-          setUploadMessage(`Ready to upload ${file.name}.`);
-        }
-
-        function selectDroppedFiles(files) {
-          if (files.length !== 1) {
-            setMessage('Please choose exactly one program file.', 'error');
-            return;
-          }
-          selectFile(files[0]);
-        }
-
-        function validateName(value) {
-          const trimmed = value.trim();
-          if (trimmed.length === 0) {
-            return null;
-          }
+        for (const program of body.programs) {
           if (
-            Array.from(trimmed).length > 128 ||
-            /[\u0000-\u001f\u007f]/u.test(trimmed)
+            !program ||
+            typeof program.id !== 'string' ||
+            typeof program.name !== 'string' ||
+            typeof program.uploadedAt !== 'string' ||
+            !Number.isInteger(program.sizeBytes) ||
+            program.sizeBytes < 0
           ) {
-            throw makeError('The program name must be 128 or fewer characters and contain no control characters.');
-          }
-          return trimmed;
-        }
-
-        async function uploadProgram() {
-          if (selectedFile === null) {
-            setMessage('Choose a program file before uploading.', 'error');
-            return;
-          }
-
-          let name;
-          try {
-            name = validateName(elements.programName.value);
-          } catch (error) {
-            displayError(error, 'upload');
-            return;
-          }
-
-          const form = new FormData();
-          form.append('program', selectedFile, selectedFile.name);
-          if (name !== null) {
-            form.append('name', name);
-          }
-
-          operation = 'uploading';
-          setUploadMessage('Uploading program...');
-          setMessage('');
-          render();
-          try {
-            const response = await request('/playerapi/v1/programs', {
-              method: 'POST',
-              body: form,
-            });
-            if (response.status !== 200 && response.status !== 201) {
-              throw await errorFromResponse(response);
-            }
-            await response.json();
-            selectedFile = null;
-            elements.fileInput.value = '';
-            elements.programName.value = '';
-            const refreshed = await loadPrograms();
-            if (refreshed) {
-              setMessage('Program uploaded successfully.', 'success');
-            } else {
-              setUploadMessage('Upload completed, but the program list could not be refreshed.');
-            }
-          } catch (error) {
-            displayError(error, 'upload');
-            setUploadMessage('Upload failed. Your selected file is still available to retry.');
-          } finally {
-            operation = 'idle';
-            render();
+            throw makeError('The server returned invalid program metadata.');
           }
         }
+        return body;
+      }
 
-        async function deleteProgram(program) {
-          if (operation !== 'idle') {
-            return;
-          }
-          if (!window.confirm(`Delete "${program.name}"? This cannot be undone.`)) {
-            return;
-          }
+      function parsePlayerIdentity(body) {
+        if (!body || typeof body.playerProfileName !== 'string') {
+          throw makeError('The server returned an invalid player identity.');
+        }
+        return body;
+      }
 
-          operation = 'deleting';
-          activeDeleteId = program.id;
-          setMessage(`Deleting ${program.name}...`);
-          render();
-          try {
-            const response = await request(
-              `/playerapi/v1/programs/${encodeURIComponent(program.id)}`,
-              { method: 'DELETE' },
-            );
-            if (response.status !== 204) {
-              throw await errorFromResponse(response);
-            }
-            const refreshed = await loadPrograms();
-            if (refreshed) {
-              setMessage('Program deleted successfully.', 'success');
-            }
-          } catch (error) {
-            if (error.status === 404) {
-              await loadPrograms();
-            }
-            displayError(error, 'delete');
-          } finally {
-            operation = 'idle';
-            activeDeleteId = null;
-            render();
-          }
+      function renderQuota() {
+        if (programList === null) {
+          elements.quotaUsed.textContent = 'Loading storage...';
+          elements.quotaRemaining.textContent = '';
+          elements.quotaDetail.textContent = 'Storage details will appear after loading.';
+          elements.quotaProgress.max = '1';
+          elements.quotaProgress.value = '0';
+          return;
         }
 
-        elements.browseButton.addEventListener('click', () => elements.fileInput.click());
-        elements.fileInput.addEventListener('change', () => {
-          if (elements.fileInput.files.length === 1) {
-            selectFile(elements.fileInput.files[0]);
-          }
-        });
-        elements.dropZone.addEventListener('click', (event) => {
-          if (event.target === elements.dropZone) {
-            elements.fileInput.click();
-          }
-        });
-        elements.dropZone.addEventListener('keydown', (event) => {
-          if (event.key === 'Enter' || event.key === ' ') {
-            event.preventDefault();
-            elements.fileInput.click();
-          }
-        });
-        elements.dropZone.addEventListener('dragover', (event) => {
-          event.preventDefault();
-          elements.dropZone.classList.add('drag-over');
-        });
-        elements.dropZone.addEventListener('dragleave', () => {
-          elements.dropZone.classList.remove('drag-over');
-        });
-        elements.dropZone.addEventListener('drop', (event) => {
-          event.preventDefault();
-          elements.dropZone.classList.remove('drag-over');
-          selectDroppedFiles(event.dataTransfer.files);
-        });
-        elements.uploadForm.addEventListener('submit', (event) => {
-          event.preventDefault();
-          uploadProgram();
-        });
-        elements.refreshButton.addEventListener('click', () => loadPrograms());
+        const quota = programList.quotaBytes;
+        const used = programList.usedBytes;
+        elements.quotaUsed.textContent = `${formatBytes(used)} used`;
+        elements.quotaRemaining.textContent = `${formatBytes(programList.remainingBytes)} remaining`;
+        elements.quotaDetail.textContent = `${formatBytes(used)} of ${
+          formatBytes(quota)
+        } total program storage`;
+        elements.quotaProgress.max = String(Math.max(quota, 1));
+        elements.quotaProgress.value = String(Math.min(used, Math.max(quota, 1)));
+        elements.quotaProgress.setAttribute(
+          'aria-label',
+          `${formatBytes(used)} of ${formatBytes(quota)} program storage used`,
+        );
+      }
 
+      function renderPrograms() {
+        elements.programsLoading.hidden = programList !== null || operation !== 'loading';
+        elements.programsBody.replaceChildren();
+
+        if (programList === null) {
+          elements.programsTable.hidden = true;
+          elements.emptyState.hidden = true;
+          return;
+        }
+
+        const programs = programList.programs;
+        elements.emptyState.hidden = programs.length !== 0;
+        elements.programsTable.hidden = programs.length === 0;
+
+        for (const program of programs) {
+          const row = document.createElement('tr');
+
+          const idCell = document.createElement('td');
+          const idCode = document.createElement('code');
+          idCode.textContent = program.id;
+          idCell.append(idCode);
+          row.append(idCell);
+
+          const nameCell = document.createElement('td');
+          nameCell.textContent = program.name;
+          row.append(nameCell);
+
+          const dateCell = document.createElement('td');
+          const date = document.createElement('time');
+          date.dateTime = program.uploadedAt;
+          date.textContent = formatDate(program.uploadedAt);
+          date.title = program.uploadedAt;
+          dateCell.append(date);
+          row.append(dateCell);
+
+          const sizeCell = document.createElement('td');
+          sizeCell.textContent = formatBytes(program.sizeBytes);
+          row.append(sizeCell);
+
+          const actionCell = document.createElement('td');
+          const deleteButton = document.createElement('button');
+          deleteButton.type = 'button';
+          deleteButton.className = 'danger';
+          deleteButton.textContent = activeDeleteId === program.id ? 'Deleting...' : 'Delete';
+          deleteButton.disabled = operation !== 'idle';
+          deleteButton.addEventListener('click', () => deleteProgram(program));
+          actionCell.append(deleteButton);
+          row.append(actionCell);
+
+          elements.programsBody.append(row);
+        }
+      }
+
+      function renderControls() {
+        const busy = operation !== 'idle';
+        elements.logoutButton.disabled = busy;
+        elements.logoutButton.textContent = operation === 'logging-out' ? 'Logging out...' : 'Log out';
+        elements.browseButton.disabled = busy;
+        elements.fileInput.disabled = busy;
+        elements.programName.disabled = busy;
+        elements.uploadButton.disabled = busy || selectedFile === null;
+        elements.refreshButton.disabled = busy;
+        elements.uploadButton.textContent = operation === 'uploading'
+          ? 'Uploading...'
+          : 'Upload program';
+      }
+
+      function renderSelectedFile() {
+        if (selectedFile === null) {
+          elements.selectedFile.textContent = '';
+          return;
+        }
+        elements.selectedFile.textContent = `Selected: ${selectedFile.name} (${
+          formatBytes(selectedFile.size)
+        })`;
+      }
+
+      function render() {
+        renderQuota();
+        renderPrograms();
+        renderControls();
+        renderSelectedFile();
+      }
+
+      function displayError(error, action) {
+        if (error.redirected) {
+          return;
+        }
+        if (error.status === 413) {
+          setMessage('This program exceeds the storage space remaining in your quota.', 'error');
+        } else if (error.status === 409) {
+          setMessage('Another program operation is in progress. Please try again shortly.', 'error');
+        } else if (error.status === 404 && action === 'delete') {
+          setMessage('That program is no longer available. The list has been refreshed.', 'error');
+        } else {
+          setMessage(error.message || 'The request failed. Please try again.', 'error');
+        }
+      }
+
+      async function loadPrograms() {
+        operation = 'loading';
         render();
-        loadPrograms();
-      })();
+        try {
+          const response = await request('/playerapi/v1/programs');
+          programList = parseProgramList(await response.json());
+          return true;
+        } catch (error) {
+          displayError(error, 'list');
+          return false;
+        } finally {
+          operation = 'idle';
+          render();
+        }
+      }
+
+      async function loadPlayerIdentity() {
+        operation = 'loading';
+        render();
+        try {
+          const response = await request('/playerapi/v1/whoami');
+          const identity = parsePlayerIdentity(await response.json());
+          elements.playerProfileName.textContent = identity.playerProfileName;
+          return true;
+        } catch (error) {
+          displayError(error, 'whoami');
+          return false;
+        } finally {
+          operation = 'idle';
+          render();
+        }
+      }
+
+      function selectFile(file) {
+        selectedFile = file;
+        render();
+        setUploadMessage(`Ready to upload ${file.name}.`);
+      }
+
+      function selectDroppedFiles(files) {
+        if (files.length !== 1) {
+          setMessage('Please choose exactly one program file.', 'error');
+          return;
+        }
+        selectFile(files[0]);
+      }
+
+      function validateName(value) {
+        const trimmed = value.trim();
+        if (trimmed.length === 0) {
+          return null;
+        }
+        if (
+          Array.from(trimmed).length > 128 ||
+          /[\u0000-\u001f\u007f]/u.test(trimmed)
+        ) {
+          throw makeError(
+            'The program name must be 128 or fewer characters and contain no control characters.',
+          );
+        }
+        return trimmed;
+      }
+
+      async function uploadProgram() {
+        if (selectedFile === null) {
+          setMessage('Choose a program file before uploading.', 'error');
+          return;
+        }
+
+        let name;
+        try {
+          name = validateName(elements.programName.value);
+        } catch (error) {
+          displayError(error, 'upload');
+          return;
+        }
+
+        const form = new FormData();
+        form.append('program', selectedFile, selectedFile.name);
+        if (name !== null) {
+          form.append('name', name);
+        }
+
+        operation = 'uploading';
+        setUploadMessage('Uploading program...');
+        setMessage('');
+        render();
+        try {
+          const response = await request('/playerapi/v1/programs', {
+            method: 'POST',
+            body: form,
+          });
+          if (response.status !== 200 && response.status !== 201) {
+            throw await errorFromResponse(response);
+          }
+          await response.json();
+          selectedFile = null;
+          elements.fileInput.value = '';
+          elements.programName.value = '';
+          const refreshed = await loadPrograms();
+          if (refreshed) {
+            setMessage('Program uploaded successfully.', 'success');
+          } else {
+            setUploadMessage('Upload completed, but the program list could not be refreshed.');
+          }
+        } catch (error) {
+          displayError(error, 'upload');
+          setUploadMessage('Upload failed. Your selected file is still available to retry.');
+        } finally {
+          operation = 'idle';
+          render();
+        }
+      }
+
+      async function deleteProgram(program) {
+        if (operation !== 'idle') {
+          return;
+        }
+        if (!window.confirm(`Delete "${program.name}"? This cannot be undone.`)) {
+          return;
+        }
+
+        operation = 'deleting';
+        activeDeleteId = program.id;
+        setMessage(`Deleting ${program.name}...`);
+        render();
+        try {
+          const response = await request(
+            `/playerapi/v1/programs/${encodeURIComponent(program.id)}`,
+            { method: 'DELETE' },
+          );
+          if (response.status !== 204) {
+            throw await errorFromResponse(response);
+          }
+          const refreshed = await loadPrograms();
+          if (refreshed) {
+            setMessage('Program deleted successfully.', 'success');
+          }
+        } catch (error) {
+          if (error.status === 404) {
+            await loadPrograms();
+          }
+          displayError(error, 'delete');
+        } finally {
+          operation = 'idle';
+          activeDeleteId = null;
+          render();
+        }
+      }
+
+      async function logout() {
+        if (operation !== 'idle') {
+          return;
+        }
+
+        operation = 'logging-out';
+        setMessage('Logging out...');
+        render();
+        try {
+          const response = await request('/playerapi/v1/logout', { method: 'POST' });
+          if (response.status !== 204) {
+            throw await errorFromResponse(response);
+          }
+          window.location.assign('/auth.html');
+        } catch (error) {
+          displayError(error, 'logout');
+        } finally {
+          operation = 'idle';
+          render();
+        }
+      }
+
+      elements.browseButton.addEventListener('click', () => elements.fileInput.click());
+      elements.fileInput.addEventListener('change', () => {
+        if (elements.fileInput.files.length === 1) {
+          selectFile(elements.fileInput.files[0]);
+        }
+      });
+      elements.dropZone.addEventListener('click', (event) => {
+        if (event.target === elements.dropZone) {
+          elements.fileInput.click();
+        }
+      });
+      elements.dropZone.addEventListener('keydown', (event) => {
+        if (event.key === 'Enter' || event.key === ' ') {
+          event.preventDefault();
+          elements.fileInput.click();
+        }
+      });
+      elements.dropZone.addEventListener('dragover', (event) => {
+        event.preventDefault();
+        elements.dropZone.classList.add('drag-over');
+      });
+      elements.dropZone.addEventListener('dragleave', () => {
+        elements.dropZone.classList.remove('drag-over');
+      });
+      elements.dropZone.addEventListener('drop', (event) => {
+        event.preventDefault();
+        elements.dropZone.classList.remove('drag-over');
+        selectDroppedFiles(event.dataTransfer.files);
+      });
+      elements.uploadForm.addEventListener('submit', (event) => {
+        event.preventDefault();
+        uploadProgram();
+      });
+      elements.refreshButton.addEventListener('click', () => loadPrograms());
+      elements.logoutButton.addEventListener('click', () => logout());
+
+      render();
+      loadPlayerIdentity().then((identityLoaded) => {
+        if (identityLoaded) {
+          loadPrograms();
+        }
+      });
+    })();
     </script>
   </body>
 </html>

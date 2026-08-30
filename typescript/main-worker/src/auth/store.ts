@@ -147,6 +147,20 @@ export class DurableAuthStore implements AuthStore {
     });
   }
 
+  async revokeSession(sessionToken: string, nowMs = this.clock()): Promise<void> {
+    await this.ready;
+    await this.withLock(async () => {
+      let changed = this.cleanupSessions(nowMs);
+      const tokenDigest = await digest(sessionToken);
+      if (this.sessions.delete(tokenDigest)) {
+        changed = true;
+      }
+      if (changed) {
+        await this.persist();
+      }
+    });
+  }
+
   private async load(): Promise<void> {
     let text: string;
     try {

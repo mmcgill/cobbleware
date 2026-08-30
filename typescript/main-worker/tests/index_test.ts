@@ -43,6 +43,10 @@ Deno.test('/index.html contains the programs UI', async () => {
       'Uploaded',
       'Size',
       'Delete',
+      'player-profile-name',
+      'Log out',
+      '/playerapi/v1/whoami',
+      '/playerapi/v1/logout',
     ]
   ) {
     if (!body.includes(landmark)) {

@@ -1,5 +1,10 @@
 import { type AppConfig, configFromEnv } from './config.ts';
-import { handleModAuthentication, handlePlayerAuthentication } from './auth/handlers.ts';
+import {
+  handleModAuthentication,
+  handlePlayerAuthentication,
+  handlePlayerLogout,
+  handlePlayerWhoAmI,
+} from './auth/handlers.ts';
 import { type RequestContext, requireModAuth, requirePlayerAuth } from './auth/middleware.ts';
 import { DurableAuthStore } from './auth/store.ts';
 import type { AuthStore } from './auth/types.ts';
@@ -61,6 +66,18 @@ async function routeRequest(
 
   if (pathname === '/playerapi/v1/authenticate') {
     return handlePlayerAuthentication(request, config, store);
+  }
+
+  if (pathname === '/playerapi/v1/whoami') {
+    const context: RequestContext = {};
+    const authError = await requirePlayerAuth(request, config, store, context, 'api');
+    return authError ?? handlePlayerWhoAmI(request, context.player!);
+  }
+
+  if (pathname === '/playerapi/v1/logout') {
+    const context: RequestContext = {};
+    const authError = await requirePlayerAuth(request, config, store, context, 'api');
+    return authError ?? handlePlayerLogout(request, config, store, context.sessionToken!);
   }
 
   if (pathname === '/playerapi/v1/programs') {
