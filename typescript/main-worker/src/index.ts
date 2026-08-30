@@ -117,7 +117,7 @@ async function routeRequest(
     return authError ?? new Response(null, { status: 404 });
   }
 
-  if (pathname === '/auth.html') {
+  if (pathname === '/auth.html' || !pathname.toLowerCase().endsWith('.html')) {
     return serveStatic(request);
   }
 

@@ -10,7 +10,7 @@ const command = new Deno.Command(runtimeBinary, {
     '--entrypoint',
     'src/index.ts',
     '--static',
-    'static/*.html',
+    'static/**/*',
     '--output',
     'main-worker.eszip',
   ],

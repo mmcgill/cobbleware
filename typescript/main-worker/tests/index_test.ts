@@ -57,3 +57,55 @@ Deno.test('/index.html contains the programs UI', async () => {
     throw new Error('index page still contains the placeholder UI');
   }
 });
+
+Deno.test('static assets are found by path and use their file type', async () => {
+  const response = await serveStatic(new Request('http://localhost/style.css'));
+
+  if (response.status !== 200) {
+    throw new Error(`expected status 200, got ${response.status}`);
+  }
+  if (response.headers.get('content-type') !== 'text/css; charset=utf-8') {
+    throw new Error('expected a CSS response');
+  }
+  if (!(await response.text()).includes('--surface')) {
+    throw new Error('expected the shared stylesheet to contain the UI theme');
+  }
+});
+
+Deno.test('public static assets can be loaded without a Player session', async () => {
+  const response = await handleRequest(new Request('http://localhost/style.css'));
+
+  if (response.status !== 200) {
+    throw new Error(`expected status 200, got ${response.status}`);
+  }
+});
+
+Deno.test('/auth.html uses the shared stylesheet', async () => {
+  const response = await serveStatic(new Request('http://localhost/auth.html'));
+  const body = await response.text();
+
+  if (response.status !== 200) {
+    throw new Error(`expected status 200, got ${response.status}`);
+  }
+  for (const landmark of ['href="/style.css"', 'class="card auth-card"', 'class="command"']) {
+    if (!body.includes(landmark)) {
+      throw new Error(`expected auth page to contain ${landmark}`);
+    }
+  }
+});
+
+Deno.test('missing static assets return 404', async () => {
+  const response = await serveStatic(new Request('http://localhost/missing.css'));
+
+  if (response.status !== 404) {
+    throw new Error(`expected status 404, got ${response.status}`);
+  }
+});
+
+Deno.test('static path traversal is rejected', async () => {
+  const response = await serveStatic(new Request('http://localhost/%2e%2e/src/index.ts'));
+
+  if (response.status !== 404) {
+    throw new Error(`expected status 404, got ${response.status}`);
+  }
+});
