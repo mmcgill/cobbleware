@@ -7,8 +7,7 @@ export const DEFAULT_PLAYER_PROGRAM_QUOTA_BYTES = 10 * 1024 * 1024;
 
 export type AppConfig = {
   apiKey: string | undefined;
-  gameDir: string;
-  authStatePath: string;
+  storageDir: string;
   cookieName: string;
   pendingAuthCodeLifetimeMs: number;
   sessionLifetimeMs: number;
@@ -21,19 +20,18 @@ export type ConfigOverrides = Partial<AppConfig> & {
   apiKey?: string | undefined;
 };
 
-function defaultAuthStatePath(gameDir: string): string {
+function defaultStorageDir(gameDir: string): string {
   const separator = gameDir.endsWith('\\') || gameDir.endsWith('/') ? '' : '/';
-  return `${gameDir}${separator}.cobbleware/auth.json`;
+  return `${gameDir}${separator}cobbleware-data`;
 }
 
 export function configFromEnv(overrides: ConfigOverrides = {}): AppConfig {
-  const gameDir = overrides.gameDir ?? Deno.env.get('COBBLEWARE_GAME_DIR') ?? Deno.cwd();
+  const gameDir = Deno.env.get('COBBLEWARE_GAME_DIR') ?? Deno.cwd();
   const apiKey = overrides.apiKey ?? Deno.env.get('COBBLEWARE_API_KEY');
 
   return {
     apiKey,
-    gameDir,
-    authStatePath: overrides.authStatePath ?? defaultAuthStatePath(gameDir),
+    storageDir: overrides.storageDir ?? defaultStorageDir(gameDir),
     cookieName: overrides.cookieName ?? DEFAULT_COOKIE_NAME,
     pendingAuthCodeLifetimeMs: overrides.pendingAuthCodeLifetimeMs ?? PENDING_AUTH_CODE_LIFETIME_MS,
     sessionLifetimeMs: overrides.sessionLifetimeMs ?? SESSION_LIFETIME_MS,

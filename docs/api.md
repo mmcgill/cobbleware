@@ -145,7 +145,7 @@ on the server. Programs are returned newest first. The response includes the pla
 ```
 
 The `id` field is a content-derived, opaque identifier. Program files are stored at
-`$COBBLEWARE_GAME_DIR/{playerUUID}/{program-id}.eszip`, with metadata stored in that player's manifest. A player
+`$COBBLEWARE_GAME_DIR/cobbleware-data/programs/{playerUUID}/{program-id}.eszip`, with metadata stored in that player's manifest. A player
 can see only their own programs. The Player API does not provide an endpoint for downloading program contents.
 Listing returns `409` with a JSON `error` property if another program operation for the same player is in progress.
 

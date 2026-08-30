@@ -20,11 +20,10 @@ async function createTestApp(
   playerProgramQuotaBytes: number,
   programStore?: ProgramStore,
 ): Promise<TestApp> {
-  const gameDir = await Deno.makeTempDir({ prefix: 'cobbleware-program-test-' });
+  const storageDir = await Deno.makeTempDir({ prefix: 'cobbleware-program-test-' });
   const config = configFromEnv({
     apiKey: API_KEY,
-    gameDir,
-    authStatePath: `${gameDir}/auth.json`,
+    storageDir,
     playerProgramQuotaBytes,
   });
   const authStore = await DurableAuthStore.open(config);
@@ -32,7 +31,7 @@ async function createTestApp(
   return {
     handler: await createHandler({ config, store: authStore, programStore }),
     config,
-    cleanup: () => Deno.remove(gameDir, { recursive: true }),
+    cleanup: () => Deno.remove(storageDir, { recursive: true }),
   };
 }
 
@@ -120,7 +119,7 @@ Deno.test('Player program upload stores bytes and returns metadata', async () =>
       'upload location should use the program id',
     );
 
-    const programPath = `${app.config.gameDir}/${PLAYER_UUID}/${metadata.id}.eszip`;
+    const programPath = `${app.config.storageDir}/programs/${PLAYER_UUID}/${metadata.id}.eszip`;
     const stored = await Deno.readFile(programPath);
     assertEquals(
       JSON.stringify([...stored]),
@@ -199,7 +198,7 @@ Deno.test('Player can delete an owned program', async () => {
       ),
       404,
     );
-    const programPath = `${app.config.gameDir}/${PLAYER_UUID}/${metadata.id}.eszip`;
+    const programPath = `${app.config.storageDir}/programs/${PLAYER_UUID}/${metadata.id}.eszip`;
     try {
       await Deno.stat(programPath);
       throw new Error('deleted program file still exists');

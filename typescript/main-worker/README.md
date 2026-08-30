@@ -11,11 +11,11 @@ and expected to be supplied as a bearer token. A Mod API request that does not h
 authorization header receives a 401 response.
 
 Player API calls use an HttpOnly `cobbleware_session` cookie created by exchanging a short-lived
-Minecraft auth code. Player sessions last 30 days, are persisted below `COBBLEWARE_GAME_DIR`, and
+Minecraft auth code. Player sessions last 30 days, are persisted below `$COBBLEWARE_GAME_DIR/cobbleware-data`, and
 are not marked `Secure` because the API supports plaintext HTTP.
 
 The Main Worker stores user programs in the Minecraft game directory at
-`$COBBLEWARE_GAME_DIR/{playerUUID}/{program-id}.eszip`, with per-player metadata stored alongside the program
+`$COBBLEWARE_GAME_DIR/cobbleware-data/programs/{playerUUID}/{program-id}.eszip`, with per-player metadata stored alongside the program
 files. Program ids are uppercase, unpadded RFC 4648 Base32 encodings of the SHA-256 hash of the exact program
 bytes. It expects
 `COBBLEWARE_GAME_DIR` to be set to the Minecraft game directory (e.g. obtained by

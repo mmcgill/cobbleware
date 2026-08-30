@@ -150,7 +150,7 @@ export class DurableAuthStore implements AuthStore {
   private async load(): Promise<void> {
     let text: string;
     try {
-      text = await Deno.readTextFile(this.config.authStatePath);
+      text = await Deno.readTextFile(this.authStatePath());
     } catch (error) {
       if (error instanceof Deno.errors.NotFound) {
         return;
@@ -206,17 +206,18 @@ export class DurableAuthStore implements AuthStore {
   }
 
   private async persist(): Promise<void> {
-    const directory = this.config.authStatePath.replace(/[\\/]auth\.json$/, '');
+    const authStatePath = this.authStatePath();
+    const directory = authStatePath.replace(/[\\/]auth\.json$/, '');
     await Deno.mkdir(directory, { recursive: true });
 
     const state: PersistedAuthState = {
       version: 1,
       sessions: [...this.sessions.values()],
     };
-    const temporaryPath = `${this.config.authStatePath}.${crypto.randomUUID()}.tmp`;
+    const temporaryPath = `${authStatePath}.${crypto.randomUUID()}.tmp`;
     try {
       await Deno.writeTextFile(temporaryPath, JSON.stringify(state, null, 2));
-      await Deno.rename(temporaryPath, this.config.authStatePath);
+      await Deno.rename(temporaryPath, authStatePath);
     } catch (error) {
       try {
         await Deno.remove(temporaryPath);
@@ -225,6 +226,13 @@ export class DurableAuthStore implements AuthStore {
       }
       throw error;
     }
+  }
+
+  private authStatePath(): string {
+    const separator = this.config.storageDir.endsWith('/') || this.config.storageDir.endsWith('\\')
+      ? ''
+      : '/';
+    return `${this.config.storageDir}${separator}auth.json`;
   }
 
   private async withLock<T>(operation: () => Promise<T>): Promise<T> {

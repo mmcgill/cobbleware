@@ -22,11 +22,10 @@ async function createTestApp(options: {
   sessionLifetimeMs?: number;
   tokenGenerator?: () => string;
 } = {}): Promise<TestApp> {
-  const gameDir = await Deno.makeTempDir({ prefix: 'cobbleware-auth-test-' });
+  const storageDir = await Deno.makeTempDir({ prefix: 'cobbleware-auth-test-' });
   const config = configFromEnv({
     apiKey: API_KEY,
-    gameDir,
-    authStatePath: `${gameDir}/auth.json`,
+    storageDir,
     pendingAuthCodeLifetimeMs: options.pendingAuthCodeLifetimeMs,
     sessionLifetimeMs: options.sessionLifetimeMs,
   });
@@ -39,7 +38,7 @@ async function createTestApp(options: {
     handler: await createHandler({ config, store }),
     config,
     store,
-    cleanup: () => Deno.remove(gameDir, { recursive: true }),
+    cleanup: () => Deno.remove(storageDir, { recursive: true }),
   };
 }
 
@@ -106,6 +105,8 @@ Deno.test('Mod authentication binds a code and Player authentication consumes it
     ) {
       throw new Error(`unexpected Set-Cookie header: ${setCookie}`);
     }
+
+    await Deno.stat(`${app.config.storageDir}/auth.json`);
 
     await assertErrorResponse(await authenticatePlayer(app.handler), 400);
   } finally {

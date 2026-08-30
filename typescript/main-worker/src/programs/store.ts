@@ -130,10 +130,10 @@ export class DurableProgramStore implements ProgramStore {
   }
 
   private playerDirectory(playerUUID: string): string {
-    const separator = this.config.gameDir.endsWith('/') || this.config.gameDir.endsWith('\\')
+    const separator = this.config.storageDir.endsWith('/') || this.config.storageDir.endsWith('\\')
       ? ''
       : '/';
-    return `${this.config.gameDir}${separator}${playerUUID}`;
+    return `${this.config.storageDir}${separator}programs/${playerUUID}`;
   }
 
   private manifestPath(playerUUID: string): string {
