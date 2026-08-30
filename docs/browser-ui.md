@@ -1,6 +1,6 @@
 # Browser UI for Players
 
-The Browser UI is an HTML/JS app served by the Main Worker that allows Players to view and manage ther Programs on a server.
+The Browser UI is an HTML/JS app served by the Main Worker that allows Players to view and manage their Programs on a server.
 The Browser UI relies on the Player API.
 
 Requests to the root are redirected to `/index.html`.
@@ -10,16 +10,22 @@ to `/auth.html`.
 
 ## Index page
 
-The `/index.html` page presents the user with a table that lists of their programs. The table
-contains columns for program id, name, and size.
+The `/index.html` page presents the user with a table that lists their programs. The table
+contains columns for program id, name, upload date, size, and an action to delete each program.
 
 The page also shows a program quota usage bar showing the total used and remaining program space
 available to the player.
 
-The page provides a drag-and-drop upload area for ESZip bundles. Dropping a file starts a
-`POST /playerapi/v1/programs` upload using `multipart/form-data`. The uploaded filename is used as the
-program name unless the player supplies a different name. On success, the new program appears in the table
-without requiring a page reload. Upload errors are shown without removing existing programs from the table.
+The page provides a drag-and-drop upload area for ESZip bundles and a file-picker fallback. Dropping or choosing
+one file starts a `POST /playerapi/v1/programs` upload using `multipart/form-data`. The uploaded filename is used
+as the program name when the optional name field is blank; otherwise the supplied name is sent to the server.
+On success, the program list and quota usage are refreshed without a full page reload. Upload errors are shown
+without removing existing programs from the table.
+
+Each program has a delete action. The UI asks for confirmation before sending
+`DELETE /playerapi/v1/programs/{id}`. After a successful deletion, the program list and quota usage are refreshed.
+The UI displays server/API errors and preserves the current list when an upload or deletion fails. An expired
+session redirects the player to `/auth.html`.
 
 ## Authentication Page
 
