@@ -32,3 +32,27 @@ as Flatbuffer schemas found in the [schema](../schema/) directory. Scripts are u
 generate Typescript and Java code from these schemas to ensure that data can be efficiently
 transmitted between the Mod and Runtime, and saved/loaded to persistent game state, in a
 consistent and backward-compatible way.
+
+## Executing Programs
+
+The Mod is responsible for:
+
+* queueing events to be processed by each Cobbleputer
+* durably maintaining the state of each Cobbleputer
+* applying effects to the state of the world
+
+The Runtime is responsible for executing Programs.
+
+Program execution should be "fair" in the sense that no single player's Cobbleputers
+may starve the Cobbleputers of another player. We do **not** provide fairness
+for individual Cobbleputers. One CPU-bound Cobbleputer may delay the execution of the owning player's
+other Cobbleputers.
+
+To ensure player-level fairness, the Mod starts the Runtime with:
+
+* a `--policy` of `per_worker`
+* a `--max-parallelism` of `1`
+* an `EDGE_RUNTIME_WORKER_POOL_SIZE` equal to the maximum number of online players supported by the Server
+
+Each online player with executing Cobbleputers gets one V8 isolate at at a time, and that isolate
+processes events for all Cobbleputers executing that player's programs.
