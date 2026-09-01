@@ -1,4 +1,4 @@
-import { emptyResponse, jsonError, jsonResponse } from '../auth/http.ts';
+import { jsonError, jsonResponse } from '../auth/http.ts';
 import { requireSameOrigin } from '../auth/middleware.ts';
 import {
   ProgramOperationConflictError,
@@ -71,31 +71,6 @@ export async function handleProgramCollection(
     if (error instanceof ProgramQuotaExceededError) {
       return jsonError('player program quota exceeded', 413);
     }
-    return handleStoreError(error);
-  }
-}
-
-export async function handleProgramDelete(
-  request: Request,
-  store: ProgramStore,
-  playerUUID: string,
-  id: string,
-): Promise<Response> {
-  if (request.method !== 'DELETE') {
-    return methodNotAllowed('DELETE');
-  }
-
-  const originError = requireSameOrigin(request);
-  if (originError !== null) {
-    return originError;
-  }
-
-  try {
-    if (!(await store.delete(playerUUID, id))) {
-      return jsonError('program not found', 404);
-    }
-    return emptyResponse(204);
-  } catch (error) {
     return handleStoreError(error);
   }
 }

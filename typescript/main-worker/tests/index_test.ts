@@ -39,10 +39,10 @@ Deno.test('/index.html contains the programs UI', async () => {
       'Program storage',
       'Drop an ESZip bundle here',
       'Program name',
+      'Your active program',
       'Program ID',
       'Uploaded',
       'Size',
-      'Delete',
       'player-profile-name',
       'Log out',
       '/playerapi/v1/whoami',
@@ -87,7 +87,7 @@ Deno.test('/auth.html uses the shared stylesheet', async () => {
   if (response.status !== 200) {
     throw new Error(`expected status 200, got ${response.status}`);
   }
-  for (const landmark of ['href="/style.css"', 'class="card auth-card"', 'class="command"']) {
+  for (const landmark of ['href="./style.css"', 'class="card auth-card"', 'class="command"']) {
     if (!body.includes(landmark)) {
       throw new Error(`expected auth page to contain ${landmark}`);
     }

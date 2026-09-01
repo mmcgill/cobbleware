@@ -13,7 +13,7 @@
         <div>
           <h1>Cobbleware programs</h1>
           <p
-            class="intro">Upload and manage the programs you own on this server. Programs are private to your
+            class="intro">Upload and replace your active program on this server. Programs are private to your
             Minecraft player and can be loaded onto Cobbleputers in game.</p>
         </div>
         <div class="account-controls" aria-label="Account controls">
@@ -39,21 +39,20 @@
 
       <section class="card" aria-labelledby="programs-heading">
         <div class="table-header">
-          <h2 id="programs-heading">Your programs</h2>
+          <h2 id="programs-heading">Your active program</h2>
           <button id="refresh-button" class="secondary" type="button">Refresh</button>
         </div>
         <p id="programs-loading" class="muted">Loading programs...</p>
-        <p id="empty-state" class="empty-state" hidden>No programs have been uploaded yet.</p>
+        <p id="empty-state" class="empty-state" hidden>No active program has been uploaded yet.</p>
         <div class="table-wrapper">
           <table id="programs-table" hidden>
-            <caption>Your uploaded Cobbleware programs</caption>
+            <caption>Your active Cobbleware program</caption>
             <thead>
               <tr>
                 <th scope="col">Program ID</th>
                 <th scope="col">Name</th>
                 <th scope="col">Uploaded</th>
                 <th scope="col">Size</th>
-                <th scope="col">Actions</th>
               </tr>
             </thead>
             <tbody id="programs-body"></tbody>
@@ -127,7 +126,6 @@
       let programList = null;
       let selectedFile = null;
       let operation = 'idle';
-      let activeDeleteId = null;
 
       function formatBytes(bytes) {
         if (bytes === 0) {
@@ -182,9 +180,8 @@
         const fallbacks = {
           400: 'The upload request or program name was invalid.',
           403: 'The server rejected this same-origin request.',
-          404: 'The program was not found.',
           409: 'Another program operation is in progress. Please try again shortly.',
-          413: 'The program is larger than the remaining storage quota.',
+          413: 'The program is larger than your storage quota.',
           415: 'The upload must be sent as a multipart form.',
           500: 'The server could not complete the request.',
         };
@@ -216,6 +213,9 @@
       function parseProgramList(body) {
         if (!body || !Array.isArray(body.programs)) {
           throw makeError('The server returned an invalid program list.');
+        }
+        if (body.programs.length > 1) {
+          throw makeError('The server returned more than one active program.');
         }
         const numericFields = ['quotaBytes', 'usedBytes', 'remainingBytes'];
         if (numericFields.some((field) => !Number.isInteger(body[field]) || body[field] < 0)) {
@@ -307,16 +307,6 @@
           sizeCell.textContent = formatBytes(program.sizeBytes);
           row.append(sizeCell);
 
-          const actionCell = document.createElement('td');
-          const deleteButton = document.createElement('button');
-          deleteButton.type = 'button';
-          deleteButton.className = 'danger';
-          deleteButton.textContent = activeDeleteId === program.id ? 'Deleting...' : 'Delete';
-          deleteButton.disabled = operation !== 'idle';
-          deleteButton.addEventListener('click', () => deleteProgram(program));
-          actionCell.append(deleteButton);
-          row.append(actionCell);
-
           elements.programsBody.append(row);
         }
       }
@@ -352,16 +342,14 @@
         renderSelectedFile();
       }
 
-      function displayError(error, action) {
+      function displayError(error) {
         if (error.redirected) {
           return;
         }
         if (error.status === 413) {
-          setMessage('This program exceeds the storage space remaining in your quota.', 'error');
+          setMessage('This program exceeds your storage quota.', 'error');
         } else if (error.status === 409) {
           setMessage('Another program operation is in progress. Please try again shortly.', 'error');
-        } else if (error.status === 404 && action === 'delete') {
-          setMessage('That program is no longer available. The list has been refreshed.', 'error');
         } else {
           setMessage(error.message || 'The request failed. Please try again.', 'error');
         }
@@ -375,7 +363,7 @@
           programList = parseProgramList(await response.json());
           return true;
         } catch (error) {
-          displayError(error, 'list');
+          displayError(error);
           return false;
         } finally {
           operation = 'idle';
@@ -392,7 +380,7 @@
           elements.playerProfileName.textContent = identity.playerProfileName;
           return true;
         } catch (error) {
-          displayError(error, 'whoami');
+          displayError(error);
           return false;
         } finally {
           operation = 'idle';
@@ -440,7 +428,7 @@
         try {
           name = validateName(elements.programName.value);
         } catch (error) {
-          displayError(error, 'upload');
+          displayError(error);
           return;
         }
 
@@ -468,51 +456,16 @@
           elements.programName.value = '';
           const refreshed = await loadPrograms();
           if (refreshed) {
-            setMessage('Program uploaded successfully.', 'success');
+            setUploadMessage('Uploaded!');
+            setMessage('Program uploaded and activated successfully.', 'success');
           } else {
             setUploadMessage('Upload completed, but the program list could not be refreshed.');
           }
         } catch (error) {
-          displayError(error, 'upload');
+          displayError(error);
           setUploadMessage('Upload failed. Your selected file is still available to retry.');
         } finally {
           operation = 'idle';
-          render();
-        }
-      }
-
-      async function deleteProgram(program) {
-        if (operation !== 'idle') {
-          return;
-        }
-        if (!window.confirm(`Delete "${program.name}"? This cannot be undone.`)) {
-          return;
-        }
-
-        operation = 'deleting';
-        activeDeleteId = program.id;
-        setMessage(`Deleting ${program.name}...`);
-        render();
-        try {
-          const response = await request(
-            `/playerapi/v1/programs/${encodeURIComponent(program.id)}`,
-            { method: 'DELETE' },
-          );
-          if (response.status !== 204) {
-            throw await errorFromResponse(response);
-          }
-          const refreshed = await loadPrograms();
-          if (refreshed) {
-            setMessage('Program deleted successfully.', 'success');
-          }
-        } catch (error) {
-          if (error.status === 404) {
-            await loadPrograms();
-          }
-          displayError(error, 'delete');
-        } finally {
-          operation = 'idle';
-          activeDeleteId = null;
           render();
         }
       }
@@ -532,7 +485,7 @@
           }
           window.location.assign('/auth.html');
         } catch (error) {
-          displayError(error, 'logout');
+          displayError(error);
         } finally {
           operation = 'idle';
           render();

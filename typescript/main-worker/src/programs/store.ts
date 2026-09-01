@@ -34,10 +34,8 @@ export class DurableProgramStore implements ProgramStore {
   list(playerUUID: string): Promise<ProgramList> {
     return this.withPlayerLock(playerUUID, async () => {
       const manifest = await this.readManifest(playerUUID);
-      const programs = [...manifest.programs].sort((left, right) => {
-        const byDate = right.uploadedAt.localeCompare(left.uploadedAt);
-        return byDate === 0 ? left.id.localeCompare(right.id) : byDate;
-      });
+      const activeProgram = newestProgram(manifest.programs);
+      const programs = activeProgram === undefined ? [] : [activeProgram];
       const usedBytes = programs.reduce((total, program) => total + program.sizeBytes, 0);
 
       return {
@@ -61,15 +59,17 @@ export class DurableProgramStore implements ProgramStore {
         throw new Error('generated program id has an invalid format');
       }
 
-      const existing = manifest.programs.find((program) => program.id === id);
+      const activeProgram = newestProgram(manifest.programs);
+      const existing = activeProgram?.id === id ? activeProgram : undefined;
       if (existing !== undefined) {
         return { metadata: existing, created: false };
       }
 
-      const usedBytes = manifest.programs.reduce((total, program) => total + program.sizeBytes, 0);
-      if (usedBytes + content.byteLength > this.config.playerProgramQuotaBytes) {
+      if (content.byteLength > this.config.playerProgramQuotaBytes) {
         throw new ProgramQuotaExceededError('player program quota exceeded');
       }
+
+      await this.removeUnreferencedPrograms(playerUUID, manifest);
 
       const metadata: ProgramMetadata = {
         id,
@@ -83,49 +83,15 @@ export class DurableProgramStore implements ProgramStore {
       await Deno.mkdir(playerDirectory, { recursive: true });
       await writeFileAtomically(programPath, content);
 
-      try {
-        await this.writeManifest(playerUUID, {
-          version: 1,
-          programs: [...manifest.programs, metadata],
-        });
-      } catch (error) {
-        try {
-          await Deno.remove(programPath);
-        } catch (cleanupError) {
-          console.error(`failed to remove partially uploaded program ${programPath}`, cleanupError);
+      await this.writeManifest(playerUUID, { version: 1, programs: [metadata] });
+
+      for (const oldProgram of manifest.programs) {
+        if (oldProgram.id !== id) {
+          await removeIfPresent(`${playerDirectory}/${oldProgram.id}.eszip`);
         }
-        throw error;
       }
 
       return { metadata, created: true };
-    });
-  }
-
-  delete(playerUUID: string, id: string): Promise<boolean> {
-    if (!PROGRAM_ID_PATTERN.test(id)) {
-      return Promise.resolve(false);
-    }
-
-    return this.withPlayerLock(playerUUID, async () => {
-      const manifest = await this.readManifest(playerUUID);
-      const index = manifest.programs.findIndex((program) => program.id === id);
-      if (index < 0) {
-        return false;
-      }
-
-      const programPath = `${this.playerDirectory(playerUUID)}/${id}.eszip`;
-      try {
-        await Deno.remove(programPath);
-      } catch (error) {
-        if (!(error instanceof Deno.errors.NotFound)) {
-          throw error;
-        }
-      }
-
-      const programs = [...manifest.programs];
-      programs.splice(index, 1);
-      await this.writeManifest(playerUUID, { version: 1, programs });
-      return true;
     });
   }
 
@@ -168,6 +134,27 @@ export class DurableProgramStore implements ProgramStore {
     );
   }
 
+  private async removeUnreferencedPrograms(
+    playerUUID: string,
+    manifest: ProgramManifest,
+  ): Promise<void> {
+    const referencedFiles = new Set(manifest.programs.map((program) => `${program.id}.eszip`));
+    const playerDirectory = this.playerDirectory(playerUUID);
+    try {
+      for await (const entry of Deno.readDir(playerDirectory)) {
+        if (!entry.isFile || !entry.name.endsWith('.eszip') || referencedFiles.has(entry.name)) {
+          continue;
+        }
+        await Deno.remove(`${playerDirectory}/${entry.name}`);
+      }
+    } catch (error) {
+      if (error instanceof Deno.errors.NotFound) {
+        return;
+      }
+      throw error;
+    }
+  }
+
   private async withPlayerLock<T>(playerUUID: string, operation: () => Promise<T>): Promise<T> {
     if (this.lockedPlayers.has(playerUUID)) {
       throw new ProgramOperationConflictError('another program operation is in progress');
@@ -195,4 +182,24 @@ async function writeFileAtomically(path: string, content: Uint8Array): Promise<v
     }
     throw error;
   }
+}
+
+async function removeIfPresent(path: string): Promise<void> {
+  try {
+    await Deno.remove(path);
+  } catch (error) {
+    if (!(error instanceof Deno.errors.NotFound)) {
+      throw error;
+    }
+  }
+}
+
+function newestProgram(programs: ProgramMetadata[]): ProgramMetadata | undefined {
+  return programs.reduce<ProgramMetadata | undefined>((newest, program) => {
+    if (newest === undefined) {
+      return program;
+    }
+    const byDate = program.uploadedAt.localeCompare(newest.uploadedAt);
+    return byDate > 0 || (byDate === 0 && program.id > newest.id) ? program : newest;
+  }, undefined);
 }

@@ -10,7 +10,7 @@ import { DurableAuthStore } from './auth/store.ts';
 import type { AuthStore } from './auth/types.ts';
 import { serveStatic } from './static.ts';
 import { jsonError } from './auth/http.ts';
-import { handleProgramCollection, handleProgramDelete } from './programs/handlers.ts';
+import { handleProgramCollection } from './programs/handlers.ts';
 import { DurableProgramStore } from './programs/store.ts';
 import type { ProgramStore } from './programs/types.ts';
 
@@ -84,23 +84,6 @@ async function routeRequest(
     const context: RequestContext = {};
     const authError = await requirePlayerAuth(request, config, store, context, 'api');
     return authError ?? handleProgramCollection(request, programStore, context.player!.playerUUID);
-  }
-
-  const programIdMatch = /^\/playerapi\/v1\/programs\/([^/]+)$/.exec(pathname);
-  if (programIdMatch !== null) {
-    const context: RequestContext = {};
-    const authError = await requirePlayerAuth(request, config, store, context, 'api');
-    if (authError !== null) {
-      return authError;
-    }
-
-    let programId: string;
-    try {
-      programId = decodeURIComponent(programIdMatch[1]);
-    } catch {
-      return jsonError('program not found', 404);
-    }
-    return handleProgramDelete(request, programStore, context.player!.playerUUID, programId);
   }
 
   if (pathname.startsWith('/modapi/v1/')) {

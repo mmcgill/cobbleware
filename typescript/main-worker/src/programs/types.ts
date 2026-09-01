@@ -28,7 +28,6 @@ export type ProgramStore = {
     content: Uint8Array,
     name: string,
   ): Promise<UploadProgramResult>;
-  delete(playerUUID: string, id: string): Promise<boolean>;
 };
 
 const ProgramMetadataSchema = z.strictObject({

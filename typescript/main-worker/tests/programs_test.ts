@@ -136,7 +136,7 @@ Deno.test('Player program upload stores bytes and returns metadata', async () =>
   }
 });
 
-Deno.test('Program upload derives a name from the filename and enforces quota', async () => {
+Deno.test('Program upload derives a name from the filename and enforces the maximum size', async () => {
   const app = await createTestApp(3);
   try {
     const cookie = await authenticatePlayerSession(app.handler);
@@ -164,12 +164,12 @@ Deno.test('Program upload derives a name from the filename and enforces quota', 
   }
 });
 
-Deno.test('Player can delete an owned program', async () => {
+Deno.test('Uploading a replacement keeps only the new active program', async () => {
   const app = await createTestApp(1024);
   try {
     const cookie = await authenticatePlayerSession(app.handler);
     const form = new FormData();
-    form.append('program', new File([new Uint8Array([1, 2])], 'delete-me.eszip'));
+    form.append('program', new File([new Uint8Array([1, 2])], 'old.eszip'));
     const uploadResponse = await app.handler(
       new Request(PROGRAMS_PATH, {
         method: 'POST',
@@ -178,35 +178,128 @@ Deno.test('Player can delete an owned program', async () => {
       }),
     );
     assertEquals(uploadResponse.status, 201, 'program upload should succeed');
-    const metadata = await uploadResponse.json();
+    const oldMetadata = await uploadResponse.json();
 
-    const deleteResponse = await app.handler(
-      new Request(`${PROGRAMS_PATH}/${metadata.id}`, {
-        method: 'DELETE',
+    const replacementForm = new FormData();
+    replacementForm.append(
+      'program',
+      new File([new Uint8Array([3, 4, 5])], 'replacement.eszip'),
+    );
+    const replacementResponse = await app.handler(
+      new Request(PROGRAMS_PATH, {
+        method: 'POST',
         headers: { cookie, origin: 'http://localhost' },
+        body: replacementForm,
       }),
     );
-    assertEquals(deleteResponse.status, 204, 'program deletion should succeed');
-    assertEquals(await deleteResponse.text(), '', 'program deletion should have no body');
+    assertEquals(replacementResponse.status, 201, 'replacement upload should succeed');
+    const newMetadata = await replacementResponse.json();
 
-    await assertErrorResponse(
-      await app.handler(
-        new Request(`${PROGRAMS_PATH}/${metadata.id}`, {
-          method: 'DELETE',
-          headers: { cookie, origin: 'http://localhost' },
-        }),
-      ),
-      404,
+    const listResponse = await app.handler(
+      new Request(PROGRAMS_PATH, { headers: { cookie } }),
     );
-    const programPath = `${app.config.storageDir}/programs/${PLAYER_UUID}/${metadata.id}.eszip`;
+    const list = await listResponse.json();
+    assertEquals(list.programs.length, 1, 'replacement should leave one active program');
+    assertEquals(list.programs[0].id, newMetadata.id, 'new program should be active');
+    assertEquals(list.usedBytes, 3, 'quota usage should count only the active program');
+
+    const oldProgramPath =
+      `${app.config.storageDir}/programs/${PLAYER_UUID}/${oldMetadata.id}.eszip`;
     try {
-      await Deno.stat(programPath);
-      throw new Error('deleted program file still exists');
+      await Deno.stat(oldProgramPath);
+      throw new Error('replaced program file still exists');
     } catch (error) {
       if (!(error instanceof Deno.errors.NotFound)) {
         throw error;
       }
     }
+
+    const newProgramPath =
+      `${app.config.storageDir}/programs/${PLAYER_UUID}/${newMetadata.id}.eszip`;
+    await Deno.stat(newProgramPath);
+  } finally {
+    await app.cleanup();
+  }
+});
+
+Deno.test('Replacement quota applies to the new active program only', async () => {
+  const app = await createTestApp(4);
+  try {
+    const cookie = await authenticatePlayerSession(app.handler);
+    const firstForm = new FormData();
+    firstForm.append('program', new File([new Uint8Array([1, 2, 3])], 'first.eszip'));
+    const firstResponse = await app.handler(
+      new Request(PROGRAMS_PATH, {
+        method: 'POST',
+        headers: { cookie, origin: 'http://localhost' },
+        body: firstForm,
+      }),
+    );
+    assertEquals(firstResponse.status, 201, 'first upload should succeed');
+
+    const replacementForm = new FormData();
+    replacementForm.append('program', new File([new Uint8Array([4, 5, 6, 7])], 'second.eszip'));
+    const replacementResponse = await app.handler(
+      new Request(PROGRAMS_PATH, {
+        method: 'POST',
+        headers: { cookie, origin: 'http://localhost' },
+        body: replacementForm,
+      }),
+    );
+    assertEquals(replacementResponse.status, 201, 'replacement at the quota limit should succeed');
+  } finally {
+    await app.cleanup();
+  }
+});
+
+Deno.test('Program upload removes unreferenced files before storing a replacement', async () => {
+  const app = await createTestApp(1024);
+  try {
+    const playerDirectory = `${app.config.storageDir}/programs/${PLAYER_UUID}`;
+    await Deno.mkdir(playerDirectory, { recursive: true });
+    const orphanPath = `${playerDirectory}/orphan.eszip`;
+    await Deno.writeFile(orphanPath, new Uint8Array([9, 9, 9]));
+    await Deno.writeTextFile(
+      `${playerDirectory}/programs.json`,
+      JSON.stringify({ version: 1, programs: [] }),
+    );
+
+    const cookie = await authenticatePlayerSession(app.handler);
+    const form = new FormData();
+    form.append('program', new File([new Uint8Array([1])], 'new.eszip'));
+    const response = await app.handler(
+      new Request(PROGRAMS_PATH, {
+        method: 'POST',
+        headers: { cookie, origin: 'http://localhost' },
+        body: form,
+      }),
+    );
+    assertEquals(response.status, 201, 'upload should succeed after orphan recovery');
+
+    try {
+      await Deno.stat(orphanPath);
+      throw new Error('unreferenced program file still exists');
+    } catch (error) {
+      if (!(error instanceof Deno.errors.NotFound)) {
+        throw error;
+      }
+    }
+  } finally {
+    await app.cleanup();
+  }
+});
+
+Deno.test('Program item and delete routes are unavailable', async () => {
+  const app = await createTestApp(1024);
+  try {
+    const cookie = await authenticatePlayerSession(app.handler);
+    const response = await app.handler(
+      new Request(`${PROGRAMS_PATH}/AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA`, {
+        method: 'DELETE',
+        headers: { cookie, origin: 'http://localhost' },
+      }),
+    );
+    assertEquals(response.status, 404, 'program item route should not be supported');
   } finally {
     await app.cleanup();
   }
@@ -247,7 +340,6 @@ Deno.test('Program operation conflicts return HTTP 409', async () => {
   const conflictStore: ProgramStore = {
     list: async () => conflict(),
     upload: async () => conflict(),
-    delete: async () => conflict(),
   };
   const app = await createTestApp(1024, conflictStore);
   try {
