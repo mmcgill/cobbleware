@@ -4,27 +4,27 @@
 
 import * as flatbuffers from 'flatbuffers';
 
-import { Effect, unionToEffect, unionListToEffect } from './cobbleware/effects/effect.ts';
-import { EmitBeep, EmitBeepT } from './cobbleware/effects/emit-beep.ts';
-import { SendChat, SendChatT } from './cobbleware/effects/send-chat.ts';
+import { Effect, unionToEffect, unionListToEffect } from '../../cobbleware/effects/effect.ts';
+import { EmitBeep, EmitBeepT } from '../../cobbleware/effects/emit-beep.ts';
+import { SendChat, SendChatT } from '../../cobbleware/effects/send-chat.ts';
 
 
-export class ProgramOutput implements flatbuffers.IUnpackableObject<ProgramOutputT> {
+export class StepResponse implements flatbuffers.IUnpackableObject<StepResponseT> {
   bb: flatbuffers.ByteBuffer|null = null;
   bb_pos = 0;
-  __init(i:number, bb:flatbuffers.ByteBuffer):ProgramOutput {
+  __init(i:number, bb:flatbuffers.ByteBuffer):StepResponse {
   this.bb_pos = i;
   this.bb = bb;
   return this;
 }
 
-static getRootAsProgramOutput(bb:flatbuffers.ByteBuffer, obj?:ProgramOutput):ProgramOutput {
-  return (obj || new ProgramOutput()).__init(bb.readInt32(bb.position()) + bb.position(), bb);
+static getRootAsStepResponse(bb:flatbuffers.ByteBuffer, obj?:StepResponse):StepResponse {
+  return (obj || new StepResponse()).__init(bb.readInt32(bb.position()) + bb.position(), bb);
 }
 
-static getSizePrefixedRootAsProgramOutput(bb:flatbuffers.ByteBuffer, obj?:ProgramOutput):ProgramOutput {
+static getSizePrefixedRootAsStepResponse(bb:flatbuffers.ByteBuffer, obj?:StepResponse):StepResponse {
   bb.setPosition(bb.position() + flatbuffers.SIZE_PREFIX_LENGTH);
-  return (obj || new ProgramOutput()).__init(bb.readInt32(bb.position()) + bb.position(), bb);
+  return (obj || new StepResponse()).__init(bb.readInt32(bb.position()) + bb.position(), bb);
 }
 
 state(index: number):number|null {
@@ -67,7 +67,7 @@ effectsLength():number {
   return offset ? this.bb!.__vector_len(this.bb_pos + offset) : 0;
 }
 
-static startProgramOutput(builder:flatbuffers.Builder) {
+static startStepResponse(builder:flatbuffers.Builder) {
   builder.startObject(3);
 }
 
@@ -119,7 +119,7 @@ static startEffectsVector(builder:flatbuffers.Builder, numElems:number) {
   builder.startVector(4, numElems, 4);
 }
 
-static endProgramOutput(builder:flatbuffers.Builder):flatbuffers.Offset {
+static endStepResponse(builder:flatbuffers.Builder):flatbuffers.Offset {
   const offset = builder.endObject();
   builder.requiredField(offset, 4) // state
   builder.requiredField(offset, 6) // effects_type
@@ -127,16 +127,16 @@ static endProgramOutput(builder:flatbuffers.Builder):flatbuffers.Offset {
   return offset;
 }
 
-static createProgramOutput(builder:flatbuffers.Builder, stateOffset:flatbuffers.Offset, effectsTypeOffset:flatbuffers.Offset, effectsOffset:flatbuffers.Offset):flatbuffers.Offset {
-  ProgramOutput.startProgramOutput(builder);
-  ProgramOutput.addState(builder, stateOffset);
-  ProgramOutput.addEffectsType(builder, effectsTypeOffset);
-  ProgramOutput.addEffects(builder, effectsOffset);
-  return ProgramOutput.endProgramOutput(builder);
+static createStepResponse(builder:flatbuffers.Builder, stateOffset:flatbuffers.Offset, effectsTypeOffset:flatbuffers.Offset, effectsOffset:flatbuffers.Offset):flatbuffers.Offset {
+  StepResponse.startStepResponse(builder);
+  StepResponse.addState(builder, stateOffset);
+  StepResponse.addEffectsType(builder, effectsTypeOffset);
+  StepResponse.addEffects(builder, effectsOffset);
+  return StepResponse.endStepResponse(builder);
 }
 
-unpack(): ProgramOutputT {
-  return new ProgramOutputT(
+unpack(): StepResponseT {
+  return new StepResponseT(
     this.bb!.createScalarList<number>(this.state.bind(this), this.stateLength()),
     this.bb!.createScalarList<Effect>(this.effectsType.bind(this), this.effectsTypeLength()),
     (() => {
@@ -155,7 +155,7 @@ unpack(): ProgramOutputT {
 }
 
 
-unpackTo(_o: ProgramOutputT): void {
+unpackTo(_o: StepResponseT): void {
   _o.state = this.bb!.createScalarList<number>(this.state.bind(this), this.stateLength());
   _o.effectsType = this.bb!.createScalarList<Effect>(this.effectsType.bind(this), this.effectsTypeLength());
   _o.effects = (() => {
@@ -173,7 +173,7 @@ unpackTo(_o: ProgramOutputT): void {
 }
 }
 
-export class ProgramOutputT implements flatbuffers.IGeneratedObject {
+export class StepResponseT implements flatbuffers.IGeneratedObject {
 constructor(
   public state: (number)[] = [],
   public effectsType: (Effect)[] = [],
@@ -182,11 +182,11 @@ constructor(
 
 
 pack(builder:flatbuffers.Builder): flatbuffers.Offset {
-  const state = ProgramOutput.createStateVector(builder, this.state);
-  const effectsType = ProgramOutput.createEffectsTypeVector(builder, this.effectsType);
-  const effects = ProgramOutput.createEffectsVector(builder, builder.createObjectOffsetList(this.effects));
+  const state = StepResponse.createStateVector(builder, this.state);
+  const effectsType = StepResponse.createEffectsTypeVector(builder, this.effectsType);
+  const effects = StepResponse.createEffectsVector(builder, builder.createObjectOffsetList(this.effects));
 
-  return ProgramOutput.createProgramOutput(builder,
+  return StepResponse.createStepResponse(builder,
     state,
     effectsType,
     effects

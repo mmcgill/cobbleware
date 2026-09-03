@@ -1,6 +1,6 @@
 import { emptyResponse, jsonError, jsonResponse } from '../auth/http.ts';
 import { requireSameOrigin } from '../auth/middleware.ts';
-import { programErrorResponse, type ProgramRunner } from './start-states.ts';
+import { PROGRAM_BINARY_CONTENT_TYPE, programErrorResponse, type ProgramRunner } from './start-states.ts';
 import {
   ProgramOperationConflictError,
   ProgramQuotaExceededError,
@@ -105,6 +105,49 @@ export async function handleStartStates(
   } catch (error) {
     return programErrorResponse(error);
   }
+}
+
+export async function handleProgramStep(
+  request: Request,
+  store: ProgramStore,
+  runner: ProgramRunner,
+  playerUUID: string,
+  programId: string,
+): Promise<Response> {
+  if (request.method !== 'POST') {
+    return methodNotAllowed('POST');
+  }
+
+  const originError = requireSameOrigin(request);
+  if (originError !== null) {
+    return originError;
+  }
+
+  const contentType = request.headers.get('content-type')?.split(';', 1)[0].trim().toLowerCase();
+  if (contentType !== PROGRAM_BINARY_CONTENT_TYPE) {
+    return jsonError('content type must be application/octet-stream', 415);
+  }
+
+  let body: Uint8Array;
+  try {
+    // Player-supplied FlatBuffers are opaque at this boundary. Do not unpack or verify them.
+    body = new Uint8Array(await request.arrayBuffer());
+  } catch (error) {
+    return jsonError(error instanceof Error ? error.message : 'request body could not be read', 400);
+  }
+
+  let program;
+  try {
+    program = await store.readActive(playerUUID);
+  } catch (error) {
+    return handleStoreError(error);
+  }
+
+  if (program === null || program.metadata.id !== programId) {
+    return emptyResponse(404);
+  }
+
+  return await runner.step(request, playerUUID, program, body);
 }
 
 function handleStoreError(error: unknown): Response {

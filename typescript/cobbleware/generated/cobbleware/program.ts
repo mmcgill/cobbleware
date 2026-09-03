@@ -2,5 +2,8 @@
 
 /* eslint-disable @typescript-eslint/no-unused-vars, @typescript-eslint/no-explicit-any, @typescript-eslint/no-non-null-assertion */
 
+export { ErrorResponse, ErrorResponseT } from './program/error-response.ts';
 export { StartState, StartStateT } from './program/start-state.ts';
 export { StartStatesResponse, StartStatesResponseT } from './program/start-states-response.ts';
+export { StepRequest, StepRequestT } from './program/step-request.ts';
+export { StepResponse, StepResponseT } from './program/step-response.ts';

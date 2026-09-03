@@ -5,13 +5,22 @@ import { Program } from '@cobbleware/core';
 import { jsonResponse } from '../auth/http.ts';
 import type { ActiveProgram } from './types.ts';
 
+export const PROGRAM_BINARY_CONTENT_TYPE = 'application/octet-stream';
+
 const START_STATES_PATH = 'http://cobbleware.local/startStates';
-const START_STATES_CONTENT_TYPE = 'application/octet-stream';
+const NEXT_STATE_PATH = 'http://cobbleware.local/nextState';
+const START_STATES_CONTENT_TYPE = PROGRAM_BINARY_CONTENT_TYPE;
 
 export type StartStates = Record<string, number[]>;
 
 export type ProgramRunner = {
   startStates(request: Request, playerUUID: string, program: ActiveProgram): Promise<StartStates>;
+  step(
+    request: Request,
+    playerUUID: string,
+    program: ActiveProgram,
+    body: Uint8Array,
+  ): Promise<Response>;
 };
 
 export class RuntimeProgramRunner implements ProgramRunner {
@@ -30,6 +39,27 @@ export class RuntimeProgramRunner implements ProgramRunner {
     EdgeRuntime.applySupabaseTag(request, programRequest);
     const response = await worker.fetch(programRequest);
     return await decodeStartStatesResponse(response);
+  }
+
+  async step(
+    request: Request,
+    playerUUID: string,
+    program: ActiveProgram,
+    body: Uint8Array,
+  ): Promise<Response> {
+    const worker = await EdgeRuntime.userWorkers.create({
+      servicePath: workerServicePath(playerUUID, program.metadata.id),
+      maybeEszip: program.content,
+      maybeEntrypoint: 'file:///src/index.ts',
+    });
+
+    const programRequest = new Request(NEXT_STATE_PATH, {
+      method: 'POST',
+      headers: { 'content-type': PROGRAM_BINARY_CONTENT_TYPE },
+      body: new Blob([body.slice().buffer as ArrayBuffer]),
+    });
+    EdgeRuntime.applySupabaseTag(request, programRequest);
+    return await worker.fetch(programRequest);
   }
 }
 

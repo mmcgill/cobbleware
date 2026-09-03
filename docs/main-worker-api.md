@@ -198,6 +198,58 @@ Because these operations authenticate with a cookie and are intended for browser
 that upload and logout requests have a same-origin `Origin` header. Cross-origin requests are rejected
 with `403`; the API does not rely solely on the cookie's `SameSite` attribute for CSRF protection.
 
+### Program Step
+
+The authenticated `POST /playerapi/v1/programs/{id}/step` operation allows a Player to test one invocation of the
+state transition function for their active program. The `{id}` path component must identify the Player's currently
+active program. A program that is not active, a program belonging to another Player, or a syntactically invalid
+program id is not available through this endpoint and receives `404`.
+
+Unlike the other Player API endpoints, this endpoint uses FlatBuffers rather than JSON for its request and success
+response bodies. The request must have an `application/octet-stream` media type (parameters are permitted). The Player
+should send a FlatBuffers `StepRequest` body containing:
+
+* `puter_id`: the UUID associated with the simulated Cobbleputer
+* `state`: the opaque serialized input state
+* `event`: the `Events.Event` union describing the event to supply to the transition function; its generated
+  discriminator is `event_type`
+
+The Main Worker invokes the active program's `POST /nextState` Program API endpoint with that request. On success,
+the Main Worker returns `200` with an `application/octet-stream` FlatBuffers `StepResponse` body containing the next
+state and effects. The state and effects are returned to the caller only: they are not persisted, and effects are not
+applied to the Minecraft world. The `puter_id` identifies the simulated input for the invocation; this operation does
+not require that a corresponding Cobbleputer exists.
+
+Player-supplied FlatBuffers request bodies and responses from player code are untrusted opaque bytes. The Main Worker
+checks the HTTP request framing and media type, but does not unpack or verify either body. It forwards the request
+bytes unchanged to the active program's per-Player user worker, where the program may unpack them, and forwards the
+program response status, headers, and bytes unchanged to the Player. Malformed or malicious data can cause the user
+worker or the Player's decoder to fail or hang; the per-Player isolate limits request processing to the owning
+Player's program.
+
+Failures generated while validating the Player API HTTP request use the normal JSON error shape containing an `error`
+property. A response produced by the player program is returned as-is, including a program-produced `500`
+`ErrorResponse`; the Main Worker does not verify that response body. If the Main Worker cannot invoke the user worker,
+it returns the usual JSON `500` error.
+
+The endpoint has the following response behavior:
+
+* `200` with a FlatBuffers `StepResponse` when the transition succeeds
+* `400` with a JSON `error` when the request body cannot be read
+* `401` with the Player API `WWW-Authenticate` header when the session is missing or invalid
+* `403` with a JSON `error` when the request is missing a same-origin `Origin` header or has a different origin
+* `404` when the requested program id is invalid, there is no active program, or the id is not the active program
+* `405` with `Allow: POST` for other methods
+* `409` with a JSON `error` when another program operation for the Player is in progress
+* `415` with a JSON `error` when the request media type is not `application/octet-stream`
+* the active program's response status, headers, and body when the user worker returns a response; the Main Worker does
+  not verify the response's FlatBuffers body
+* `500` with a JSON `error` when the Main Worker cannot invoke the user worker
+
+Because this operation is authenticated with a cookie and is intended for browser use, it requires the same-origin
+`Origin` check used by upload and logout. Although a step does not mutate persistent Cobbleputer state, running a
+program can consume runtime resources, so the check is still required.
+
 ## Mod API
 
 ### Player Authentication

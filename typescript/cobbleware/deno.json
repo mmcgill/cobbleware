@@ -11,7 +11,7 @@
   "nodeModulesDir": "auto",
   "tasks": {
     "test": "deno test --no-prompt",
-    "check": "deno check mod.ts types.ts generated.ts tests/**/*.ts",
+    "check": "deno check src/mod.ts tests/**/*.ts",
     "fmt": "deno fmt --ignore=generated",
     "generate": "deno run --allow-read --allow-write --allow-run scripts/generate.ts"
   },

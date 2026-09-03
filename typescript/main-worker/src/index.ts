@@ -10,9 +10,13 @@ import { DurableAuthStore } from './auth/store.ts';
 import type { AuthStore } from './auth/types.ts';
 import { serveStatic } from './static.ts';
 import { jsonError } from './auth/http.ts';
-import { handleProgramCollection, handleStartStates } from './programs/handlers.ts';
+import {
+  handleProgramCollection,
+  handleProgramStep,
+  handleStartStates,
+} from './programs/handlers.ts';
 import { DurableProgramStore } from './programs/store.ts';
-import type { ProgramStore } from './programs/types.ts';
+import { PROGRAM_ID_PATTERN, type ProgramStore } from './programs/types.ts';
 import { type ProgramRunner, RuntimeProgramRunner } from './programs/start-states.ts';
 import { normalizePlayerUUID } from './auth/validation.ts';
 
@@ -89,6 +93,32 @@ async function routeRequest(
     const context: RequestContext = {};
     const authError = await requirePlayerAuth(request, config, store, context, 'api');
     return authError ?? handleProgramCollection(request, programStore, context.player!.playerUUID);
+  }
+
+  const programStepMatch = /^\/playerapi\/v1\/programs\/([^/]+)\/step$/.exec(pathname);
+  if (programStepMatch !== null) {
+    const context: RequestContext = {};
+    const authError = await requirePlayerAuth(request, config, store, context, 'api');
+    if (authError !== null) {
+      return authError;
+    }
+
+    let programId: string;
+    try {
+      programId = decodeURIComponent(programStepMatch[1]);
+    } catch {
+      return new Response(null, { status: 404 });
+    }
+    if (!PROGRAM_ID_PATTERN.test(programId)) {
+      return new Response(null, { status: 404 });
+    }
+    return handleProgramStep(
+      request,
+      programStore,
+      programRunner,
+      context.player!.playerUUID,
+      programId,
+    );
   }
 
   if (pathname.startsWith('/modapi/v1/')) {

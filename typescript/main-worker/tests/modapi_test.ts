@@ -35,7 +35,10 @@ async function createTestApp(
     readActive,
     upload: () => Promise.resolve({ metadata: activeProgram.metadata, created: false }),
   };
-  const runner: ProgramRunner = { startStates };
+  const runner: ProgramRunner = {
+    startStates,
+    step: () => Promise.reject(new Error('step is not used by Mod API tests')),
+  };
 
   return {
     handler: await createHandler({ config, store: authStore, programStore, programRunner: runner }),

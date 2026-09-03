@@ -5,8 +5,3 @@ include "program.fbs";
 // The internal schemas are for use in the Runtime API provided to the Mod.
 // They will later be split out into a distinct library.
 include "internal.fbs";
-
-table ProgramOutput {
-    state:[ubyte] (required);
-    effects:[Cobbleware.Effects.Effect] (required);
-}

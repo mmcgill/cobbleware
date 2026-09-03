@@ -10,3 +10,18 @@ table StartState {
 table StartStatesResponse {
     start_states:[StartState];
 }
+
+table StepRequest {
+    puter_id:Common.UUID (required);
+    state:[ubyte] (required);
+    event:Events.Event (required);
+}
+
+table StepResponse {
+    state:[ubyte] (required);
+    effects:[Effects.Effect] (required);
+}
+
+table ErrorResponse {
+    error:string (required);
+}
