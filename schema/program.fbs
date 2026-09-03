@@ -1,0 +1,12 @@
+// Schemas for request/response representations used by the Program API.
+
+namespace Cobbleware.Program;
+
+table StartState {
+    state_name:string (required);
+    state:[ubyte] (required);
+}
+
+table StartStatesResponse {
+    start_states:[StartState];
+}

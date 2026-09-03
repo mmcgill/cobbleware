@@ -19,13 +19,14 @@ Consequently:
     host cannot sniff network traffic on the host. A malicious process with permission to sniff network traffic
     could trivially discover the shared secret and subsequently perform any action that could be performed
     by the Mod.
-* The Player API is designed to have **minimal useful attack surface area**. An attacker that is able to observe
-  the unencrypted traffic to the Player API will be able to view program metadata and upload or replace programs as if
-  they are another player. Such an attacker can **not**, without additional social engineering,
-  * run uploaded programs associated with another player
-  * view the contents of programs
+* An attacker that is able to observe the unencrypted traffic to the Player API will be able to view program
+  metadata and upload arbitrary programs to be run in any player's V8 isolate.
+  * From the player standpoint, this is a significant vulnerability.
+  * From a server administrator standpoint, player code should already be treated as untrusted code.
+    The Mod architecture is based on the Edge Runtime specifically to prevent untrusted code from
+    compromising the integrity, security or availability of the server.
 
-For improved security, server operators are encouraged to host the Main Worker API behind a reverse proxy
+For improved security, server operators are **strongly encouraged** to host the Main Worker API behind a reverse proxy
 configured to perform TLS termination. Some popular Minecraft hosting providers (e.g. PebbleHost) explicitly support this capability.
 
 ## Authentication and Authorization
