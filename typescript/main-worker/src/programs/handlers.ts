@@ -1,5 +1,6 @@
-import { jsonError, jsonResponse } from '../auth/http.ts';
+import { emptyResponse, jsonError, jsonResponse } from '../auth/http.ts';
 import { requireSameOrigin } from '../auth/middleware.ts';
+import { programErrorResponse, type ProgramRunner } from './start-states.ts';
 import {
   ProgramOperationConflictError,
   ProgramQuotaExceededError,
@@ -72,6 +73,37 @@ export async function handleProgramCollection(
       return jsonError('player program quota exceeded', 413);
     }
     return handleStoreError(error);
+  }
+}
+
+export async function handleStartStates(
+  request: Request,
+  store: ProgramStore,
+  runner: ProgramRunner,
+  playerUUID: string,
+): Promise<Response> {
+  if (request.method !== 'GET') {
+    return methodNotAllowed('GET');
+  }
+
+  let program;
+  try {
+    program = await store.readActive(playerUUID);
+  } catch (error) {
+    if (error instanceof ProgramOperationConflictError) {
+      return jsonError('another program operation is in progress', 409);
+    }
+    return programErrorResponse(error);
+  }
+
+  if (program === null) {
+    return emptyResponse(404);
+  }
+
+  try {
+    return jsonResponse({ startStates: await runner.startStates(request, playerUUID, program) });
+  } catch (error) {
+    return programErrorResponse(error);
   }
 }
 

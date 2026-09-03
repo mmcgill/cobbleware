@@ -10,9 +10,11 @@ import { DurableAuthStore } from './auth/store.ts';
 import type { AuthStore } from './auth/types.ts';
 import { serveStatic } from './static.ts';
 import { jsonError } from './auth/http.ts';
-import { handleProgramCollection } from './programs/handlers.ts';
+import { handleProgramCollection, handleStartStates } from './programs/handlers.ts';
 import { DurableProgramStore } from './programs/store.ts';
 import type { ProgramStore } from './programs/types.ts';
+import { type ProgramRunner, RuntimeProgramRunner } from './programs/start-states.ts';
+import { normalizePlayerUUID } from './auth/validation.ts';
 
 const HELLO_BODY = JSON.stringify({ message: 'hello' });
 
@@ -20,6 +22,7 @@ export type AppOptions = {
   config?: AppConfig;
   store?: AuthStore;
   programStore?: ProgramStore;
+  programRunner?: ProgramRunner;
 };
 
 export async function createHandler(
@@ -28,10 +31,11 @@ export async function createHandler(
   const config = options.config ?? configFromEnv();
   const store = options.store ?? await DurableAuthStore.open(config);
   const programStore = options.programStore ?? new DurableProgramStore(config);
+  const programRunner = options.programRunner ?? new RuntimeProgramRunner();
 
   return async (request) => {
     try {
-      return await routeRequest(request, config, store, programStore);
+      return await routeRequest(request, config, store, programStore, programRunner);
     } catch {
       return jsonError('internal server error', 500);
     }
@@ -43,6 +47,7 @@ async function routeRequest(
   config: AppConfig,
   store: AuthStore,
   programStore: ProgramStore,
+  programRunner: ProgramRunner,
 ): Promise<Response> {
   const { pathname } = new URL(request.url);
 
@@ -89,6 +94,21 @@ async function routeRequest(
   if (pathname.startsWith('/modapi/v1/')) {
     if (pathname === '/modapi/v1/authentication') {
       return handleModAuthentication(request, config, store);
+    }
+    const startStatesMatch = /^\/modapi\/v1\/players\/([^/]+)\/startStates$/.exec(pathname);
+    if (startStatesMatch !== null) {
+      const authError = requireModAuth(request, config);
+      if (authError !== null) {
+        return authError;
+      }
+
+      let playerUUID: string;
+      try {
+        playerUUID = normalizePlayerUUID(decodeURIComponent(startStatesMatch[1]));
+      } catch {
+        return new Response(null, { status: 404 });
+      }
+      return handleStartStates(request, programStore, programRunner, playerUUID);
     }
     const authError = requireModAuth(request, config);
     return authError ?? new Response(null, { status: 404 });

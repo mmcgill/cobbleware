@@ -223,3 +223,34 @@ If the code is new, or is retried for the same player UUID, the endpoint returns
 If the code is already pending for another player UUID, it returns `400` with a JSON response body
 containing an `"error"` property. The Runtime trusts `playerProfileName` as supplied by the Mod and does
 not validate its contents.
+
+### Start States Query
+
+The authenticated `GET /modapi/v1/players/{playerUUID}/startStates` endpoint queries the given player's
+currently configured program for its start states. A successful response requires that the given player
+has previously uploaded a valid program that correctly serves start states. On success, the response
+has the shape:
+
+```json
+{
+    "startStates": {
+        "<stateName>": [1,2,....]
+    }
+}
+```
+
+In the case where the given player has not uploaded a program, the response is a 404.
+
+In the case where the player has uploaded a program but that program does not return a valid
+`/startStates` response, the response status is 200 (because the request to the Mod API was successful)
+and the response body has the shape:
+
+```json
+{
+    "programError": "..."
+}
+```
+
+The program error is intended to be passed along to the player that uploaded the program.
+It may be a message indicating a problem with the program's `/startStates` response,
+a stacktrace from the program itself, etc.

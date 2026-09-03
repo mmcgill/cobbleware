@@ -32,3 +32,5 @@ of a single Program.
 A program **must** respond to a `GET /startStates` request from the main worker
 with a 200 response whose body is a `StartStatesResponse`.
 
+In a valid resonse, the `state_name` of each start state is unique within the response.
+A response with repeated `state_name` values is invalid.

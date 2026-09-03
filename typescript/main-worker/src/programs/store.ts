@@ -1,6 +1,7 @@
 import type { AppConfig } from '../config.ts';
 import { bytesToBase32, digestBytes } from '../auth/crypto.ts';
 import {
+  type ActiveProgram,
   PROGRAM_ID_PATTERN,
   type ProgramList,
   type ProgramManifest,
@@ -44,6 +45,21 @@ export class DurableProgramStore implements ProgramStore {
         usedBytes,
         remainingBytes: Math.max(0, this.config.playerProgramQuotaBytes - usedBytes),
       };
+    });
+  }
+
+  readActive(playerUUID: string): Promise<ActiveProgram | null> {
+    return this.withPlayerLock(playerUUID, async () => {
+      const manifest = await this.readManifest(playerUUID);
+      const metadata = newestProgram(manifest.programs);
+      if (metadata === undefined) {
+        return null;
+      }
+
+      const content = await Deno.readFile(
+        `${this.playerDirectory(playerUUID)}/${metadata.id}.eszip`,
+      );
+      return { metadata, content };
     });
   }
 

@@ -131,6 +131,13 @@ Deno.test('Player program upload stores bytes and returns metadata', async () =>
     const list = await reloaded.list(PLAYER_UUID);
     assertEquals(list.programs.length, 1, 'program metadata should survive store reload');
     assertEquals(list.usedBytes, content.byteLength, 'stored bytes should count against quota');
+    const active = await reloaded.readActive(PLAYER_UUID);
+    if (active === null) throw new Error('active program should be readable');
+    assertEquals(
+      JSON.stringify([...active.content]),
+      JSON.stringify([...content]),
+      'active-program reads must return exact uploaded bytes',
+    );
   } finally {
     await app.cleanup();
   }
@@ -338,8 +345,9 @@ Deno.test('Program operation conflicts return HTTP 409', async () => {
     throw new ProgramOperationConflictError('another program operation is in progress');
   };
   const conflictStore: ProgramStore = {
-    list: async () => conflict(),
-    upload: async () => conflict(),
+    list: () => conflict(),
+    readActive: () => conflict(),
+    upload: () => conflict(),
   };
   const app = await createTestApp(1024, conflictStore);
   try {

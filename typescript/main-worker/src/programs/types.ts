@@ -16,6 +16,11 @@ export type ProgramList = {
   remainingBytes: number;
 };
 
+export type ActiveProgram = {
+  metadata: ProgramMetadata;
+  content: Uint8Array;
+};
+
 export type UploadProgramResult = {
   metadata: ProgramMetadata;
   created: boolean;
@@ -23,6 +28,7 @@ export type UploadProgramResult = {
 
 export type ProgramStore = {
   list(playerUUID: string): Promise<ProgramList>;
+  readActive(playerUUID: string): Promise<ActiveProgram | null>;
   upload(
     playerUUID: string,
     content: Uint8Array,

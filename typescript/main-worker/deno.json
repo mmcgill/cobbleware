@@ -2,6 +2,8 @@
   "name": "@cobbleware/main-worker",
   "version": "0.1.0",
   "imports": {
+    "@cobbleware/core": "../cobbleware/src/mod.ts",
+    "flatbuffers": "npm:flatbuffers@25.9.23",
     "zod": "npm:zod@4"
   },
   "exports": {
