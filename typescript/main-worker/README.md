@@ -25,7 +25,10 @@ but this is primarily to facilitate local testing. The per-player program quota 
 
 See [Main Worker API](../../docs/api.md) for API documentation.
 
+The bundle task tree-shakes the Main Worker with Deno's esbuild-powered bundler
+before creating `main-worker.eszip`; it intentionally does not minify the
+resulting JavaScript.
+
 ## Future Work / TODO
 
 [ ] Ship Cobbleware/protobuf libraries with Edge Runtime so programs don't have to bundle them.
-[ ] Experiment with `deno bundle` for minifying before building ESZip, to minimize file size.

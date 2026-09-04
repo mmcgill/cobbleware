@@ -8,7 +8,7 @@
     "test": "deno test --no-prompt",
     "check": "deno check src/index.ts tests/**/*.ts",
     "fmt": "deno fmt",
-    "bundle": "deno run --allow-env --allow-run scripts/bundle.ts",
+    "bundle": "deno run --allow-env --allow-read --allow-run --allow-write scripts/bundle.ts",
     "package": "deno task bundle",
     "serve": "deno task package && deno run --allow-read=hello-world.eszip --allow-net=127.0.0.1:8000 scripts/serve.ts"
   },

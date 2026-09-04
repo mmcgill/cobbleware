@@ -3,21 +3,50 @@ const defaultRuntimeBinary = Deno.build.os === 'windows'
   : '../../mc-edge-runtime/target/debug/edge-runtime';
 
 const runtimeBinary = Deno.env.get('EDGE_RUNTIME_BIN') ?? defaultRuntimeBinary;
-
-const command = new Deno.Command(runtimeBinary, {
-  args: [
-    'bundle',
-    '--entrypoint',
-    'src/index.ts',
-    '--output',
-    'hello-world.eszip',
-  ],
-  stdout: 'inherit',
-  stderr: 'inherit',
+const programDirectory = await Deno.realPath(new URL('../', import.meta.url));
+const temporaryDirectory = await Deno.makeTempDir({
+  dir: programDirectory,
+  prefix: '.cobbleware-eszip-',
 });
+const bundledProgramPath = `${temporaryDirectory}/program.js`;
+const outputPath = 'hello-world.eszip';
 
-const output = await command.output();
+try {
+  const esbuild = new Deno.Command(Deno.execPath(), {
+    args: [
+      'bundle',
+      '--no-check',
+      '--output',
+      bundledProgramPath,
+      'src/index.ts',
+    ],
+    cwd: programDirectory,
+    stdout: 'inherit',
+    stderr: 'inherit',
+  });
 
-if (!output.success) {
-  Deno.exit(output.code);
+  const esbuildOutput = await esbuild.output();
+  if (!esbuildOutput.success) {
+    Deno.exit(esbuildOutput.code);
+  }
+
+  const command = new Deno.Command(runtimeBinary, {
+    args: [
+      'bundle',
+      '--entrypoint',
+      bundledProgramPath,
+      '--output',
+      outputPath,
+    ],
+    stdout: 'inherit',
+    stderr: 'inherit',
+  });
+
+  const output = await command.output();
+
+  if (!output.success) {
+    Deno.exit(output.code);
+  }
+} finally {
+  await Deno.remove(temporaryDirectory, { recursive: true });
 }
