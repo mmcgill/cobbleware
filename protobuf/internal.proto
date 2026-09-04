@@ -6,20 +6,65 @@ import "common.proto";
 import "effects.proto";
 import "events.proto";
 
-message EventSeq {
-  // Required by the application contract.
-  cobbleware.common.Uuid puter_id = 1;
-  // Required by the application contract.
-  bytes initial_state = 2;
-  // Required by the application contract.
-  repeated cobbleware.events.Event events = 3;
+// The lifecycle state of an execution.
+enum ExecutionStatus {
+  EXECUTION_STATUS_UNSPECIFIED = 0;
+  EXECUTION_STATUS_RUNNING = 1;
+  EXECUTION_STATUS_STOPPED = 2;
+  EXECUTION_STATUS_CRASHED = 3;
 }
 
-message EffectSeq {
+message ExecutionState {
+  // Identifies an execution. Required by the application contract.
+  cobbleware.common.Uuid execution_id = 1;
+  // The state of the execution immediately before processing the first pending event.
   // Required by the application contract.
-  cobbleware.common.Uuid puter_id = 1;
+  bytes initial_state = 2;
+  // The pending events for this execution. Required by the application contract.
+  repeated cobbleware.events.Event events = 3;
+  // The sequence number of the first pending event.
+  // Required by the application contract.
+  uint64 event_seq_num = 4;
+  // The sequence number of the last applied effect from this execution.
+  // Required by the application contract.
+  uint64 effect_seq_num = 5;
+  // Identifies the player whose active program owns this execution.
+  // Required by the application contract.
+  cobbleware.common.Uuid player_id = 6;
+  // The execution lifecycle state. Required by the application contract.
+  ExecutionStatus state = 7;
+}
+
+message ExecutionResult {
+  // Identifies an execution. Required by the application contract.
+  cobbleware.common.Uuid execution_id = 1;
+  // The state of the execution after consuming all events up to and including event_seq_num.
   // Required by the application contract.
   bytes final_state = 2;
+  // The unapplied effects that result from processing all events up to and including event_seq_num.
   // Required by the application contract.
   repeated cobbleware.effects.Effect effects = 3;
+  // Sequence number of the last consumed event, whose output state was final_state.
+  // Required by the application contract.
+  uint64 event_seq_num = 4;
+  // Sequence number of the first effect.
+  // Required by the application contract.
+  uint64 effect_seq_num = 5;
+  // The execution lifecycle state. Required by the application contract.
+  ExecutionStatus state = 6;
+}
+
+message ExecutionsRequest {
+  // Required by the application contract.
+  repeated ExecutionState executions = 1;
+}
+
+message ExecutionsResponse {
+  // Required by the application contract.
+  repeated ExecutionResult results = 1;
+}
+
+// An error returned by an internal Mod API endpoint.
+message ErrorResponse {
+  string error = 1;
 }

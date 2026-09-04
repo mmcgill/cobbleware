@@ -19,7 +19,7 @@ message StartStatesResponse {
 
 message StepRequest {
   // Required by the application contract.
-  cobbleware.common.Uuid puter_id = 1;
+  cobbleware.common.Uuid execution_id = 1;
   // Required by the application contract.
   bytes state = 2;
   // Required by the application contract.

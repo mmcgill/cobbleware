@@ -340,6 +340,44 @@ Deno.test('Program operations conflict per player without blocking other players
   }
 });
 
+Deno.test('Concurrent active-program reads for one player do not conflict', async () => {
+  const app = await createTestApp(1024);
+  try {
+    const store = new DurableProgramStore(app.config);
+    const uploaded = await store.upload(PLAYER_UUID, new Uint8Array([1, 2, 3]), 'program');
+
+    const [first, second] = await Promise.all([
+      store.readActive(PLAYER_UUID),
+      store.readActive(PLAYER_UUID),
+    ]);
+    if (first === null || second === null) {
+      throw new Error('concurrent reads should find the active program');
+    }
+    assertEquals(
+      first.metadata.id,
+      uploaded.metadata.id,
+      'first read should find the active program',
+    );
+    assertEquals(
+      second.metadata.id,
+      uploaded.metadata.id,
+      'second read should find the active program',
+    );
+    assertEquals(
+      JSON.stringify([...first.content]),
+      JSON.stringify([1, 2, 3]),
+      'first read should return the stored content',
+    );
+    assertEquals(
+      JSON.stringify([...second.content]),
+      JSON.stringify([1, 2, 3]),
+      'second read should return the stored content',
+    );
+  } finally {
+    await app.cleanup();
+  }
+});
+
 Deno.test('Program operation conflicts return HTTP 409', async () => {
   const conflict = () => {
     throw new ProgramOperationConflictError('another program operation is in progress');

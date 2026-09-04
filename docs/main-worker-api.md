@@ -211,7 +211,7 @@ response bodies. It supports both the binary protobuf wire format and the canoni
 with an `application/octet-stream` media type (parameters are permitted) contains a protobuf `StepRequest` body. The
 Player should send a message containing:
 
-* `puter_id`: the UUID associated with the simulated Cobbleputer
+* `execution_id`: the UUID associated with the simulated execution
 * `state`: the opaque serialized input state
 * `event`: the `Events.Event` message describing the event to supply to the transition function; its `event` `oneof`
   selects the concrete event message
@@ -219,7 +219,7 @@ Player should send a message containing:
 The Main Worker invokes the active program's `POST /nextState` Program API endpoint with that request. On success,
 the Main Worker returns `200` with an `application/octet-stream` protobuf `StepResponse` body containing the next
 state and effects. The state and effects are returned to the caller only: they are not persisted, and effects are not
-applied to the Minecraft world. The `puter_id` identifies the simulated input for the invocation; this operation does
+applied to the Minecraft world. The `execution_id` identifies the simulated input for the invocation; this operation does
 not require that a corresponding Cobbleputer exists.
 
 #### Protobuf JSON representation
@@ -266,7 +266,6 @@ The endpoint has the following response behavior:
 * `403` with a JSON `error` when the request is missing a same-origin `Origin` header or has a different origin
 * `404` when the requested program id is invalid, there is no active program, or the id is not the active program
 * `405` with `Allow: POST` for other methods
-* `409` with a JSON `error` when another program operation for the Player is in progress
 * `415` with a JSON `error` when the request media type is neither `application/octet-stream` nor `application/json`
 * `502` with a JSON `error` when a JSON success response cannot be converted from the program's binary `StepResponse`
 * the active program's response status, headers, and body for non-`200` responses when the user worker returns a
@@ -333,3 +332,132 @@ and the response body has the shape:
 The program error is intended to be passed along to the player that uploaded the program.
 It may be a message indicating a problem with the program's `/startStates` response,
 a stacktrace from the program itself, etc.
+
+### Execution Sync
+
+The `POST /modapi/v1/executions` operation is the engine of Cobbleputer execution. The Mod
+calls this operation at regular intervals whenever there are new events or in-progress
+computations. The request body is described by the `cobbleware.internal.ExecutionsRequest` message.
+The response body is described by `cobbleware.internal.ExecutionsResponse`.
+
+The request and success response both use the binary protobuf wire format with an
+`application/octet-stream` media type (parameters are permitted). Results are ordered to match the
+request's `executions` list. Errors produced by this endpoint use the same media type and contain
+a `cobbleware.internal.ErrorResponse` message with an `error` string.
+
+The operation fulfills several purposes:
+
+* The Mod presents the Runtime with its current understanding of in-progress and pending work,
+  in the form of per-execution state/event sequence pairs. The Mod's representation of work
+  is authoritative.
+* The Runtime synchronizes with the Mod's presented view, possibly dispatching new events
+  to new or existing per-player user workers.
+* The Runtime's response provides the Mod with the Runtime's own representation of in-flight work,
+  conveying new execution states and Effect sequences to the Mod for storage and processing.
+
+The Runtime maintains an in-memory data structure (non-authoritative and not persisted to disk)
+that tracks the current state of every active execution, from its point of view.
+It contains, for each active execution:
+
+* The `execution_id` that uniquely identifies the execution. A new execution (with a fresh id)
+  begins when a Cobbleputer is started or restarted.
+* The current execution state and associated event sequence number. Event sequence numbers are
+  specific to an execution and increase monotonically.
+* A bounded queue of events to be processed.
+* A bounded queue of effects emitted by the execution and not yet acknowledged by the Mod.
+
+The Runtime currently hard-codes an event-window limit of 10 events per execution. If the Mod's
+authoritative snapshot contains more pending events, the Runtime retains only the first 10. Once the
+Mod durably accepts a consumed prefix and advances `event_seq_num`, a later sync fills the newly
+available window slots from the remaining suffix. The Mod must therefore retain the suffix until the
+Runtime reports it consumed.
+
+The Runtime also hard-codes an outbox limit of 50 unacknowledged effects per execution. When an
+invocation emits effects after its outbox has reached that limit, the Runtime drops those effects.
+Only retained effects receive sequence numbers, so the effects returned to the Mod remain contiguous.
+
+#### Execution records
+
+An execution is the unit of identity presented to a program and synchronized by this operation;
+the API does not separately track a Cobbleputer identity. An execution is owned by one player for
+its entire lifetime. The `player_id` in `ExecutionState` identifies that player, allowing the
+Runtime to select the player's active program and per-player user worker. A start or restart creates
+a new `execution_id`; ownership or program changes therefore also require a new execution.
+
+The Mod durably stores the authoritative record for each active execution:
+
+* its `execution_id`, owner `player_id`, and lifecycle `state`;
+* the state immediately before its first pending event, and that event's sequence number;
+* its bounded, ordered queue of pending events; and
+* effects received from the Runtime but not yet applied to the game world, together with the last
+  effect sequence number for which application was attempted.
+
+The first event and effect of an execution have sequence number 1. Sequence numbers increase by one
+without wrapping. `ExecutionState.event_seq_num` is the next event sequence number even when its
+`events` list is empty. Its events occupy the contiguous range beginning at that number.
+`ExecutionState.effect_seq_num` acknowledges every effect through that number; it is zero before
+the first effect is applied. `EXECUTION_STATUS_UNSPECIFIED` is invalid. `RUNNING` permits dispatch,
+`STOPPED` preserves work without dispatching it, and `CRASHED` is terminal for the execution id.
+Every `ExecutionState` must include its required scalar/message values; each event must select an
+`Event.event` oneof. `event_seq_num` must be at least one. Empty states and empty event lists are valid.
+
+The Runtime keeps a non-durable cache, keyed by `execution_id`. Each entry stores the immutable
+owner id; lifecycle state; the current state and last consumed event sequence number; a bounded,
+ordered event queue; an ordered outbox of unacknowledged effects with their sequence numbers; and,
+when applicable, the single in-flight program invocation. The entry also has a generation token so
+that a result from an invocation cancelled by a re-sync cannot update a newer entry. The Runtime
+uses the execution id as `StepRequest.execution_id` when it invokes the player program.
+
+`ExecutionResult.event_seq_num` is the last event consumed by the Runtime, and `final_state` is the
+state after that event. A failing event is consumed but leaves the state unchanged. The result's
+effects occupy the contiguous range beginning at `effect_seq_num`; they are all effects that have
+not been acknowledged by the request. When `effects` is empty, `effect_seq_num` is the next effect
+sequence number. A result for a newly created execution with no consumed events reports event
+sequence number 0.
+
+#### Runtime synchronization algorithm
+
+An `ExecutionsRequest` is a complete snapshot: it contains every execution that may still need
+execution or may have unacknowledged effects. The Mod serializes sync calls and never changes an
+event after assigning its sequence number. For each request, the Runtime:
+
+1. Rejects duplicate execution ids and records with a missing required value. For an existing id,
+   a different `player_id` is invalid; changing ownership requires a fresh execution id.
+2. Removes every cached entry absent from the request, increments its generation token, and abandons
+   its queued or in-flight work. For each new execution, initializes the cache from the Mod's state
+   and event snapshot. For an existing execution, the Runtime uses the sequence number and state
+   supplied by the Mod to discard a prefix that the Mod has durably accepted, retains compatible
+   completed work, and appends the previously unseen contiguous event suffix. If the supplied state
+   or overlapping events are incompatible with the cache, it discards the cache and reinitializes
+   it from the Mod's authoritative snapshot.
+3. Drops from each effect outbox every effect through the request's `effect_seq_num`. This is an
+   acknowledgement of an application attempt, not an assertion that the effect was applicable.
+4. For a `RUNNING` execution with no invocation in flight, schedules the oldest queued event for the
+   owning player's worker. The invocation is asynchronous: this operation need not wait for it, so
+   a response may describe only work completed before the response snapshot. On success, the Runtime
+   advances the state and event sequence number, assigns consecutive sequence numbers to the returned
+   effects, and schedules the next event. It ignores a completion whose generation token is stale.
+5. Does not dispatch events for `STOPPED` executions. On an invocation failure, including an invalid
+   program response, it consumes the failing event, marks the execution `CRASHED`, and discards its
+   remaining local event queue. A `CRASHED` execution never resumes under the same execution id and
+   discards subsequently presented events.
+6. Returns one `ExecutionResult` for every requested execution, containing its current state,
+   lifecycle state, last consumed event sequence number, and remaining effect outbox.
+
+When the Mod receives a result, it atomically persists the returned state and lifecycle state, removes the
+consumed prefix of its event queue, and de-duplicates and stores the returned effects by sequence
+number before attempting any of them. A `CRASHED` result also makes the Mod discard its remaining
+event queue. The Mod applies stored effects in sequence order and durably advances its acknowledged
+effect sequence after each application attempt. Thus a retry or a Runtime restart can resend an
+unacknowledged effect without causing it to be applied twice.
+
+The endpoint returns a protobuf `ErrorResponse` for errors generated by the Main Worker:
+
+* `400` for an unreadable/malformed protobuf payload or an invalid execution snapshot
+* `401` with `WWW-Authenticate: Bearer` when Mod authentication fails
+* `405` with `Allow: POST` for other methods
+* `415` for a request whose media type is not `application/octet-stream`
+* `500` for an unexpected Main Worker failure
+
+Program invocation failures are represented in the normal `200` `ExecutionsResponse`: the failing
+event is consumed and its execution becomes `CRASHED`. Crash diagnostics are not included in this API.

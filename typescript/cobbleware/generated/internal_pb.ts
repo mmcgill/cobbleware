@@ -2,8 +2,8 @@
 // @generated from file internal.proto (package cobbleware.internal, edition 2024)
 /* eslint-disable */
 
-import type { GenFile, GenMessage } from "@bufbuild/protobuf/codegenv2";
-import { fileDesc, messageDesc } from "@bufbuild/protobuf/codegenv2";
+import type { GenEnum, GenFile, GenMessage } from "@bufbuild/protobuf/codegenv2";
+import { enumDesc, fileDesc, messageDesc } from "@bufbuild/protobuf/codegenv2";
 import type { Uuid } from "./common_pb.ts";
 import { file_common } from "./common_pb.ts";
 import type { Effect } from "./effects_pb.ts";
@@ -16,20 +16,21 @@ import type { Message } from "@bufbuild/protobuf";
  * Describes the file internal.proto.
  */
 export const file_internal: GenFile = /*@__PURE__*/
-  fileDesc("Cg5pbnRlcm5hbC5wcm90bxITY29iYmxld2FyZS5pbnRlcm5hbCJ2CghFdmVudFNlcRIpCghwdXRlcl9pZBgBIAEoCzIXLmNvYmJsZXdhcmUuY29tbW9uLlV1aWQSFQoNaW5pdGlhbF9zdGF0ZRgCIAEoDBIoCgZldmVudHMYAyADKAsyGC5jb2JibGV3YXJlLmV2ZW50cy5FdmVudCJ4CglFZmZlY3RTZXESKQoIcHV0ZXJfaWQYASABKAsyFy5jb2JibGV3YXJlLmNvbW1vbi5VdWlkEhMKC2ZpbmFsX3N0YXRlGAIgASgMEisKB2VmZmVjdHMYAyADKAsyGi5jb2JibGV3YXJlLmVmZmVjdHMuRWZmZWN0YghlZGl0aW9uc3DpBw", [file_common, file_effects, file_events]);
+  fileDesc("Cg5pbnRlcm5hbC5wcm90bxITY29iYmxld2FyZS5pbnRlcm5hbCKQAgoORXhlY3V0aW9uU3RhdGUSLQoMZXhlY3V0aW9uX2lkGAEgASgLMhcuY29iYmxld2FyZS5jb21tb24uVXVpZBIVCg1pbml0aWFsX3N0YXRlGAIgASgMEigKBmV2ZW50cxgDIAMoCzIYLmNvYmJsZXdhcmUuZXZlbnRzLkV2ZW50EhUKDWV2ZW50X3NlcV9udW0YBCABKAQSFgoOZWZmZWN0X3NlcV9udW0YBSABKAQSKgoJcGxheWVyX2lkGAYgASgLMhcuY29iYmxld2FyZS5jb21tb24uVXVpZBIzCgVzdGF0ZRgHIAEoDjIkLmNvYmJsZXdhcmUuaW50ZXJuYWwuRXhlY3V0aW9uU3RhdHVzIuYBCg9FeGVjdXRpb25SZXN1bHQSLQoMZXhlY3V0aW9uX2lkGAEgASgLMhcuY29iYmxld2FyZS5jb21tb24uVXVpZBITCgtmaW5hbF9zdGF0ZRgCIAEoDBIrCgdlZmZlY3RzGAMgAygLMhouY29iYmxld2FyZS5lZmZlY3RzLkVmZmVjdBIVCg1ldmVudF9zZXFfbnVtGAQgASgEEhYKDmVmZmVjdF9zZXFfbnVtGAUgASgEEjMKBXN0YXRlGAYgASgOMiQuY29iYmxld2FyZS5pbnRlcm5hbC5FeGVjdXRpb25TdGF0dXMiTAoRRXhlY3V0aW9uc1JlcXVlc3QSNwoKZXhlY3V0aW9ucxgBIAMoCzIjLmNvYmJsZXdhcmUuaW50ZXJuYWwuRXhlY3V0aW9uU3RhdGUiSwoSRXhlY3V0aW9uc1Jlc3BvbnNlEjUKB3Jlc3VsdHMYASADKAsyJC5jb2JibGV3YXJlLmludGVybmFsLkV4ZWN1dGlvblJlc3VsdCIeCg1FcnJvclJlc3BvbnNlEg0KBWVycm9yGAEgASgJKo0BCg9FeGVjdXRpb25TdGF0dXMSIAocRVhFQ1VUSU9OX1NUQVRVU19VTlNQRUNJRklFRBAAEhwKGEVYRUNVVElPTl9TVEFUVVNfUlVOTklORxABEhwKGEVYRUNVVElPTl9TVEFUVVNfU1RPUFBFRBACEhwKGEVYRUNVVElPTl9TVEFUVVNfQ1JBU0hFRBADYghlZGl0aW9uc3DpBw", [file_common, file_effects, file_events]);
 
 /**
- * @generated from message cobbleware.internal.EventSeq
+ * @generated from message cobbleware.internal.ExecutionState
  */
-export type EventSeq = Message<"cobbleware.internal.EventSeq"> & {
+export type ExecutionState = Message<"cobbleware.internal.ExecutionState"> & {
   /**
-   * Required by the application contract.
+   * Identifies an execution. Required by the application contract.
    *
-   * @generated from field: cobbleware.common.Uuid puter_id = 1;
+   * @generated from field: cobbleware.common.Uuid execution_id = 1;
    */
-  puterId?: Uuid | undefined;
+  executionId?: Uuid | undefined;
 
   /**
+   * The state of the execution immediately before processing the first pending event.
    * Required by the application contract.
    *
    * @generated from field: bytes initial_state = 2;
@@ -37,32 +38,64 @@ export type EventSeq = Message<"cobbleware.internal.EventSeq"> & {
   initialState: Uint8Array;
 
   /**
-   * Required by the application contract.
+   * The pending events for this execution. Required by the application contract.
    *
    * @generated from field: repeated cobbleware.events.Event events = 3;
    */
   events: Event[];
+
+  /**
+   * The sequence number of the first pending event.
+   * Required by the application contract.
+   *
+   * @generated from field: uint64 event_seq_num = 4;
+   */
+  eventSeqNum: bigint;
+
+  /**
+   * The sequence number of the last applied effect from this execution.
+   * Required by the application contract.
+   *
+   * @generated from field: uint64 effect_seq_num = 5;
+   */
+  effectSeqNum: bigint;
+
+  /**
+   * Identifies the player whose active program owns this execution.
+   * Required by the application contract.
+   *
+   * @generated from field: cobbleware.common.Uuid player_id = 6;
+   */
+  playerId?: Uuid | undefined;
+
+  /**
+   * The execution lifecycle state. Required by the application contract.
+   *
+   * @generated from field: cobbleware.internal.ExecutionStatus state = 7;
+   */
+  state: ExecutionStatus;
 };
 
 /**
- * Describes the message cobbleware.internal.EventSeq.
- * Use `create(EventSeqSchema)` to create a new message.
+ * Describes the message cobbleware.internal.ExecutionState.
+ * Use `create(ExecutionStateSchema)` to create a new message.
  */
-export const EventSeqSchema: GenMessage<EventSeq> = /*@__PURE__*/
+export const ExecutionStateSchema: GenMessage<ExecutionState> = /*@__PURE__*/
   messageDesc(file_internal, 0);
 
 /**
- * @generated from message cobbleware.internal.EffectSeq
+ * @generated from message cobbleware.internal.ExecutionResult
  */
-export type EffectSeq = Message<"cobbleware.internal.EffectSeq"> & {
+export type ExecutionResult = Message<"cobbleware.internal.ExecutionResult"> & {
   /**
-   * Required by the application contract.
+   * Identifies an execution. Required by the application contract.
    *
-   * @generated from field: cobbleware.common.Uuid puter_id = 1;
+   * @generated from field: cobbleware.common.Uuid execution_id = 1;
    */
-  puterId?: Uuid | undefined;
+  executionId?: Uuid | undefined;
 
   /**
+   * The state of the execution after consuming all events up to and including event_seq_num.
    * Required by the application contract.
    *
    * @generated from field: bytes final_state = 2;
@@ -70,17 +103,131 @@ export type EffectSeq = Message<"cobbleware.internal.EffectSeq"> & {
   finalState: Uint8Array;
 
   /**
+   * The unapplied effects that result from processing all events up to and including event_seq_num.
    * Required by the application contract.
    *
    * @generated from field: repeated cobbleware.effects.Effect effects = 3;
    */
   effects: Effect[];
+
+  /**
+   * Sequence number of the last consumed event, whose output state was final_state.
+   * Required by the application contract.
+   *
+   * @generated from field: uint64 event_seq_num = 4;
+   */
+  eventSeqNum: bigint;
+
+  /**
+   * Sequence number of the first effect.
+   * Required by the application contract.
+   *
+   * @generated from field: uint64 effect_seq_num = 5;
+   */
+  effectSeqNum: bigint;
+
+  /**
+   * The execution lifecycle state. Required by the application contract.
+   *
+   * @generated from field: cobbleware.internal.ExecutionStatus state = 6;
+   */
+  state: ExecutionStatus;
 };
 
 /**
- * Describes the message cobbleware.internal.EffectSeq.
- * Use `create(EffectSeqSchema)` to create a new message.
+ * Describes the message cobbleware.internal.ExecutionResult.
+ * Use `create(ExecutionResultSchema)` to create a new message.
  */
-export const EffectSeqSchema: GenMessage<EffectSeq> = /*@__PURE__*/
+export const ExecutionResultSchema: GenMessage<ExecutionResult> = /*@__PURE__*/
   messageDesc(file_internal, 1);
+
+/**
+ * @generated from message cobbleware.internal.ExecutionsRequest
+ */
+export type ExecutionsRequest = Message<"cobbleware.internal.ExecutionsRequest"> & {
+  /**
+   * Required by the application contract.
+   *
+   * @generated from field: repeated cobbleware.internal.ExecutionState executions = 1;
+   */
+  executions: ExecutionState[];
+};
+
+/**
+ * Describes the message cobbleware.internal.ExecutionsRequest.
+ * Use `create(ExecutionsRequestSchema)` to create a new message.
+ */
+export const ExecutionsRequestSchema: GenMessage<ExecutionsRequest> = /*@__PURE__*/
+  messageDesc(file_internal, 2);
+
+/**
+ * @generated from message cobbleware.internal.ExecutionsResponse
+ */
+export type ExecutionsResponse = Message<"cobbleware.internal.ExecutionsResponse"> & {
+  /**
+   * Required by the application contract.
+   *
+   * @generated from field: repeated cobbleware.internal.ExecutionResult results = 1;
+   */
+  results: ExecutionResult[];
+};
+
+/**
+ * Describes the message cobbleware.internal.ExecutionsResponse.
+ * Use `create(ExecutionsResponseSchema)` to create a new message.
+ */
+export const ExecutionsResponseSchema: GenMessage<ExecutionsResponse> = /*@__PURE__*/
+  messageDesc(file_internal, 3);
+
+/**
+ * An error returned by an internal Mod API endpoint.
+ *
+ * @generated from message cobbleware.internal.ErrorResponse
+ */
+export type ErrorResponse = Message<"cobbleware.internal.ErrorResponse"> & {
+  /**
+   * @generated from field: string error = 1;
+   */
+  error: string;
+};
+
+/**
+ * Describes the message cobbleware.internal.ErrorResponse.
+ * Use `create(ErrorResponseSchema)` to create a new message.
+ */
+export const ErrorResponseSchema: GenMessage<ErrorResponse> = /*@__PURE__*/
+  messageDesc(file_internal, 4);
+
+/**
+ * The lifecycle state of an execution.
+ *
+ * @generated from enum cobbleware.internal.ExecutionStatus
+ */
+export enum ExecutionStatus {
+  /**
+   * @generated from enum value: EXECUTION_STATUS_UNSPECIFIED = 0;
+   */
+  UNSPECIFIED = 0,
+
+  /**
+   * @generated from enum value: EXECUTION_STATUS_RUNNING = 1;
+   */
+  RUNNING = 1,
+
+  /**
+   * @generated from enum value: EXECUTION_STATUS_STOPPED = 2;
+   */
+  STOPPED = 2,
+
+  /**
+   * @generated from enum value: EXECUTION_STATUS_CRASHED = 3;
+   */
+  CRASHED = 3,
+}
+
+/**
+ * Describes the enum cobbleware.internal.ExecutionStatus.
+ */
+export const ExecutionStatusSchema: GenEnum<ExecutionStatus> = /*@__PURE__*/
+  enumDesc(file_internal, 0);
 

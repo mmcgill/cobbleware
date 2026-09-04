@@ -48,7 +48,7 @@ The program **must** respond to a `POST /nextState` request with a response
 that indicates, for the given program state, the subsequent state and associated
 effects.
 
-The request body is a `StepRequest` containing the simulated `puter_id`, the current `state`, and an `event` from
+The request body is a `StepRequest` containing the simulated `execution_id`, the current `state`, and an `event` from
 the `Events.Event` message. The message's `event` `oneof` identifies the concrete event message.
 The program's transition function receives the state and event and returns a `Program.StepResponse` containing
 the subsequent state and effects.

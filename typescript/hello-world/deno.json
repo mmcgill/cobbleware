@@ -9,9 +9,8 @@
     "check": "deno check src/index.ts tests/**/*.ts integration/**/*.ts",
     "fmt": "deno fmt",
     "bundle": "deno run --allow-env --allow-read --allow-run --allow-write scripts/bundle.ts",
-    "package": "deno task bundle",
-    "serve": "deno task package && deno run --allow-read=hello-world.eszip --allow-net=127.0.0.1:8000 scripts/serve.ts",
-    "integration": "deno task package && deno test --no-prompt --allow-net=localhost:9000 --allow-read=hello-world.eszip integration/main-worker_test.ts"
+    "serve": "deno task bundle && deno run --allow-read=hello-world.eszip --allow-net=127.0.0.1:8000 scripts/serve.ts",
+    "integrate": "deno task bundle && deno test --no-prompt --allow-net=localhost:9000 --allow-read=hello-world.eszip integration/main-worker_test.ts"
   },
   "fmt": {
     "useTabs": false,

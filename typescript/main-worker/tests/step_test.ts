@@ -84,7 +84,7 @@ function encodeStepRequest(state = [1, 2, 3]): Uint8Array {
   return toBinary(
     Program.StepRequestSchema,
     create(Program.StepRequestSchema, {
-      puterId: create(Common.UuidSchema, { high: 1n, low: 2n }),
+      executionId: create(Common.UuidSchema, { high: 1n, low: 2n }),
       state: new Uint8Array(state),
       event: create(Events.EventSchema, {
         event: {
@@ -148,7 +148,7 @@ function jsonStepRequest(body: unknown, cookie: string, accept?: string): Reques
 
 function stepRequestJson(): Record<string, unknown> {
   return {
-    puterId: { high: '1', low: '2' },
+    executionId: { high: '1', low: '2' },
     state: 'AQID',
     event: {
       puterPlaced: {
@@ -254,7 +254,7 @@ Deno.test('Player program step accepts and returns ProtoJSON', async () => {
     );
     if (receivedBody === undefined) throw new Error('runner should receive the converted request');
     const request = fromBinary(Program.StepRequestSchema, receivedBody);
-    assertEquals(request.puterId?.high, 1n, 'ProtoJSON UUID high value should convert');
+    assertEquals(request.executionId?.high, 1n, 'ProtoJSON UUID high value should convert');
     assertEquals(request.event?.event.case, 'puterPlaced', 'ProtoJSON oneof should convert');
   } finally {
     await app.cleanup();

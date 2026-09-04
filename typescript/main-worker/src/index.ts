@@ -19,6 +19,8 @@ import { DurableProgramStore } from './programs/store.ts';
 import { PROGRAM_ID_PATTERN, type ProgramStore } from './programs/types.ts';
 import { type ProgramRunner, RuntimeProgramRunner } from './programs/start-states.ts';
 import { normalizePlayerUUID } from './auth/validation.ts';
+import { handleExecutions } from './executions/handlers.ts';
+import { type ExecutionCoordinator, ExecutionManager } from './executions/manager.ts';
 
 const HELLO_BODY = JSON.stringify({ message: 'hello' });
 
@@ -27,6 +29,7 @@ export type AppOptions = {
   store?: AuthStore;
   programStore?: ProgramStore;
   programRunner?: ProgramRunner;
+  executionCoordinator?: ExecutionCoordinator;
 };
 
 export async function createHandler(
@@ -36,10 +39,21 @@ export async function createHandler(
   const store = options.store ?? await DurableAuthStore.open(config);
   const programStore = options.programStore ?? new DurableProgramStore(config);
   const programRunner = options.programRunner ?? new RuntimeProgramRunner();
+  const executionCoordinator = options.executionCoordinator ?? new ExecutionManager(
+    programStore,
+    programRunner,
+  );
 
   return async (request) => {
     try {
-      return await routeRequest(request, config, store, programStore, programRunner);
+      return await routeRequest(
+        request,
+        config,
+        store,
+        programStore,
+        programRunner,
+        executionCoordinator,
+      );
     } catch {
       return jsonError('internal server error', 500);
     }
@@ -52,6 +66,7 @@ async function routeRequest(
   store: AuthStore,
   programStore: ProgramStore,
   programRunner: ProgramRunner,
+  executionCoordinator: ExecutionCoordinator,
 ): Promise<Response> {
   const { pathname } = new URL(request.url);
 
@@ -124,6 +139,9 @@ async function routeRequest(
   if (pathname.startsWith('/modapi/v1/')) {
     if (pathname === '/modapi/v1/authentication') {
       return handleModAuthentication(request, config, store);
+    }
+    if (pathname === '/modapi/v1/executions') {
+      return await handleExecutions(request, config, executionCoordinator);
     }
     const startStatesMatch = /^\/modapi\/v1\/players\/([^/]+)\/startStates$/.exec(pathname);
     if (startStatesMatch !== null) {

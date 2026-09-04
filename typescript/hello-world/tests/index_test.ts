@@ -48,7 +48,7 @@ Deno.test('Program API returns the hello-world start states', async () => {
 
 Deno.test('Program API applies the event from a StepRequest', async () => {
   const request = create(Program.StepRequestSchema, {
-    puterId: create(Common.UuidSchema, { high: 1n, low: 2n }),
+    executionId: create(Common.UuidSchema, { high: 1n, low: 2n }),
     state: new Uint8Array([1, 2, 3]),
     event: create(Events.EventSchema, {
       event: {

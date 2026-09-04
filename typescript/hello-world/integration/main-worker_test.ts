@@ -1,9 +1,15 @@
+import { Common, create, Events, fromBinary, toBinary } from '@cobbleware/core';
+import * as Internal from '@cobbleware/core/internal';
+
 const BASE_URL = 'http://localhost:9000';
 const MOD_API_KEY = 'secret';
 const PLAYER_UUID = '00000000-0000-0000-0000-000000000001';
 const PLAYER_PROFILE_NAME = 'HelloWorldIntegration';
 const AUTH_CODE = 'TEST0001';
 const PROGRAM_ARCHIVE_PATH = new URL('../hello-world.eszip', import.meta.url);
+const PLAYER_ID = uuid(0n, 1n);
+const FIRST_EXECUTION_ID = uuid(11n, 101n);
+const SECOND_EXECUTION_ID = uuid(22n, 202n);
 
 type ProgramMetadata = {
   id: string;
@@ -17,7 +23,7 @@ Deno.test('Hello World runs through the Main Worker API', async () => {
     program.id,
     cookie,
     {
-      puterId: { high: '1', low: '2' },
+      executionId: { high: '1', low: '2' },
       state: 'AQID',
       event: {
         puterPlaced: {
@@ -34,7 +40,7 @@ Deno.test('Hello World runs through the Main Worker API', async () => {
     program.id,
     cookie,
     {
-      puterId: { high: '1', low: '2' },
+      executionId: { high: '1', low: '2' },
       state: 'BAU=',
       event: {
         puterReset: { tick: '123' },
@@ -43,7 +49,60 @@ Deno.test('Hello World runs through the Main Worker API', async () => {
     'BAU=',
     [{ emitBeep: {} }],
   );
+
+  await assertExecutionSync();
 });
+
+async function assertExecutionSync(): Promise<void> {
+  const first = executionState(FIRST_EXECUTION_ID, new Uint8Array([10]), [
+    puterPlacedEvent(),
+    puterResetEvent(11n),
+  ]);
+  const second = executionState(SECOND_EXECUTION_ID, new Uint8Array([20]), [
+    puterResetEvent(22n),
+    puterPlacedEvent(),
+  ]);
+
+  let completed: Internal.ExecutionsResponse | undefined;
+  for (let attempt = 0; attempt < 100; attempt += 1) {
+    const response = await syncExecutions([first, second]);
+    if (response.results.every((result) => result.eventSeqNum === 2n)) {
+      completed = response;
+      break;
+    }
+    await new Promise((resolve) => setTimeout(resolve, 10));
+  }
+  if (completed === undefined) {
+    throw new Error('executions did not complete within the integration-test deadline');
+  }
+
+  assertExecutionResult(
+    resultFor(completed, FIRST_EXECUTION_ID),
+    FIRST_EXECUTION_ID,
+    [10],
+    ['sendChat', 'emitBeep'],
+  );
+  assertExecutionResult(
+    resultFor(completed, SECOND_EXECUTION_ID),
+    SECOND_EXECUTION_ID,
+    [20],
+    ['emitBeep', 'sendChat'],
+  );
+
+  const acknowledged = await syncExecutions([
+    executionState(FIRST_EXECUTION_ID, new Uint8Array([10]), [], 3n, 2n),
+    executionState(SECOND_EXECUTION_ID, new Uint8Array([20]), [], 3n, 2n),
+  ]);
+  for (const result of acknowledged.results) {
+    assertEquals(result.eventSeqNum, 2n, 'acknowledgement must retain the consumed event sequence');
+    assertEquals(result.effects.length, 0, 'acknowledgement must remove all returned effects');
+    assertEquals(
+      result.effectSeqNum,
+      3n,
+      'empty effect outbox must report the next sequence number',
+    );
+  }
+}
 
 async function authenticatePlayer(): Promise<string> {
   const modResponse = await fetch(`${BASE_URL}/modapi/v1/authentication`, {
@@ -97,6 +156,112 @@ async function uploadProgram(cookie: string): Promise<ProgramMetadata> {
     throw new Error(`Program upload returned invalid metadata: ${JSON.stringify(metadata)}`);
   }
   return metadata;
+}
+
+async function syncExecutions(
+  executions: Internal.ExecutionState[],
+): Promise<Internal.ExecutionsResponse> {
+  const body = toBinary(
+    Internal.ExecutionsRequestSchema,
+    create(Internal.ExecutionsRequestSchema, { executions }),
+  );
+  const response = await fetch(`${BASE_URL}/modapi/v1/executions`, {
+    method: 'POST',
+    headers: {
+      authorization: `Bearer ${MOD_API_KEY}`,
+      'content-type': 'application/octet-stream',
+    },
+    body: new Blob([body.slice().buffer as ArrayBuffer]),
+  });
+  await assertStatus(response, [200], 'Execution sync');
+  if (response.headers.get('content-type') !== 'application/octet-stream') {
+    throw new Error(
+      `Execution sync returned unexpected content type ${response.headers.get('content-type')}`,
+    );
+  }
+  return fromBinary(
+    Internal.ExecutionsResponseSchema,
+    new Uint8Array(await response.arrayBuffer()),
+  );
+}
+
+function executionState(
+  executionId: Common.Uuid,
+  initialState: Uint8Array,
+  events: Events.Event[],
+  eventSeqNum = 1n,
+  effectSeqNum = 0n,
+): Internal.ExecutionState {
+  return create(Internal.ExecutionStateSchema, {
+    executionId,
+    initialState,
+    events,
+    eventSeqNum,
+    effectSeqNum,
+    playerId: PLAYER_ID,
+    state: Internal.ExecutionStatus.RUNNING,
+  });
+}
+
+function puterPlacedEvent(): Events.Event {
+  return create(Events.EventSchema, {
+    event: {
+      case: 'puterPlaced',
+      value: create(Events.PuterPlacedSchema, {
+        levelKey: create(Common.IdentifierSchema, { ns: 'minecraft', path: 'overworld' }),
+        pos: create(Common.Vec3Schema, { x: 1, y: 2, z: 3 }),
+      }),
+    },
+  });
+}
+
+function puterResetEvent(tick: bigint): Events.Event {
+  return create(Events.EventSchema, {
+    event: { case: 'puterReset', value: create(Events.PuterResetSchema, { tick }) },
+  });
+}
+
+function resultFor(
+  response: Internal.ExecutionsResponse,
+  executionId: Common.Uuid,
+): Internal.ExecutionResult {
+  const result = response.results.find((candidate) => sameUuid(candidate.executionId, executionId));
+  if (result === undefined) {
+    throw new Error(`missing result for execution ${executionId.high}:${executionId.low}`);
+  }
+  return result;
+}
+
+function assertExecutionResult(
+  result: Internal.ExecutionResult,
+  executionId: Common.Uuid,
+  expectedState: number[],
+  expectedEffects: string[],
+): void {
+  if (!sameUuid(result.executionId, executionId)) {
+    throw new Error('execution result has the wrong execution id');
+  }
+  assertEquals(result.state, Internal.ExecutionStatus.RUNNING, 'execution must remain running');
+  assertEquals(result.eventSeqNum, 2n, 'two events must be consumed');
+  assertEquals(result.effectSeqNum, 1n, 'first effect sequence must be one');
+  assertEquals(
+    JSON.stringify([...result.finalState]),
+    JSON.stringify(expectedState),
+    'execution returned unexpected state',
+  );
+  assertEquals(
+    JSON.stringify(result.effects.map((effect) => effect.effect.case)),
+    JSON.stringify(expectedEffects),
+    'execution took unexpected transition branches',
+  );
+}
+
+function uuid(high: bigint, low: bigint): Common.Uuid {
+  return create(Common.UuidSchema, { high, low });
+}
+
+function sameUuid(left: Common.Uuid | undefined, right: Common.Uuid): boolean {
+  return left?.high === right.high && left.low === right.low;
 }
 
 async function assertStep(
