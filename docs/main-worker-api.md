@@ -206,8 +206,10 @@ active program. A program that is not active, a program belonging to another Pla
 program id is not available through this endpoint and receives `404`.
 
 Unlike the other Player API endpoints, this endpoint uses Protocol Buffers rather than JSON for its request and success
-response bodies. The request must have an `application/octet-stream` media type (parameters are permitted). The Player
-should send a protobuf `StepRequest` body containing:
+response bodies. It supports both the binary protobuf wire format and the canonical
+[ProtoJSON](https://protobuf.dev/programming-guides/json/) representation. The binary format is the default: a request
+with an `application/octet-stream` media type (parameters are permitted) contains a protobuf `StepRequest` body. The
+Player should send a message containing:
 
 * `puter_id`: the UUID associated with the simulated Cobbleputer
 * `state`: the opaque serialized input state
@@ -220,30 +222,55 @@ state and effects. The state and effects are returned to the caller only: they a
 applied to the Minecraft world. The `puter_id` identifies the simulated input for the invocation; this operation does
 not require that a corresponding Cobbleputer exists.
 
-Player-supplied protobuf request bodies and responses from player code are untrusted opaque bytes. The Main Worker
-checks the HTTP request framing and media type, but does not unpack or verify either body. It forwards the request
-bytes unchanged to the active program's per-Player user worker, where the program may unpack them, and forwards the
-program response status, headers, and bytes unchanged to the Player. Malformed or malicious data can cause the user
-worker or the Player's decoder to fail or hang; the per-Player isolate limits request processing to the owning
-Player's program.
+#### Protobuf JSON representation
+
+A Player may instead send the `StepRequest` as ProtoJSON by using an `application/json` request media type (parameters
+are permitted). To receive the successful `StepResponse` as ProtoJSON, the Player sends `Accept: application/json`.
+The response has an `application/json` media type. Without that explicit selection, the Main Worker returns the binary
+`application/octet-stream` response described above. Request and response representation are selected independently, so
+a Player may use either representation for each direction.
+
+The JSON representation is the canonical Protobuf JSON representation for the messages in
+[`protobuf/program.proto`](../protobuf/program.proto) and its imported schemas. In particular, field names use
+lower camel case, `bytes` fields use padded standard base64 strings, 64-bit integer fields use decimal strings, and a
+`oneof` is represented by its selected field directly in the containing object.
+
+For a JSON request, the Main Worker parses the JSON as `StepRequest` and serializes it before invoking the program.
+Malformed JSON, fields not recognized by the schema, or values that cannot be represented by the message receive `400`
+with a JSON `error`. The Main Worker does not otherwise validate application-level requirements in the message; as with
+the binary representation, the program receives the resulting request and is responsible for interpreting it.
+
+For a JSON success response, the Main Worker parses the program's `200` response as a binary `StepResponse` before
+serializing it as ProtoJSON. A `200` response that does not have the binary protobuf media type or cannot be parsed as
+`StepResponse` receives `502` with a JSON `error`. Responses with another status continue to be returned from the
+program unchanged.
+
+Binary protobuf request bodies and responses from player code are untrusted opaque bytes. When the binary
+representation is used, the Main Worker checks the HTTP request framing and media type, but does not unpack or verify
+either body. It forwards the request bytes unchanged to the active program's per-Player user worker, where the program
+may unpack them, and forwards the program response status, headers, and bytes unchanged to the Player. The JSON
+representation requires the conversion described above. Malformed or malicious binary data can cause the user worker
+or the Player's decoder to fail or hang; the per-Player isolate limits request processing to the owning Player's
+program.
 
 Failures generated while validating the Player API HTTP request use the normal JSON error shape containing an `error`
-property. A response produced by the player program is returned as-is, including a program-produced `500`
+property. A non-`200` response produced by the player program is returned as-is, including a program-produced `500`
 `ErrorResponse`; the Main Worker does not verify that response body. If the Main Worker cannot invoke the user worker,
 it returns the usual JSON `500` error.
 
 The endpoint has the following response behavior:
 
-* `200` with a protobuf `StepResponse` when the transition succeeds
-* `400` with a JSON `error` when the request body cannot be read
+* `200` with a protobuf `StepResponse` in the representation selected by the Player when the transition succeeds
+* `400` with a JSON `error` when the request body cannot be read or a JSON request cannot be parsed as `StepRequest`
 * `401` with the Player API `WWW-Authenticate` header when the session is missing or invalid
 * `403` with a JSON `error` when the request is missing a same-origin `Origin` header or has a different origin
 * `404` when the requested program id is invalid, there is no active program, or the id is not the active program
 * `405` with `Allow: POST` for other methods
 * `409` with a JSON `error` when another program operation for the Player is in progress
-* `415` with a JSON `error` when the request media type is not `application/octet-stream`
-* the active program's response status, headers, and body when the user worker returns a response; the Main Worker does
-  not verify the response's protobuf body
+* `415` with a JSON `error` when the request media type is neither `application/octet-stream` nor `application/json`
+* `502` with a JSON `error` when a JSON success response cannot be converted from the program's binary `StepResponse`
+* the active program's response status, headers, and body for non-`200` responses when the user worker returns a
+  response; the Main Worker does not verify the response's protobuf body
 * `500` with a JSON `error` when the Main Worker cannot invoke the user worker
 
 Because this operation is authenticated with a cookie and is intended for browser use, it requires the same-origin

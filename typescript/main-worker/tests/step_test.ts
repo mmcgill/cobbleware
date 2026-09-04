@@ -121,12 +121,42 @@ function stepRequest(
   cookie: string,
   method = 'POST',
   contentType = 'application/octet-stream',
+  accept?: string,
 ): Request {
+  const headers = new Headers({ cookie, origin: 'http://localhost', 'content-type': contentType });
+  if (accept !== undefined) {
+    headers.set('accept', accept);
+  }
   return new Request(STEP_PATH, {
     method,
-    headers: { cookie, origin: 'http://localhost', 'content-type': contentType },
+    headers,
     body: new Blob([body.slice().buffer as ArrayBuffer]),
   });
+}
+
+function jsonStepRequest(body: unknown, cookie: string, accept?: string): Request {
+  const headers = new Headers({
+    cookie,
+    origin: 'http://localhost',
+    'content-type': 'application/json; charset=utf-8',
+  });
+  if (accept !== undefined) {
+    headers.set('accept', accept);
+  }
+  return new Request(STEP_PATH, { method: 'POST', headers, body: JSON.stringify(body) });
+}
+
+function stepRequestJson(): Record<string, unknown> {
+  return {
+    puterId: { high: '1', low: '2' },
+    state: 'AQID',
+    event: {
+      puterPlaced: {
+        levelKey: { ns: 'minecraft', path: 'overworld' },
+        pos: { x: 1, y: 2, z: 3 },
+      },
+    },
+  };
 }
 
 function assertEquals<T>(actual: T, expected: T, message: string): void {
@@ -191,6 +221,93 @@ Deno.test('Player program step executes the active program and returns binary ou
   }
 });
 
+Deno.test('Player program step accepts and returns ProtoJSON', async () => {
+  let receivedBody: Uint8Array | undefined;
+  const app = await createTestApp(
+    () => Promise.resolve(activeProgram),
+    (_request, _playerUUID, _program, body) => {
+      receivedBody = body;
+      return Promise.resolve(binaryResponse(encodeStepResponse(), 200));
+    },
+  );
+  try {
+    const cookie = await authenticatePlayerSession(app.handler);
+    const response = await app.handler(
+      jsonStepRequest(stepRequestJson(), cookie, 'application/json'),
+    );
+    assertEquals(response.status, 200, 'ProtoJSON step should succeed');
+    assertEquals(
+      response.headers.get('content-type'),
+      'application/json; charset=utf-8',
+      'ProtoJSON step should return JSON content',
+    );
+    assertEquals(
+      JSON.stringify(await response.json()),
+      JSON.stringify({
+        state: 'CQg=',
+        effects: [
+          { sendChat: { msg: 'hello' } },
+          { emitBeep: { millis: 250 } },
+        ],
+      }),
+      'StepResponse should use the canonical ProtoJSON form',
+    );
+    if (receivedBody === undefined) throw new Error('runner should receive the converted request');
+    const request = fromBinary(Program.StepRequestSchema, receivedBody);
+    assertEquals(request.puterId?.high, 1n, 'ProtoJSON UUID high value should convert');
+    assertEquals(request.event?.event.case, 'puterPlaced', 'ProtoJSON oneof should convert');
+  } finally {
+    await app.cleanup();
+  }
+});
+
+Deno.test('Player program step defaults a ProtoJSON request to a binary response', async () => {
+  const app = await createTestApp(
+    () => Promise.resolve(activeProgram),
+    () => Promise.resolve(binaryResponse(encodeStepResponse(), 200)),
+  );
+  try {
+    const cookie = await authenticatePlayerSession(app.handler);
+    const response = await app.handler(jsonStepRequest(stepRequestJson(), cookie));
+    assertEquals(response.status, 200, 'ProtoJSON step should succeed');
+    assertEquals(
+      response.headers.get('content-type'),
+      'application/octet-stream',
+      'ProtoJSON input should not select a JSON response',
+    );
+    const body = new Uint8Array(await response.arrayBuffer());
+    const decoded = fromBinary(Program.StepResponseSchema, body);
+    assertEquals(
+      JSON.stringify([...decoded.state]),
+      JSON.stringify([9, 8]),
+      'response should be binary',
+    );
+  } finally {
+    await app.cleanup();
+  }
+});
+
+Deno.test('Player program step rejects invalid ProtoJSON without invoking the program', async () => {
+  let runnerCalled = false;
+  const app = await createTestApp(
+    () => Promise.resolve(activeProgram),
+    () => {
+      runnerCalled = true;
+      return Promise.resolve(binaryResponse(encodeStepResponse(), 200));
+    },
+  );
+  try {
+    const cookie = await authenticatePlayerSession(app.handler);
+    await assertJsonError(
+      await app.handler(jsonStepRequest({ ...stepRequestJson(), unknownField: true }, cookie)),
+      400,
+    );
+    if (runnerCalled) throw new Error('invalid ProtoJSON must not invoke the program');
+  } finally {
+    await app.cleanup();
+  }
+});
+
 Deno.test('Player program step enforces HTTP policy and forwards opaque request bodies', async () => {
   let runnerCalled = false;
   const app = await createTestApp(
@@ -213,7 +330,7 @@ Deno.test('Player program step enforces HTTP policy and forwards opaque request 
     if (!runnerCalled) throw new Error('opaque request bodies must reach the program runner');
     runnerCalled = false;
     await assertJsonError(
-      await app.handler(stepRequest(encodeStepRequest(), cookie, 'POST', 'application/json')),
+      await app.handler(stepRequest(encodeStepRequest(), cookie, 'POST', 'text/plain')),
       415,
     );
     const noOrigin = new Request(STEP_PATH, {
@@ -252,7 +369,15 @@ Deno.test('Player program step exposes program failures as binary ErrorResponse'
   );
   try {
     const cookie = await authenticatePlayerSession(app.handler);
-    const response = await app.handler(stepRequest(encodeStepRequest(), cookie));
+    const response = await app.handler(
+      stepRequest(
+        encodeStepRequest(),
+        cookie,
+        'POST',
+        'application/octet-stream',
+        'application/json',
+      ),
+    );
     assertEquals(response.status, 500, 'program failure should return 500');
     assertEquals(
       response.headers.get('content-type'),
@@ -288,6 +413,30 @@ Deno.test('Player program step forwards untrusted program response bytes unchang
       JSON.stringify([...new Uint8Array(await response.arrayBuffer())]),
       JSON.stringify([...responseBody]),
       'program response bytes should be preserved',
+    );
+  } finally {
+    await app.cleanup();
+  }
+});
+
+Deno.test('Player program step returns 502 when a ProtoJSON response cannot be converted', async () => {
+  const app = await createTestApp(
+    () => Promise.resolve(activeProgram),
+    () => Promise.resolve(binaryResponse(new Uint8Array([1, 2, 3]), 200)),
+  );
+  try {
+    const cookie = await authenticatePlayerSession(app.handler);
+    await assertJsonError(
+      await app.handler(
+        stepRequest(
+          encodeStepRequest(),
+          cookie,
+          'POST',
+          'application/octet-stream',
+          'application/json',
+        ),
+      ),
+      502,
     );
   } finally {
     await app.cleanup();

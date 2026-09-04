@@ -1,6 +1,12 @@
-import { emptyResponse, jsonError, jsonResponse } from '../auth/http.ts';
+import { emptyResponse, isJsonRequest, jsonError, jsonResponse, readJson } from '../auth/http.ts';
+import { fromBinary, fromJson, Program, toBinary, toJson } from '@cobbleware/core';
+import type { JsonValue } from '@bufbuild/protobuf';
 import { requireSameOrigin } from '../auth/middleware.ts';
-import { PROGRAM_BINARY_CONTENT_TYPE, programErrorResponse, type ProgramRunner } from './start-states.ts';
+import {
+  PROGRAM_BINARY_CONTENT_TYPE,
+  programErrorResponse,
+  type ProgramRunner,
+} from './start-states.ts';
 import {
   ProgramOperationConflictError,
   ProgramQuotaExceededError,
@@ -8,6 +14,7 @@ import {
 } from './types.ts';
 
 const MULTIPART_CONTENT_TYPE = 'multipart/form-data';
+const JSON_CONTENT_TYPE = 'application/json';
 const PROGRAM_FIELD = 'program';
 const NAME_FIELD = 'name';
 const MAX_PROGRAM_NAME_LENGTH = 128;
@@ -123,17 +130,27 @@ export async function handleProgramStep(
     return originError;
   }
 
-  const contentType = request.headers.get('content-type')?.split(';', 1)[0].trim().toLowerCase();
-  if (contentType !== PROGRAM_BINARY_CONTENT_TYPE) {
-    return jsonError('content type must be application/octet-stream', 415);
+  const contentType = mediaType(request.headers.get('content-type'));
+  if (contentType !== PROGRAM_BINARY_CONTENT_TYPE && contentType !== JSON_CONTENT_TYPE) {
+    return jsonError('content type must be application/octet-stream or application/json', 415);
   }
 
   let body: Uint8Array;
   try {
-    // Player-supplied protobuf messages are opaque at this boundary. Do not unpack or verify them.
-    body = new Uint8Array(await request.arrayBuffer());
+    if (isJsonRequest(request)) {
+      body = toBinary(
+        Program.StepRequestSchema,
+        fromJson(Program.StepRequestSchema, await readJson(request) as JsonValue),
+      );
+    } else {
+      // Player-supplied protobuf messages are opaque at this boundary. Do not unpack or verify them.
+      body = new Uint8Array(await request.arrayBuffer());
+    }
   } catch (error) {
-    return jsonError(error instanceof Error ? error.message : 'request body could not be read', 400);
+    return jsonError(
+      error instanceof Error ? error.message : 'request body could not be read',
+      400,
+    );
   }
 
   let program;
@@ -147,7 +164,23 @@ export async function handleProgramStep(
     return emptyResponse(404);
   }
 
-  return await runner.step(request, playerUUID, program, body);
+  const response = await runner.step(request, playerUUID, program, body);
+  if (!acceptsJsonResponse(request) || response.status !== 200) {
+    return response;
+  }
+
+  if (mediaType(response.headers.get('content-type')) !== PROGRAM_BINARY_CONTENT_TYPE) {
+    return jsonError('program returned an unexpected /nextState content type', 502);
+  }
+
+  try {
+    const body = new Uint8Array(await response.arrayBuffer());
+    return jsonResponse(
+      toJson(Program.StepResponseSchema, fromBinary(Program.StepResponseSchema, body)),
+    );
+  } catch {
+    return jsonError('program returned an invalid StepResponse', 502);
+  }
 }
 
 function handleStoreError(error: unknown): Response {
@@ -175,6 +208,27 @@ function normalizeProgramName(name: string): string | null {
 
 function programLocation(id: string): string {
   return `/playerapi/v1/programs/${id}`;
+}
+
+function mediaType(value: string | null): string | undefined {
+  return value?.split(';', 1)[0].trim().toLowerCase();
+}
+
+function acceptsJsonResponse(request: Request): boolean {
+  const accept = request.headers.get('accept');
+  if (accept === null) {
+    return false;
+  }
+
+  return accept.split(',').some((mediaRange) => {
+    const [type, ...parameters] = mediaRange.split(';');
+    if (type.trim().toLowerCase() !== JSON_CONTENT_TYPE) {
+      return false;
+    }
+
+    const quality = parameters.find((parameter) => parameter.trim().toLowerCase().startsWith('q='));
+    return quality === undefined || Number(quality.trim().slice(2)) > 0;
+  });
 }
 
 function methodNotAllowed(allowedMethods: string): Response {
