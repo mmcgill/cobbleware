@@ -4,11 +4,6 @@
   "exports": {
     ".": "./src/index.ts"
   },
-  "imports": {
-    "@cobbleware/core": "../cobbleware/src/mod.ts",
-    "flatbuffers": "npm:flatbuffers@25.9.23"
-  },
-  "nodeModulesDir": "auto",
   "tasks": {
     "test": "deno test --no-prompt",
     "check": "deno check src/index.ts tests/**/*.ts",
@@ -23,9 +18,5 @@
     "indentWidth": 2,
     "singleQuote": true,
     "proseWrap": "preserve"
-  },
-  "compilerOptions": {
-    "strict": true,
-    "noImplicitOverride": true
   }
 }

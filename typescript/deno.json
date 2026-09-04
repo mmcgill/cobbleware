@@ -1,0 +1,17 @@
+{
+  "workspace": [
+    "./cobbleware",
+    "./hello-world",
+    "./main-worker"
+  ],
+  "imports": {
+    "@bufbuild/protobuf": "npm:@bufbuild/protobuf@2.14.1",
+    "@bufbuild/protobuf/codegenv2": "npm:@bufbuild/protobuf@2.14.1/codegenv2",
+    "@bufbuild/protoc-gen-es": "npm:@bufbuild/protoc-gen-es@2.14.1"
+  },
+  "nodeModulesDir": "auto",
+  "compilerOptions": {
+    "strict": true,
+    "noImplicitOverride": true
+  }
+}

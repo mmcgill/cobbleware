@@ -1,0 +1,40 @@
+edition = "2024";
+
+package cobbleware.common;
+
+// Shared value types used by Cobbleware's public and internal APIs.
+message Vec3 {
+  double x = 1;
+  double y = 2;
+  double z = 3;
+}
+
+message Vec3i {
+  int32 x = 1;
+  int32 y = 2;
+  int32 z = 3;
+}
+
+message ChunkPos {
+  int32 x = 1;
+  int32 z = 2;
+}
+
+enum Direction {
+  DOWN = 0;
+  UP = 1;
+  NORTH = 2;
+  SOUTH = 3;
+  WEST = 4;
+  EAST = 5;
+}
+
+message Identifier {
+  string ns = 1;
+  string path = 2;
+}
+
+message Uuid {
+  int64 high = 1;
+  int64 low = 2;
+}

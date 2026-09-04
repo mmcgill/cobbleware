@@ -1,5 +1,4 @@
-import * as flatbuffers from 'flatbuffers';
-import { Common, Effects, Events, Program } from '@cobbleware/core';
+import { Common, create, Effects, Events, fromBinary, Program, toBinary } from '@cobbleware/core';
 import { type AppConfig, configFromEnv } from '../src/config.ts';
 import { DurableAuthStore } from '../src/auth/store.ts';
 import { createHandler } from '../src/index.ts';
@@ -82,29 +81,39 @@ async function authenticatePlayerSession(handler: TestApp['handler']): Promise<s
 }
 
 function encodeStepRequest(state = [1, 2, 3]): Uint8Array {
-  const builder = new flatbuffers.Builder(256);
-  const request = new Program.StepRequestT(
-    new Common.UUIDT(1n, 2n),
-    state,
-    Events.Event.PuterPlaced,
-    new Events.PuterPlacedT(
-      new Common.IdentifierT('minecraft', 'overworld'),
-      new Common.Vec3T(1, 2, 3),
-    ),
+  return toBinary(
+    Program.StepRequestSchema,
+    create(Program.StepRequestSchema, {
+      puterId: create(Common.UuidSchema, { high: 1n, low: 2n }),
+      state: new Uint8Array(state),
+      event: create(Events.EventSchema, {
+        event: {
+          case: 'puterPlaced',
+          value: create(Events.PuterPlacedSchema, {
+            levelKey: create(Common.IdentifierSchema, { ns: 'minecraft', path: 'overworld' }),
+            pos: create(Common.Vec3Schema, { x: 1, y: 2, z: 3 }),
+          }),
+        },
+      }),
+    }),
   );
-  builder.finish(request.pack(builder));
-  return builder.asUint8Array();
 }
 
 function encodeStepResponse(): Uint8Array {
-  const builder = new flatbuffers.Builder(256);
-  const response = new Program.StepResponseT(
-    [9, 8],
-    [Effects.Effect.SendChat, Effects.Effect.EmitBeep],
-    [new Effects.SendChatT('hello'), new Effects.EmitBeepT(250)],
+  return toBinary(
+    Program.StepResponseSchema,
+    create(Program.StepResponseSchema, {
+      state: new Uint8Array([9, 8]),
+      effects: [
+        create(Effects.EffectSchema, {
+          effect: { case: 'sendChat', value: create(Effects.SendChatSchema, { msg: 'hello' }) },
+        }),
+        create(Effects.EffectSchema, {
+          effect: { case: 'emitBeep', value: create(Effects.EmitBeepSchema, { millis: 250 }) },
+        }),
+      ],
+    }),
   );
-  builder.finish(response.pack(builder));
-  return builder.asUint8Array();
 }
 
 function stepRequest(
@@ -160,10 +169,9 @@ Deno.test('Player program step executes the active program and returns binary ou
     );
 
     const body = new Uint8Array(await response.arrayBuffer());
-    const decoded = Program.StepResponse.getRootAsStepResponse(new flatbuffers.ByteBuffer(body))
-      .unpack();
+    const decoded = fromBinary(Program.StepResponseSchema, body);
     assertEquals(
-      JSON.stringify(decoded.state),
+      JSON.stringify([...decoded.state]),
       JSON.stringify([9, 8]),
       'next state should round trip',
     );
@@ -200,7 +208,7 @@ Deno.test('Player program step enforces HTTP policy and forwards opaque request 
     assertEquals(
       malformedBodyResponse.status,
       200,
-      'malformed FlatBuffers should be forwarded without Main Worker verification',
+      'malformed protobuf messages should be forwarded without Main Worker verification',
     );
     if (!runnerCalled) throw new Error('opaque request bodies must reach the program runner');
     runnerCalled = false;
@@ -252,9 +260,7 @@ Deno.test('Player program step exposes program failures as binary ErrorResponse'
       'program failure should return binary content',
     );
     const body = new Uint8Array(await response.arrayBuffer());
-    const errorResponse = Program.ErrorResponse.getRootAsErrorResponse(
-      new flatbuffers.ByteBuffer(body),
-    ).unpack();
+    const errorResponse = fromBinary(Program.ErrorResponseSchema, body);
     if (errorResponse.error !== 'program exploded') {
       throw new Error(`expected program error message, got ${errorResponse.error}`);
     }
@@ -289,9 +295,7 @@ Deno.test('Player program step forwards untrusted program response bytes unchang
 });
 
 function encodeErrorResponse(error: string): Uint8Array {
-  const builder = new flatbuffers.Builder(128);
-  builder.finish(new Program.ErrorResponseT(error).pack(builder));
-  return builder.asUint8Array();
+  return toBinary(Program.ErrorResponseSchema, create(Program.ErrorResponseSchema, { error }));
 }
 
 function binaryResponse(

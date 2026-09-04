@@ -27,5 +27,5 @@ See [Main Worker API](../../docs/api.md) for API documentation.
 
 ## Future Work / TODO
 
-[ ] Ship Cobbleware/flatbuffers libs with Edge Runtime so programs don't have to bundle them.
+[ ] Ship Cobbleware/protobuf libraries with Edge Runtime so programs don't have to bundle them.
 [ ] Experiment with `deno bundle` for minifying before building ESZip, to minimize file size.

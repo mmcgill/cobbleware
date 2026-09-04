@@ -130,7 +130,7 @@ export async function handleProgramStep(
 
   let body: Uint8Array;
   try {
-    // Player-supplied FlatBuffers are opaque at this boundary. Do not unpack or verify them.
+    // Player-supplied protobuf messages are opaque at this boundary. Do not unpack or verify them.
     body = new Uint8Array(await request.arrayBuffer());
   } catch (error) {
     return jsonError(error instanceof Error ? error.message : 'request body could not be read', 400);

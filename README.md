@@ -49,8 +49,8 @@ The Mod will provide server admins with the following configuration options:
 
 You'll need the following prerequisites:
 
-* Flatbuffers Compiler. See [Building - FlatBuffers Docs](https://flatbuffers.dev/building/) for installation
-methods.
+* Protocol Buffers Compiler (`protoc`). See the [Protocol Buffers installation guide](https://protobuf.dev/installation/)
+for installation methods.
 
 ### Building
 

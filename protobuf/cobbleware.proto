@@ -1,0 +1,11 @@
+edition = "2024";
+
+// Convenience entry point for generators that should emit every Cobbleware
+// message. Individual schema files can also be passed to protoc directly.
+package cobbleware;
+
+import "common.proto";
+import "effects.proto";
+import "events.proto";
+import "internal.proto";
+import "program.proto";

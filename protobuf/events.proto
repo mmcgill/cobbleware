@@ -1,0 +1,27 @@
+edition = "2024";
+
+package cobbleware.events;
+
+import "common.proto";
+
+// The Cobbleputer has just powered on, either for the first time or after a
+// reset.
+message PuterReset {
+  uint64 tick = 1;
+}
+
+// The Cobbleputer has just been placed in a new location.
+message PuterPlaced {
+  // Required by the application contract.
+  cobbleware.common.Identifier level_key = 1;
+  // Required by the application contract.
+  cobbleware.common.Vec3 pos = 2;
+}
+
+// A single event supplied to a program step.
+message Event {
+  oneof event {
+    PuterPlaced puter_placed = 1;
+    PuterReset puter_reset = 2;
+  }
+}

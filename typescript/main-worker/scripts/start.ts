@@ -1,6 +1,6 @@
 const defaultRuntimeBinary = Deno.build.os === 'windows'
-  ? '../../mc-edge-runtime/target/debug/edge-runtime.exe'
-  : '../../mc-edge-runtime/target/debug/edge-runtime';
+  ? 'mc-edge-runtime/target/debug/edge-runtime.exe'
+  : 'mc-edge-runtime/target/debug/edge-runtime';
 
 const runtimeBinary = Deno.env.get('EDGE_RUNTIME_BIN') ?? defaultRuntimeBinary;
 
@@ -8,13 +8,14 @@ const command = new Deno.Command(runtimeBinary, {
   args: [
     'start',
     '--main-service',
-    'main-worker.eszip',
+    'typescript/main-worker/main-worker.eszip',
     '--main-entrypoint',
     'file:///src/index.ts',
   ],
   stdin: 'inherit',
   stdout: 'inherit',
   stderr: 'inherit',
+  cwd: '../..',
 });
 
 const child = command.spawn();

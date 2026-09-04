@@ -12,7 +12,10 @@ deno task check
 deno task fmt
 ```
 
-FlatBuffers bindings are generated from the repository-wide schema:
+Protobuf bindings are generated from the repository-wide schemas in `protobuf/`.
+Generation uses the installed `protoc` compiler and the pinned `@bufbuild/protoc-gen-es` plugin:
+
+`protoc` and Node.js must be available on `PATH`; Node.js runs the local generator plugin.
 
 ```sh
 deno task generate
@@ -21,5 +24,5 @@ deno task generate
 `src/mod.ts` is the package entry point. It intentionally contains only portable
 TypeScript and can be imported directly by an Edge Function.
 
-`generated/internal.ts` describes implementation details that are subject to breaking
+`generated/internal_pb.ts` describes implementation details that are subject to breaking
 changes without warning.

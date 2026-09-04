@@ -25,10 +25,10 @@ The Main Worker is written in Typescript; its code is located in [typescript/mai
 The [cobbleware](../typescript/cobbleware/) Typescript library contains type definitions and code
 useful for implementing Cobbleputer Programs.
 
-## Flatbuffers Schemas
+## Protocol Buffer Schemas
 
 The Mod and Runtime depend on shared representations of key data structures. These are modeled
-as Flatbuffer schemas found in the [schema](../schema/) directory. Scripts are used to
+as Protocol Buffer schemas found in the [protobuf](../protobuf/) directory. Scripts are used to
 generate Typescript and Java code from these schemas to ensure that data can be efficiently
 transmitted between the Mod and Runtime, and saved/loaded to persistent game state, in a
 consistent and backward-compatible way.

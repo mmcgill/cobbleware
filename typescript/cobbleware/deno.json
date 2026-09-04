@@ -3,12 +3,8 @@
   "version": "0.1.0",
   "exports": {
     ".": "./src/mod.ts",
-    "./internal": "./generated/internal.ts"
+    "./internal": "./generated/internal_pb.ts"
   },
-  "imports": {
-    "flatbuffers": "npm:flatbuffers@25.9.23"
-  },
-  "nodeModulesDir": "auto",
   "tasks": {
     "test": "deno test --no-prompt",
     "check": "deno check src/mod.ts tests/**/*.ts",
@@ -21,9 +17,5 @@
     "indentWidth": 2,
     "singleQuote": true,
     "proseWrap": "preserve"
-  },
-  "compilerOptions": {
-    "strict": true,
-    "noImplicitOverride": true
   }
 }

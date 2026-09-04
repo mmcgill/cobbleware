@@ -205,22 +205,22 @@ state transition function for their active program. The `{id}` path component mu
 active program. A program that is not active, a program belonging to another Player, or a syntactically invalid
 program id is not available through this endpoint and receives `404`.
 
-Unlike the other Player API endpoints, this endpoint uses FlatBuffers rather than JSON for its request and success
+Unlike the other Player API endpoints, this endpoint uses Protocol Buffers rather than JSON for its request and success
 response bodies. The request must have an `application/octet-stream` media type (parameters are permitted). The Player
-should send a FlatBuffers `StepRequest` body containing:
+should send a protobuf `StepRequest` body containing:
 
 * `puter_id`: the UUID associated with the simulated Cobbleputer
 * `state`: the opaque serialized input state
-* `event`: the `Events.Event` union describing the event to supply to the transition function; its generated
-  discriminator is `event_type`
+* `event`: the `Events.Event` message describing the event to supply to the transition function; its `event` `oneof`
+  selects the concrete event message
 
 The Main Worker invokes the active program's `POST /nextState` Program API endpoint with that request. On success,
-the Main Worker returns `200` with an `application/octet-stream` FlatBuffers `StepResponse` body containing the next
+the Main Worker returns `200` with an `application/octet-stream` protobuf `StepResponse` body containing the next
 state and effects. The state and effects are returned to the caller only: they are not persisted, and effects are not
 applied to the Minecraft world. The `puter_id` identifies the simulated input for the invocation; this operation does
 not require that a corresponding Cobbleputer exists.
 
-Player-supplied FlatBuffers request bodies and responses from player code are untrusted opaque bytes. The Main Worker
+Player-supplied protobuf request bodies and responses from player code are untrusted opaque bytes. The Main Worker
 checks the HTTP request framing and media type, but does not unpack or verify either body. It forwards the request
 bytes unchanged to the active program's per-Player user worker, where the program may unpack them, and forwards the
 program response status, headers, and bytes unchanged to the Player. Malformed or malicious data can cause the user
@@ -234,7 +234,7 @@ it returns the usual JSON `500` error.
 
 The endpoint has the following response behavior:
 
-* `200` with a FlatBuffers `StepResponse` when the transition succeeds
+* `200` with a protobuf `StepResponse` when the transition succeeds
 * `400` with a JSON `error` when the request body cannot be read
 * `401` with the Player API `WWW-Authenticate` header when the session is missing or invalid
 * `403` with a JSON `error` when the request is missing a same-origin `Origin` header or has a different origin
@@ -243,7 +243,7 @@ The endpoint has the following response behavior:
 * `409` with a JSON `error` when another program operation for the Player is in progress
 * `415` with a JSON `error` when the request media type is not `application/octet-stream`
 * the active program's response status, headers, and body when the user worker returns a response; the Main Worker does
-  not verify the response's FlatBuffers body
+  not verify the response's protobuf body
 * `500` with a JSON `error` when the Main Worker cannot invoke the user worker
 
 Because this operation is authenticated with a cookie and is intended for browser use, it requires the same-origin

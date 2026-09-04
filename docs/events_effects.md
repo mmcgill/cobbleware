@@ -11,13 +11,14 @@ descriptions in sync:
 * Type-level descriptions in Java and Typescript
 * Persistent representations stored in game save state
 
-## FlatBuffers?
+## Protocol Buffers
 
-We should do an initial test to see how much FlatBuffers buys us:
+The shared wire representation for events and effects is Protocol Buffers. We should benchmark its performance
+against JSON before making performance-sensitive design decisions:
 
 * Define a complicated composite data structure.
 * Set up a Java driver that randomly generates data and pumps it through
   an edge function API as JSON.
 * Set up an edge function that reads a particular field and returns it.
 * Benchmark. What's the max throughput we get single-threaded?
-* Do the same, but with FlatBuffers.
+* Do the same, but with Protocol Buffers.

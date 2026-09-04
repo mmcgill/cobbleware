@@ -1,24 +1,30 @@
-import * as flatbuffers from 'flatbuffers';
 import {
+  create,
   Effects,
-  type EffectT,
-  Events,
-  Program,
+  fromBinary,
   type Program as EventProgram,
+  toBinary,
+  Program,
 } from '@cobbleware/core';
 
-const helloWorldEffect: EffectT = new Effects.SendChatT('Hello world');
-
-export const handle: EventProgram = function handle(state, _event) {
-  const builder = new flatbuffers.Builder(128);
-  builder.finish(
-    new Program.StepResponseT([...state], [Effects.Effect.SendChat], [helloWorldEffect]).pack(
-      builder,
-    ),
-  );
-  return Program.StepResponse.getRootAsStepResponse(
-    new flatbuffers.ByteBuffer(builder.asUint8Array()),
-  );
+export const handle: EventProgram = function handle(state, event) {
+  let effects: Effects.Effect[] = [];
+  if (event.event.case === 'puterReset') {
+    effects = [create(Effects.EffectSchema, {
+      effect: {
+        case: 'emitBeep',
+        value: create(Effects.EmitBeepSchema, {}),
+      }
+    })];
+  } else if (event.event.case === 'puterPlaced') {
+    effects = [create(Effects.EffectSchema, {
+      effect: {
+        case: 'sendChat',
+        value: create(Effects.SendChatSchema, { msg: 'Hello world'}),
+      }
+    })];
+  }
+  return create(Program.StepResponseSchema, { state: state.slice(), effects });
 };
 
 const START_STATES_RESPONSE = createStartStatesResponse();
@@ -48,14 +54,12 @@ async function handleNextState(request: Request): Promise<Response> {
 
   const content = await request.arrayBuffer();
   try {
-    const stepRequest = Program.StepRequest.getRootAsStepRequest(
-      new flatbuffers.ByteBuffer(new Uint8Array(content)),
-    ).unpack();
-    if (stepRequest.event === null || stepRequest.eventType === Events.Event.NONE) {
+    const stepRequest = fromBinary(Program.StepRequestSchema, new Uint8Array(content));
+    if (stepRequest.event?.event.case === undefined) {
       throw new Error('StepRequest is missing an event');
     }
 
-    const output = handle(new Uint8Array(stepRequest.state), stepRequest.eventType);
+    const output = handle(stepRequest.state, stepRequest.event);
     return binaryResponse(encodeStepResponse(output), 200);
   } catch (error) {
     return binaryResponse(encodeErrorResponse(describeError(error)), 500);
@@ -63,26 +67,23 @@ async function handleNextState(request: Request): Promise<Response> {
 }
 
 function createStartStatesResponse(): Uint8Array {
-  const builder = new flatbuffers.Builder(64);
-  const root = new Program.StartStatesResponseT([
-    new Program.StartStateT('one', [1]),
-    new Program.StartStateT('two', [2]),
-  ]).pack(builder);
-  builder.finish(root);
-  return builder.asUint8Array();
+  return toBinary(
+    Program.StartStatesResponseSchema,
+    create(Program.StartStatesResponseSchema, {
+      startStates: [
+        create(Program.StartStateSchema, { stateName: 'one', state: new Uint8Array([1]) }),
+        create(Program.StartStateSchema, { stateName: 'two', state: new Uint8Array([2]) }),
+      ],
+    }),
+  );
 }
 
 function encodeStepResponse(response: Program.StepResponse): Uint8Array {
-  if (response.bb === null) {
-    throw new Error('StepResponse is not initialized');
-  }
-  return response.bb.bytes();
+  return toBinary(Program.StepResponseSchema, response);
 }
 
 function encodeErrorResponse(error: string): Uint8Array {
-  const builder = new flatbuffers.Builder(128);
-  builder.finish(new Program.ErrorResponseT(error).pack(builder));
-  return builder.asUint8Array();
+  return toBinary(Program.ErrorResponseSchema, create(Program.ErrorResponseSchema, { error }));
 }
 
 function binaryResponse(content: Uint8Array, status: number): Response {

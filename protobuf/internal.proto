@@ -1,0 +1,25 @@
+edition = "2024";
+
+package cobbleware.internal;
+
+import "common.proto";
+import "effects.proto";
+import "events.proto";
+
+message EventSeq {
+  // Required by the application contract.
+  cobbleware.common.Uuid puter_id = 1;
+  // Required by the application contract.
+  bytes initial_state = 2;
+  // Required by the application contract.
+  repeated cobbleware.events.Event events = 3;
+}
+
+message EffectSeq {
+  // Required by the application contract.
+  cobbleware.common.Uuid puter_id = 1;
+  // Required by the application contract.
+  bytes final_state = 2;
+  // Required by the application contract.
+  repeated cobbleware.effects.Effect effects = 3;
+}

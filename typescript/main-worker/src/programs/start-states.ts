@@ -1,7 +1,6 @@
 /// <reference path="../runtime.d.ts" />
 
-import * as flatbuffers from 'flatbuffers';
-import { Program } from '@cobbleware/core';
+import { fromBinary, Program } from '@cobbleware/core';
 import { jsonResponse } from '../auth/http.ts';
 import type { ActiveProgram } from './types.ts';
 
@@ -83,23 +82,11 @@ export function programErrorResponse(error: unknown): Response {
 
 export function unpackStartStates(content: Uint8Array): StartStates {
   try {
-    validateFlatBufferRoot(content);
-    const root = Program.StartStatesResponse.getRootAsStartStatesResponse(
-      new flatbuffers.ByteBuffer(content),
-    );
+    const root = fromBinary(Program.StartStatesResponseSchema, content);
     const startStates: StartStates = {};
 
-    for (let index = 0; index < root.startStatesLength(); index++) {
-      const startState = root.startStates(index);
-      if (startState === null) {
-        throw new Error(`start state ${index} is missing`);
-      }
-
-      const stateName = startState.stateName();
-      const state = startState.stateArray();
-      if (stateName === null || state === null) {
-        throw new Error(`start state ${index} is missing a required field`);
-      }
+    for (const [index, startState] of root.startStates.entries()) {
+      const { stateName, state } = startState;
       if (Object.hasOwn(startStates, stateName)) {
         throw new Error(`start state name is repeated: ${stateName}`);
       }
@@ -115,34 +102,6 @@ export function unpackStartStates(content: Uint8Array): StartStates {
     throw new Error(
       `program returned an invalid /startStates response: ${describeProgramError(error)}`,
     );
-  }
-}
-
-function validateFlatBufferRoot(content: Uint8Array): void {
-  const view = new DataView(content.buffer, content.byteOffset, content.byteLength);
-  if (content.byteLength < 4) {
-    throw new Error('FlatBuffers body is too short');
-  }
-
-  const rootOffset = view.getInt32(0, true);
-  if (rootOffset < 4 || rootOffset + 4 > content.byteLength) {
-    throw new Error('FlatBuffers root table is out of bounds');
-  }
-
-  const tableOffset = view.getInt32(rootOffset, true);
-  const vtableOffset = rootOffset - tableOffset;
-  if (tableOffset <= 0 || vtableOffset < 0 || vtableOffset + 4 > content.byteLength) {
-    throw new Error('FlatBuffers vtable is out of bounds');
-  }
-
-  const vtableLength = view.getUint16(vtableOffset, true);
-  const objectLength = view.getUint16(vtableOffset + 2, true);
-  if (
-    vtableLength < 4 ||
-    vtableOffset + vtableLength > content.byteLength ||
-    rootOffset + objectLength > content.byteLength
-  ) {
-    throw new Error('FlatBuffers table is out of bounds');
   }
 }
 

@@ -1,0 +1,21 @@
+edition = "2024";
+
+package cobbleware.effects;
+
+message SendChat {
+  // Required by the application contract.
+  string msg = 1;
+}
+
+message EmitBeep {
+  // The original FlatBuffers uint16 value. Values above 65535 are invalid.
+  uint32 millis = 1;
+}
+
+// A single effect produced by a program step.
+message Effect {
+  oneof effect {
+    SendChat send_chat = 1;
+    EmitBeep emit_beep = 2;
+  }
+}

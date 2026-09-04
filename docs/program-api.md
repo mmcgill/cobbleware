@@ -20,13 +20,13 @@ is able to invoke the API.
 
 ## Request and Response Body Representation
 
-The Program API contract specifies request and response body formats via FlatBuffers.
+The Program API contract specifies request and response body formats via Protocol Buffers.
 The expected media type is `application/octet-stream`.
 
-For `POST /nextState`, the Main Worker forwards the Player API's FlatBuffers request bytes unchanged. The Main Worker
+For `POST /nextState`, the Main Worker forwards the Player API's protobuf request bytes unchanged. The Main Worker
 does not unpack or verify those request bytes; the player program is responsible for unpacking the `StepRequest` inside
 its per-Player V8 isolate. Responses from the player program are likewise untrusted: the Main Worker forwards the
-response status, headers, and body without unpacking or verifying the FlatBuffers response. Malformed or malicious
+response status, headers, and body without unpacking or verifying the protobuf response. Malformed or malicious
 request bytes may therefore fail or hang that program, but the isolate contains the effect to the owning Player's
 program.
 
@@ -49,7 +49,7 @@ that indicates, for the given program state, the subsequent state and associated
 effects.
 
 The request body is a `StepRequest` containing the simulated `puter_id`, the current `state`, and an `event` from
-the `Events.Event` union. The union's generated `event_type` discriminator identifies the concrete event table.
+the `Events.Event` message. The message's `event` `oneof` identifies the concrete event message.
 The program's transition function receives the state and event and returns a `Program.StepResponse` containing
 the subsequent state and effects.
 On success, the response should have 200 status with a `StepResponse` body. On failure (e.g. due to an exception)
