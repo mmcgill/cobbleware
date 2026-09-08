@@ -14,6 +14,7 @@ import {
 } from './types.ts';
 
 const MANIFEST_FILENAME = 'programs.json';
+const ACTIVE_PROGRAM_READ_ATTEMPTS = 3;
 
 type Clock = () => number;
 
@@ -48,19 +49,29 @@ export class DurableProgramStore implements ProgramStore {
     });
   }
 
-  readActive(playerUUID: string): Promise<ActiveProgram | null> {
-    return this.withPlayerLock(playerUUID, async () => {
+  async readActive(playerUUID: string): Promise<ActiveProgram | null> {
+    for (let attempt = 0; attempt < ACTIVE_PROGRAM_READ_ATTEMPTS; attempt += 1) {
       const manifest = await this.readManifest(playerUUID);
       const metadata = newestProgram(manifest.programs);
       if (metadata === undefined) {
         return null;
       }
 
-      const content = await Deno.readFile(
-        `${this.playerDirectory(playerUUID)}/${metadata.id}.eszip`,
-      );
-      return { metadata, content };
-    });
+      try {
+        const content = await Deno.readFile(
+          `${this.playerDirectory(playerUUID)}/${metadata.id}.eszip`,
+        );
+        return { metadata, content };
+      } catch (error) {
+        if (
+          !(error instanceof Deno.errors.NotFound) || attempt === ACTIVE_PROGRAM_READ_ATTEMPTS - 1
+        ) {
+          throw error;
+        }
+      }
+    }
+
+    throw new Error('active program read attempts exhausted');
   }
 
   upload(
