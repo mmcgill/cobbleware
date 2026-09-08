@@ -1,5 +1,6 @@
 plugins {
     id 'net.fabricmc.fabric-loom' version "${loom_version}"
+    id 'com.google.protobuf' version "${protobuf_gradle_plugin_version}"
 }
 
 version = project.mod_version
@@ -10,13 +11,34 @@ base {
 }
 
 repositories {
-    // Loom supplies the repositories needed for Minecraft, Fabric Loader, and Fabric API.
+    mavenCentral()
 }
 
 dependencies {
     minecraft "com.mojang:minecraft:${project.minecraft_version}"
     implementation "net.fabricmc:fabric-loader:${project.loader_version}"
     implementation "net.fabricmc.fabric-api:fabric-api:${project.fabric_version}"
+    implementation "com.google.protobuf:protobuf-java:${project.protobuf_version}"
+}
+
+sourceSets {
+    main {
+        proto {
+            srcDir '../../protobuf'
+        }
+    }
+}
+
+protobuf {
+    protoc {
+        artifact = "com.google.protobuf:protoc:${project.protobuf_version}"
+    }
+}
+
+tasks.register('generateCobblewareProtos') {
+    group = 'build'
+    description = 'Generates Java bindings from the repository-wide Cobbleware protobuf schemas.'
+    dependsOn(tasks.named('generateProto'))
 }
 
 processResources {

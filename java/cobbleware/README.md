@@ -12,6 +12,18 @@ introduced with Minecraft 26.1.
 The remapped mod JAR is written to `build/libs/`; use the JAR with the shortest filename outside the development
 environment.
 
+## Protocol Buffers
+
+The Java bindings are generated from the repository-wide schemas in [`../../protobuf`](../../protobuf). Generate them
+explicitly with:
+
+```powershell
+.\gradlew.bat generateCobblewareProtos
+```
+
+Generation is also wired into Java compilation. Gradle regenerates bindings when a schema changes; append
+`--rerun-tasks` to force generation when the schemas are unchanged.
+
 ## Development server
 
 ```powershell
