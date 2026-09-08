@@ -1,0 +1,22 @@
+{
+  "schemaVersion": 1,
+  "id": "cobbleware",
+  "version": "${version}",
+  "name": "Cobbleware",
+  "description": "Cobble together software systems in Minecraft.",
+  "authors": [
+    "mmcgill"
+  ],
+  "environment": "*",
+  "entrypoints": {
+    "main": [
+      "io.github.mmcgill.cobbleware.CobblewareMod"
+    ]
+  },
+  "depends": {
+    "fabricloader": ">=0.19.3",
+    "minecraft": "26.2",
+    "java": ">=25",
+    "fabric-api": "*"
+  }
+}

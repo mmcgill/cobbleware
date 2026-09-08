@@ -51,7 +51,26 @@ You'll need the following prerequisites:
 
 * Protocol Buffers Compiler (`protoc`). See the [Protocol Buffers installation guide](https://protobuf.dev/installation/)
 for installation methods.
+* JDK 25 for the Fabric mod in [`java/cobbleware`](java/cobbleware/).
 
 ### Building
 
+Build the Fabric mod from its project directory:
+
+```powershell
+cd java/cobbleware
+.\gradlew.bat build
+```
+
 ### Testing
+
+Start a development server with:
+
+```powershell
+cd java/cobbleware
+.\gradlew.bat runServer
+```
+
+Minecraft creates `java/cobbleware/run/eula.txt` on the first launch. A developer who accepts Mojang's EULA must set
+`eula=true` there before the server can finish starting. The current scaffold registers `/cobbleware startstates`,
+which prints `hello world`.
