@@ -32,3 +32,23 @@ Generation is also wired into Java compilation. Gradle regenerates bindings when
 
 On a fresh development server, Minecraft creates `run/eula.txt`. Accept Mojang's EULA by setting `eula=true` before
 starting the server again. The scaffold's `/cobbleware startstates` command currently responds with `hello world`.
+
+## Main Worker configuration
+
+On first startup, the Mod creates `config/cobbleware.json` in Fabric's config directory:
+
+```json
+{
+  "mainWorkerUrl": "http://localhost:9000",
+  "mainWorkerApiKey": ""
+}
+```
+
+Set `mainWorkerApiKey` to the same value used for the Main Worker's
+`COBBLEWARE_API_KEY`. The Mod logs an error and disables authentication requests while
+the value is empty. `mainWorkerUrl` may use either `http` or `https`; it points to an
+already-running Main Worker.
+
+Open the Main Worker's browser UI, then run its displayed
+`/cobbleware auth <code>` command in-game. On success, the next browser poll completes
+the session login.

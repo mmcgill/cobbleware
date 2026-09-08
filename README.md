@@ -28,6 +28,15 @@ TBD
 
 Until Mod development progress farther, this section is aspirational rather than descriptive.
 
+### Current Main Worker connection settings
+
+The Fabric Mod currently creates `config/cobbleware.json` on first start. Set
+`mainWorkerApiKey` to the same value supplied to the already-running Main Worker as
+`COBBLEWARE_API_KEY`; leave `mainWorkerUrl` at its default `http://localhost:9000` or
+set it to that worker's HTTP/HTTPS base URL. The API key defaults to an empty string,
+which causes the Mod to log an error and disable authentication requests until an
+administrator sets it.
+
 The Mod will provide server admins with the following configuration options:
 
 * A cap on the total number of V8 isolates that may be active at any given time.
