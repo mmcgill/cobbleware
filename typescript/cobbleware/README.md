@@ -2,6 +2,26 @@
 
 The Cobbleware library is the Edge Runtime-compatible API exposed to Cobbleputer program authors.
 
+## Writing a program
+
+Define a set of named initial states and an event handler, then call `start`. The library runs
+`Deno.serve` and implements the Program API endpoints for you.
+
+```ts
+import { create, Program, start, type Program as EventHandler } from '@cobbleware/core';
+
+const handler: EventHandler = (state, _event) =>
+  create(Program.StepResponseSchema, { state, effects: [] });
+
+start({
+  startStates: { initial: new Uint8Array() },
+  program: handler,
+});
+```
+
+See [`../hello-world/src/index.ts`](../hello-world/src/index.ts) for a complete program. When
+testing an entry point that calls `start`, wrap that call in `if (import.meta.main)`.
+
 ## Development
 
 This package uses Deno:

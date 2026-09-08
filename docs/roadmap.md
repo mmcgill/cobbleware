@@ -7,9 +7,7 @@ Here's a rough sketch of the current plan to getting something working end-to-en
 * [x] Implement basic program management use cases.
 * [x] Sketch out a minimal set of starting events and effects
 * [x] Get a "hello world" program written
-* Initial program execution in the Mod API
-  * `/modapi/v1/executions` handles Runtime <-> Mod coordination in both directions
-  * We can test this stuff as-is without even doing Minecraft things
+* [x] Initial program execution in the Mod API
 * Basic Mod scaffold
   * Minecraft-side Cobbleputer basics, no UI
 * First interactions
