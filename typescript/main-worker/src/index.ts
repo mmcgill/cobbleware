@@ -10,11 +10,7 @@ import { DurableAuthStore } from './auth/store.ts';
 import type { AuthStore } from './auth/types.ts';
 import { serveStatic } from './static.ts';
 import { jsonError } from './auth/http.ts';
-import {
-  handleProgramCollection,
-  handleProgramStep,
-  handleStartStates,
-} from './programs/handlers.ts';
+import { handleProgram, handleProgramCollection, handleProgramStep } from './programs/handlers.ts';
 import { DurableProgramStore } from './programs/store.ts';
 import { PROGRAM_ID_PATTERN, type ProgramStore } from './programs/types.ts';
 import { type ProgramRunner, RuntimeProgramRunner } from './programs/start-states.ts';
@@ -143,8 +139,8 @@ async function routeRequest(
     if (pathname === '/modapi/v1/executions') {
       return await handleExecutions(request, config, executionCoordinator);
     }
-    const startStatesMatch = /^\/modapi\/v1\/players\/([^/]+)\/startStates$/.exec(pathname);
-    if (startStatesMatch !== null) {
+    const programMatch = /^\/modapi\/v1\/players\/([^/]+)\/program$/.exec(pathname);
+    if (programMatch !== null) {
       const authError = requireModAuth(request, config);
       if (authError !== null) {
         return authError;
@@ -152,11 +148,11 @@ async function routeRequest(
 
       let playerUUID: string;
       try {
-        playerUUID = normalizePlayerUUID(decodeURIComponent(startStatesMatch[1]));
+        playerUUID = normalizePlayerUUID(decodeURIComponent(programMatch[1]));
       } catch {
         return new Response(null, { status: 404 });
       }
-      return handleStartStates(request, programStore, programRunner, playerUUID);
+      return handleProgram(request, programStore, programRunner, playerUUID);
     }
     const authError = requireModAuth(request, config);
     return authError ?? new Response(null, { status: 404 });

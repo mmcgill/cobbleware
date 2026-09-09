@@ -9,6 +9,7 @@ import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.time.Duration;
+import java.util.List;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionException;
@@ -61,6 +62,31 @@ public final class MainWorkerClient {
                 });
     }
 
+    /** Gets the authenticated player's active program information without blocking the server thread. */
+    public CompletableFuture<ProgramResult> getProgram(UUID playerUuid) {
+        if (!config.isEnabled()) {
+            return CompletableFuture.completedFuture(ProgramResult.configurationError(config.disabledReason()));
+        }
+
+        URI endpoint = config.mainWorkerBaseUri().resolve("modapi/v1/players/" + playerUuid + "/program");
+        HttpRequest request = HttpRequest.newBuilder(endpoint)
+                .timeout(REQUEST_TIMEOUT)
+                .header("Accept", "application/json")
+                .header("Authorization", "Bearer " + config.mainWorkerApiKey())
+                .GET()
+                .build();
+
+        return httpClient.sendAsync(request, HttpResponse.BodyHandlers.ofString())
+                .handle((response, failure) -> {
+                    if (failure != null) {
+                        Throwable cause = unwrap(failure);
+                        logger.warn("Main Worker program request failed: {}", cause.toString());
+                        return ProgramResult.unavailable("Main Worker request failed");
+                    }
+                    return programResponseResult(response);
+                });
+    }
+
     private AuthenticationResult responseResult(HttpResponse<String> response) {
         int status = response.statusCode();
         if (status == 201) {
@@ -79,6 +105,63 @@ public final class MainWorkerClient {
 
         logger.warn("Main Worker authentication request returned HTTP {}: {}", status, workerError);
         return AuthenticationResult.unavailable("Main Worker returned HTTP " + status);
+    }
+
+    private ProgramResult programResponseResult(HttpResponse<String> response) {
+        int status = response.statusCode();
+        if (status == 200) {
+            try {
+                JsonObject body = JsonParser.parseString(response.body()).getAsJsonObject();
+                JsonElement programError = body.get("programError");
+                if (programError != null && programError.isJsonPrimitive()
+                        && programError.getAsJsonPrimitive().isString()) {
+                    return ProgramResult.programError(programError.getAsString());
+                }
+                return ProgramResult.success(parseProgram(body));
+            } catch (RuntimeException exception) {
+                logger.warn("Main Worker returned an invalid program response: {}", exception.toString());
+                return ProgramResult.unavailable("Main Worker returned an invalid program response");
+            }
+        }
+        if (status == 404) {
+            return ProgramResult.noProgram();
+        }
+        if (status == 401) {
+            logger.error("Main Worker rejected the configured API key");
+            return ProgramResult.unauthorized();
+        }
+
+        logger.warn("Main Worker program request returned HTTP {}: {}", status, errorMessage(response.body()));
+        return ProgramResult.unavailable("Main Worker returned HTTP " + status);
+    }
+
+    private static ProgramInfo parseProgram(JsonObject body) {
+        JsonElement startStates = body.get("startStates");
+        if (startStates == null || !startStates.isJsonObject()) {
+            throw new IllegalArgumentException("program response has no startStates object");
+        }
+        return new ProgramInfo(
+                requiredString(body, "id"),
+                requiredString(body, "name"),
+                requiredString(body, "uploadedAt"),
+                requiredLong(body, "sizeBytes"),
+                List.copyOf(startStates.getAsJsonObject().keySet()));
+    }
+
+    private static String requiredString(JsonObject body, String field) {
+        JsonElement value = body.get(field);
+        if (value == null || !value.isJsonPrimitive() || !value.getAsJsonPrimitive().isString()) {
+            throw new IllegalArgumentException("program response has no string " + field);
+        }
+        return value.getAsString();
+    }
+
+    private static long requiredLong(JsonObject body, String field) {
+        JsonElement value = body.get(field);
+        if (value == null || !value.isJsonPrimitive() || !value.getAsJsonPrimitive().isNumber()) {
+            throw new IllegalArgumentException("program response has no numeric " + field);
+        }
+        return value.getAsLong();
     }
 
     private static String requestJson(AuthenticationRequest authentication) {
@@ -146,6 +229,50 @@ public final class MainWorkerClient {
         CONFIGURATION_ERROR,
         REJECTED,
         UNAUTHORIZED,
+        UNAVAILABLE
+    }
+
+    public record ProgramInfo(String id, String name, String uploadedAt, long sizeBytes, List<String> startStateNames) {
+        public ProgramInfo {
+            if (id == null || name == null || uploadedAt == null || sizeBytes < 0 || startStateNames == null) {
+                throw new IllegalArgumentException("program information is invalid");
+            }
+            startStateNames = List.copyOf(startStateNames);
+        }
+    }
+
+    public record ProgramResult(ProgramStatus status, ProgramInfo program, String detail) {
+        public static ProgramResult success(ProgramInfo program) {
+            return new ProgramResult(ProgramStatus.SUCCESS, program, null);
+        }
+
+        public static ProgramResult noProgram() {
+            return new ProgramResult(ProgramStatus.NO_PROGRAM, null, null);
+        }
+
+        public static ProgramResult configurationError(String detail) {
+            return new ProgramResult(ProgramStatus.CONFIGURATION_ERROR, null, detail);
+        }
+
+        public static ProgramResult unauthorized() {
+            return new ProgramResult(ProgramStatus.UNAUTHORIZED, null, null);
+        }
+
+        public static ProgramResult programError(String detail) {
+            return new ProgramResult(ProgramStatus.PROGRAM_ERROR, null, detail);
+        }
+
+        public static ProgramResult unavailable(String detail) {
+            return new ProgramResult(ProgramStatus.UNAVAILABLE, null, detail);
+        }
+    }
+
+    public enum ProgramStatus {
+        SUCCESS,
+        NO_PROGRAM,
+        CONFIGURATION_ERROR,
+        UNAUTHORIZED,
+        PROGRAM_ERROR,
         UNAVAILABLE
     }
 }

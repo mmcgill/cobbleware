@@ -83,7 +83,8 @@ export async function handleProgramCollection(
   }
 }
 
-export async function handleStartStates(
+/** Returns the active program's metadata and start states for the Mod API. */
+export async function handleProgram(
   request: Request,
   store: ProgramStore,
   runner: ProgramRunner,
@@ -108,7 +109,10 @@ export async function handleStartStates(
   }
 
   try {
-    return jsonResponse({ startStates: await runner.startStates(request, playerUUID, program) });
+    return jsonResponse({
+      ...program.metadata,
+      startStates: await runner.startStates(request, playerUUID, program),
+    });
   } catch (error) {
     return programErrorResponse(error);
   }

@@ -5,7 +5,7 @@ import type { ActiveProgram, ProgramStore } from '../src/programs/types.ts';
 import type { ProgramRunner } from '../src/programs/start-states.ts';
 
 const API_KEY = 'test-api-key';
-const START_STATES_PATH = 'http://localhost/modapi/v1/players/ABC-Player/startStates';
+const PROGRAM_PATH = 'http://localhost/modapi/v1/players/ABC-Player/program';
 const PLAYER_UUID = 'abc-player';
 
 type TestApp = {
@@ -47,7 +47,7 @@ async function createTestApp(
 }
 
 function authorizedRequest(method = 'GET'): Request {
-  return new Request(START_STATES_PATH, {
+  return new Request(PROGRAM_PATH, {
     method,
     headers: { authorization: `Bearer ${API_KEY}` },
   });
@@ -67,20 +67,20 @@ function assertEquals<T>(actual: T, expected: T, message: string): void {
   }
 }
 
-Deno.test('Mod start states requires bearer authentication', async () => {
+Deno.test('Mod program query requires bearer authentication', async () => {
   const app = await createTestApp(
     () => Promise.resolve(activeProgram),
     () => Promise.resolve({ one: [1] }),
   );
   try {
-    const response = await app.handler(new Request(START_STATES_PATH));
+    const response = await app.handler(new Request(PROGRAM_PATH));
     assertEquals(response.status, 401, 'missing Mod authentication should be rejected');
   } finally {
     await app.cleanup();
   }
 });
 
-Deno.test('Mod start states returns the active program states', async () => {
+Deno.test('Mod program query returns active program metadata and states', async () => {
   let requestedPlayer: string | undefined;
   let executedProgram: ActiveProgram | undefined;
   const app = await createTestApp(
@@ -96,11 +96,17 @@ Deno.test('Mod start states returns the active program states', async () => {
   );
   try {
     const response = await app.handler(authorizedRequest());
-    assertEquals(response.status, 200, 'valid start states should succeed');
+    assertEquals(response.status, 200, 'valid program query should succeed');
     assertEquals(
       JSON.stringify(await response.json()),
-      JSON.stringify({ startStates: { one: [1], two: [2] } }),
-      'start states should be returned as JSON byte arrays',
+      JSON.stringify({
+        id: activeProgram.metadata.id,
+        name: 'test',
+        uploadedAt: '2026-09-03T00:00:00.000Z',
+        sizeBytes: 2,
+        startStates: { one: [1], two: [2] },
+      }),
+      'program metadata and start states should be returned as JSON',
     );
     assertEquals(requestedPlayer, PLAYER_UUID, 'player UUID should be normalized');
     if (executedProgram !== activeProgram) {
@@ -111,7 +117,7 @@ Deno.test('Mod start states returns the active program states', async () => {
   }
 });
 
-Deno.test('Mod start states returns 404 without an active program', async () => {
+Deno.test('Mod program query returns 404 without an active program', async () => {
   let called = false;
   const app = await createTestApp(
     () => Promise.resolve(null),
@@ -129,7 +135,7 @@ Deno.test('Mod start states returns 404 without an active program', async () => 
   }
 });
 
-Deno.test('Mod start states rejects methods other than GET', async () => {
+Deno.test('Mod program query rejects methods other than GET', async () => {
   let called = false;
   const app = await createTestApp(
     () => {
@@ -148,7 +154,7 @@ Deno.test('Mod start states rejects methods other than GET', async () => {
   }
 });
 
-Deno.test('Mod start states converts program failures to programError', async () => {
+Deno.test('Mod program query converts program failures to programError', async () => {
   const app = await createTestApp(
     () => Promise.resolve(activeProgram),
     () => Promise.reject(new Error('program exploded')),
@@ -160,7 +166,7 @@ Deno.test('Mod start states converts program failures to programError', async ()
   }
 });
 
-Deno.test('Mod start states converts active-program read failures to programError', async () => {
+Deno.test('Mod program query converts active-program read failures to programError', async () => {
   const app = await createTestApp(
     () => Promise.reject(new Error('program file could not be loaded')),
     () => Promise.resolve({ one: [1] }),

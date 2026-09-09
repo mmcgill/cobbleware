@@ -302,22 +302,27 @@ If the code is already pending for another player UUID, it returns `400` with a 
 containing an `"error"` property. The Runtime trusts `playerProfileName` as supplied by the Mod and does
 not validate its contents.
 
-### Start States Query
+### Program Query
 
-The authenticated `GET /modapi/v1/players/{playerUUID}/startStates` endpoint queries the given player's
-currently configured program for its start states. A successful response requires that the given player
-has previously uploaded a valid program that correctly serves start states. On success, the response
-has the shape:
+The authenticated `GET /modapi/v1/players/{playerUUID}/program` endpoint queries the given player's
+currently active program and its start states. A successful response requires that the given player has
+previously uploaded a valid program that correctly serves start states. On success, the response has the
+shape:
 
 ```json
 {
+    "id": "abc123",
+    "name": "hello-world.eszip",
+    "uploadedAt": "2026-08-30T14:25:00Z",
+    "sizeBytes": 12345,
     "startStates": {
         "<stateName>": [1,2,....]
     }
 }
 ```
 
-In the case where the given player has not uploaded a program, the response is a 404.
+The metadata fields have the same meanings and formats as the Player API's program metadata. In the
+case where the given player has not uploaded a program, the response is a 404.
 
 In the case where the player has uploaded a program but that program does not return a valid
 `/startStates` response, the response status is 200 (because the request to the Mod API was successful)

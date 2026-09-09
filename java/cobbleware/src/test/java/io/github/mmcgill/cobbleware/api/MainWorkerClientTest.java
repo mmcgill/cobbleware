@@ -10,6 +10,7 @@ import java.net.URI;
 import java.net.http.HttpClient;
 import java.nio.charset.StandardCharsets;
 import java.time.Duration;
+import java.util.List;
 import java.util.UUID;
 import java.util.concurrent.atomic.AtomicReference;
 import org.junit.jupiter.api.AfterEach;
@@ -75,9 +76,52 @@ class MainWorkerClientTest {
         assertEquals("mainWorkerApiKey is empty", result.detail());
     }
 
+    @Test
+    void getsActiveProgramMetadataAndStartStateNames() throws Exception {
+        AtomicReference<String> authorization = new AtomicReference<>();
+        AtomicReference<String> method = new AtomicReference<>();
+        startServer("/worker/modapi/v1/players/123e4567-e89b-12d3-a456-426614174000/program", 200, """
+                {"id":"AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA","name":"hello-world.eszip","uploadedAt":"2026-09-03T00:00:00.000Z","sizeBytes":42,"startStates":{"idle":[1],"running":[2]}}
+                """, exchange -> {
+            authorization.set(exchange.getRequestHeaders().getFirst("Authorization"));
+            method.set(exchange.getRequestMethod());
+        });
+
+        MainWorkerClient.ProgramResult result = client("secret").getProgram(
+                UUID.fromString("123e4567-e89b-12d3-a456-426614174000")).get();
+
+        assertEquals(MainWorkerClient.ProgramStatus.SUCCESS, result.status());
+        assertEquals("hello-world.eszip", result.program().name());
+        assertEquals(42, result.program().sizeBytes());
+        assertEquals(List.of("idle", "running"), result.program().startStateNames());
+        assertEquals("GET", method.get());
+        assertEquals("Bearer secret", authorization.get());
+    }
+
+    @Test
+    void classifiesMissingProgramAndProgramErrors() throws Exception {
+        startServer("/worker/modapi/v1/players/123e4567-e89b-12d3-a456-426614174000/program", 404, "", exchange -> { });
+        MainWorkerClient.ProgramResult noProgram = client("secret").getProgram(
+                UUID.fromString("123e4567-e89b-12d3-a456-426614174000")).get();
+        assertEquals(MainWorkerClient.ProgramStatus.NO_PROGRAM, noProgram.status());
+
+        server.stop(0);
+        server = null;
+        startServer("/worker/modapi/v1/players/123e4567-e89b-12d3-a456-426614174000/program", 200,
+                "{\"programError\":\"program exploded\"}", exchange -> { });
+        MainWorkerClient.ProgramResult programError = client("secret").getProgram(
+                UUID.fromString("123e4567-e89b-12d3-a456-426614174000")).get();
+        assertEquals(MainWorkerClient.ProgramStatus.PROGRAM_ERROR, programError.status());
+        assertEquals("program exploded", programError.detail());
+    }
+
     private void startServer(int status, String responseBody, RequestInspector inspector) throws Exception {
+        startServer("/worker/modapi/v1/authentication", status, responseBody, inspector);
+    }
+
+    private void startServer(String path, int status, String responseBody, RequestInspector inspector) throws Exception {
         server = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
-        server.createContext("/worker/modapi/v1/authentication", exchange -> {
+        server.createContext(path, exchange -> {
             inspector.inspect(exchange);
             byte[] response = responseBody.getBytes(StandardCharsets.UTF_8);
             if (response.length == 0) {

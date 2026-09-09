@@ -4,6 +4,7 @@ import com.mojang.brigadier.arguments.StringArgumentType;
 import com.mojang.brigadier.context.CommandContext;
 import com.mojang.brigadier.exceptions.CommandSyntaxException;
 import io.github.mmcgill.cobbleware.api.MainWorkerClient;
+import java.util.stream.Collectors;
 import net.fabricmc.fabric.api.command.v2.CommandRegistrationCallback;
 import net.minecraft.commands.CommandSourceStack;
 import net.minecraft.commands.Commands;
@@ -21,8 +22,8 @@ public final class CobblewareCommands {
                         .then(Commands.literal("auth")
                                 .then(Commands.argument("code", StringArgumentType.word())
                                         .executes(context -> authenticate(context, mainWorkerClient))))
-                        .then(Commands.literal("startstates")
-                                .executes(CobblewareCommands::startStates))
+                        .then(Commands.literal("program")
+                                .executes(context -> program(context, mainWorkerClient)))
         ));
     }
 
@@ -61,8 +62,42 @@ public final class CobblewareCommands {
         player.sendSystemMessage(message);
     }
 
-    private static int startStates(CommandContext<CommandSourceStack> context) {
-        context.getSource().sendSuccess(() -> Component.literal("hello world"), false);
+    private static int program(CommandContext<CommandSourceStack> context, MainWorkerClient mainWorkerClient) {
+        CommandSourceStack source = context.getSource();
+        ServerPlayer player;
+        try {
+            player = source.getPlayerOrException();
+        } catch (CommandSyntaxException exception) {
+            source.sendFailure(Component.literal("Only a player can view a Cobbleware program."));
+            return 0;
+        }
+
+        player.sendSystemMessage(Component.literal("Looking up your Cobbleware program..."));
+        mainWorkerClient.getProgram(player.getUUID()).thenAccept(result -> source.getServer().execute(
+                () -> sendProgramResult(player, result)));
         return 1;
+    }
+
+    private static void sendProgramResult(ServerPlayer player, MainWorkerClient.ProgramResult result) {
+        Component message = switch (result.status()) {
+            case SUCCESS -> Component.literal(formatProgram(result.program()));
+            case NO_PROGRAM -> Component.literal("You do not have an active Cobbleware program.");
+            case CONFIGURATION_ERROR -> Component.literal("Cobbleware is not configured correctly on this server.");
+            case UNAUTHORIZED -> Component.literal("Cobbleware could not authenticate with its Main Worker. Contact a server administrator.");
+            case PROGRAM_ERROR -> Component.literal("Your Cobbleware program could not provide start states: " + result.detail());
+            case UNAVAILABLE -> Component.literal("Cobbleware could not reach its Main Worker. Try again shortly.");
+        };
+        player.sendSystemMessage(message);
+    }
+
+    private static String formatProgram(MainWorkerClient.ProgramInfo program) {
+        String startStates = program.startStateNames().isEmpty()
+                ? "(none)"
+                : program.startStateNames().stream().collect(Collectors.joining(", "));
+        return "Cobbleware program: " + program.name()
+                + "\nID: " + program.id()
+                + "\nSize: " + program.sizeBytes() + " bytes"
+                + "\nUploaded: " + program.uploadedAt()
+                + "\nStart states: " + startStates;
     }
 }
