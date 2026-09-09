@@ -45,7 +45,10 @@ A placed Cobbleputer block has an associated block entity that stores:
 * execution ID: `null` when the block state is `UNINITIALIZED` or `CRASHED`, and reset to a fresh UUID
   whenever a program is started on the Cobbleputer from a start state; not reset when a `STOPPED`
   Cobbleputer is resumed.
-* event sequence num: a `long` that starts at 0 and increments for each event enqueued.
+* owner player ID: `null` when execution ID is null; otherwise the ID of the Player whose active program
+  owns the execution.
+* event sequence num: a `long` holding the next event sequence number. It starts at 1 and increments
+  after each event is enqueued.
 * effect sequence num: a `long` that starts at 0 and advances for each effect processed.
 * state: `null` when execution ID is null, otherwise a byte array holding the current execution state
 
@@ -66,7 +69,7 @@ handlers for placing/breaking of Cobbleputer blocks and by handlers for chunk lo
 to ensure that the `ExecutionDriver` has references to all active Cobbleputer block entities.
 
 It manages at most one in-flight async request to the `/modapi/v1/executions` endpoint.
-At most once per tick (via `ServerTickEvents.END_SERVER_TICK`), the `EventDriver` does the following:
+At most once per tick (via `ServerTickEvents.END_SERVER_TICK`), the `ExecutionDriver` does the following:
 
 * If there is an in-flight `/modapi/v1/executions` request with no response:
   * Do nothing further.

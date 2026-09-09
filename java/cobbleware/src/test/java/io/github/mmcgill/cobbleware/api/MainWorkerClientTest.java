@@ -1,7 +1,7 @@
 package io.github.mmcgill.cobbleware.api;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 
 import com.sun.net.httpserver.HttpServer;
 import io.github.mmcgill.cobbleware.config.CobblewareConfig;
@@ -94,8 +94,35 @@ class MainWorkerClientTest {
         assertEquals("hello-world.eszip", result.program().name());
         assertEquals(42, result.program().sizeBytes());
         assertEquals(List.of("idle", "running"), result.program().startStateNames());
+        assertArrayEquals(new byte[] {1}, result.program().startState("idle").orElseThrow());
+        assertArrayEquals(new byte[] {2}, result.program().startState("running").orElseThrow());
         assertEquals("GET", method.get());
         assertEquals("Bearer secret", authorization.get());
+    }
+
+    @Test
+    void rejectsMalformedStartStateBytes() throws Exception {
+        startServer("/worker/modapi/v1/players/123e4567-e89b-12d3-a456-426614174000/program", 200, """
+                {"id":"AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA","name":"hello-world.eszip","uploadedAt":"2026-09-03T00:00:00.000Z","sizeBytes":42,"startStates":{"invalid":[256]}}
+                """, exchange -> { });
+
+        MainWorkerClient.ProgramResult result = client("secret").getProgram(
+                UUID.fromString("123e4567-e89b-12d3-a456-426614174000")).get();
+
+        assertEquals(MainWorkerClient.ProgramStatus.UNAVAILABLE, result.status());
+    }
+
+    @Test
+    void programInfoDefensivelyCopiesStartStateBytes() {
+        byte[] original = {1};
+        MainWorkerClient.ProgramInfo program = new MainWorkerClient.ProgramInfo(
+                "id", "name", "2026-09-03T00:00:00.000Z", 1, java.util.Map.of("initial", original));
+
+        original[0] = 2;
+        byte[] returned = program.startState("initial").orElseThrow();
+        returned[0] = 3;
+
+        assertArrayEquals(new byte[] {1}, program.startState("initial").orElseThrow());
     }
 
     @Test

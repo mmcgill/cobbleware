@@ -23,7 +23,7 @@ They are invoked by the 'puter as a result of Events that happen in the Minecraf
 Effects to be processed by the Mainframe as output.
 
 When a 'puter block is placed, it is _uninitialized_: it has no state and is not executing a program.
-A player can run their active program on a placed 'puter block via the `/cobbleware run <initial-state>`
+A player can run their active program on a placed 'puter block via the `/cobbleware exec <start-state>`
 command. An executing 'puter block stores its own runtime state, which persists across
 chunk reloads and server restarts.
 

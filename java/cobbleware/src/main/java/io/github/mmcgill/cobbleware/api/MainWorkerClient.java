@@ -4,12 +4,18 @@ import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
 import io.github.mmcgill.cobbleware.config.CobblewareConfig;
+import java.math.BigDecimal;
 import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.time.Duration;
+import java.util.Arrays;
+import java.util.Collections;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
+import java.util.Optional;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionException;
@@ -140,12 +146,39 @@ public final class MainWorkerClient {
         if (startStates == null || !startStates.isJsonObject()) {
             throw new IllegalArgumentException("program response has no startStates object");
         }
+        Map<String, byte[]> parsedStartStates = new LinkedHashMap<>();
+        for (Map.Entry<String, JsonElement> entry : startStates.getAsJsonObject().entrySet()) {
+            parsedStartStates.put(entry.getKey(), parseStateBytes(entry.getValue()));
+        }
         return new ProgramInfo(
                 requiredString(body, "id"),
                 requiredString(body, "name"),
                 requiredString(body, "uploadedAt"),
                 requiredLong(body, "sizeBytes"),
-                List.copyOf(startStates.getAsJsonObject().keySet()));
+                parsedStartStates);
+    }
+
+    private static byte[] parseStateBytes(JsonElement state) {
+        if (!state.isJsonArray()) {
+            throw new IllegalArgumentException("program start state is not a byte array");
+        }
+        byte[] bytes = new byte[state.getAsJsonArray().size()];
+        for (int index = 0; index < bytes.length; index++) {
+            JsonElement element = state.getAsJsonArray().get(index);
+            if (!element.isJsonPrimitive() || !element.getAsJsonPrimitive().isNumber()) {
+                throw new IllegalArgumentException("program start state contains a non-numeric byte");
+            }
+            try {
+                int value = new BigDecimal(element.getAsString()).intValueExact();
+                if (value < 0 || value > 255) {
+                    throw new IllegalArgumentException("program start state byte is outside 0..255");
+                }
+                bytes[index] = (byte) value;
+            } catch (NumberFormatException | ArithmeticException exception) {
+                throw new IllegalArgumentException("program start state contains an invalid byte", exception);
+            }
+        }
+        return bytes;
     }
 
     private static String requiredString(JsonObject body, String field) {
@@ -232,12 +265,37 @@ public final class MainWorkerClient {
         UNAVAILABLE
     }
 
-    public record ProgramInfo(String id, String name, String uploadedAt, long sizeBytes, List<String> startStateNames) {
+    public record ProgramInfo(String id, String name, String uploadedAt, long sizeBytes, Map<String, byte[]> startStates) {
         public ProgramInfo {
-            if (id == null || name == null || uploadedAt == null || sizeBytes < 0 || startStateNames == null) {
+            if (id == null || name == null || uploadedAt == null || sizeBytes < 0 || startStates == null) {
                 throw new IllegalArgumentException("program information is invalid");
             }
-            startStateNames = List.copyOf(startStateNames);
+            Map<String, byte[]> copiedStates = new LinkedHashMap<>();
+            for (Map.Entry<String, byte[]> entry : startStates.entrySet()) {
+                if (entry.getKey() == null || entry.getValue() == null) {
+                    throw new IllegalArgumentException("program start states must not contain null values");
+                }
+                copiedStates.put(entry.getKey(), Arrays.copyOf(entry.getValue(), entry.getValue().length));
+            }
+            startStates = Collections.unmodifiableMap(copiedStates);
+        }
+
+        @Override
+        public Map<String, byte[]> startStates() {
+            Map<String, byte[]> copiedStates = new LinkedHashMap<>();
+            for (Map.Entry<String, byte[]> entry : startStates.entrySet()) {
+                copiedStates.put(entry.getKey(), Arrays.copyOf(entry.getValue(), entry.getValue().length));
+            }
+            return Collections.unmodifiableMap(copiedStates);
+        }
+
+        public List<String> startStateNames() {
+            return List.copyOf(startStates.keySet());
+        }
+
+        public Optional<byte[]> startState(String stateName) {
+            byte[] state = startStates.get(stateName);
+            return state == null ? Optional.empty() : Optional.of(Arrays.copyOf(state, state.length));
         }
     }
 

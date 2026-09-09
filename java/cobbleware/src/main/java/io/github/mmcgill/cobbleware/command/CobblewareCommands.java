@@ -3,16 +3,31 @@ package io.github.mmcgill.cobbleware.command;
 import com.mojang.brigadier.arguments.StringArgumentType;
 import com.mojang.brigadier.context.CommandContext;
 import com.mojang.brigadier.exceptions.CommandSyntaxException;
+import com.mojang.brigadier.suggestion.Suggestions;
+import com.mojang.brigadier.suggestion.SuggestionsBuilder;
 import io.github.mmcgill.cobbleware.api.MainWorkerClient;
+import io.github.mmcgill.cobbleware.block.CobbleputerBlock;
+import io.github.mmcgill.cobbleware.block.CobbleputerBlockEntity;
+import io.github.mmcgill.cobbleware.block.CobbleputerState;
+import io.github.mmcgill.cobbleware.registry.CobblewareBlocks;
+import java.util.Optional;
+import java.util.concurrent.CompletableFuture;
 import java.util.stream.Collectors;
 import net.fabricmc.fabric.api.command.v2.CommandRegistrationCallback;
+import net.minecraft.commands.SharedSuggestionProvider;
 import net.minecraft.commands.CommandSourceStack;
 import net.minecraft.commands.Commands;
+import net.minecraft.core.BlockPos;
 import net.minecraft.network.chat.Component;
 import net.minecraft.server.level.ServerPlayer;
+import net.minecraft.world.level.Level;
+import net.minecraft.world.level.block.state.BlockState;
+import net.minecraft.world.phys.Vec3;
 
 /** Registers commands supplied by Cobbleware. */
 public final class CobblewareCommands {
+    private static final double EXECUTION_RANGE = 3.0;
+
     private CobblewareCommands() {
     }
 
@@ -24,6 +39,10 @@ public final class CobblewareCommands {
                                         .executes(context -> authenticate(context, mainWorkerClient))))
                         .then(Commands.literal("program")
                                 .executes(context -> program(context, mainWorkerClient)))
+                        .then(Commands.literal("exec")
+                                .then(Commands.argument("start-state", StringArgumentType.word())
+                                        .suggests((context, builder) -> suggestStartStates(context, builder, mainWorkerClient))
+                                        .executes(context -> execute(context, mainWorkerClient))))
         ));
     }
 
@@ -90,6 +109,133 @@ public final class CobblewareCommands {
         player.sendSystemMessage(message);
     }
 
+    private static CompletableFuture<Suggestions> suggestStartStates(
+            CommandContext<CommandSourceStack> context,
+            SuggestionsBuilder builder,
+            MainWorkerClient mainWorkerClient) {
+        ServerPlayer player;
+        try {
+            player = context.getSource().getPlayerOrException();
+        } catch (CommandSyntaxException exception) {
+            return builder.buildFuture();
+        }
+
+        return mainWorkerClient.getProgram(player.getUUID())
+                .thenCompose(result -> result.status() == MainWorkerClient.ProgramStatus.SUCCESS
+                        ? SharedSuggestionProvider.suggest(result.program().startStateNames(), builder)
+                        : builder.buildFuture());
+    }
+
+    private static int execute(CommandContext<CommandSourceStack> context, MainWorkerClient mainWorkerClient) {
+        CommandSourceStack source = context.getSource();
+        ServerPlayer player;
+        try {
+            player = source.getPlayerOrException();
+        } catch (CommandSyntaxException exception) {
+            source.sendFailure(Component.literal("Only a player can start a Cobbleware execution."));
+            return 0;
+        }
+
+        Optional<CobbleputerTarget> target = findNearestCobbleputer(player);
+        if (target.isEmpty()) {
+            player.sendSystemMessage(Component.literal("No Cobbleputer is within 3m."));
+            return 0;
+        }
+        if (target.orElseThrow().state().getValue(CobbleputerBlock.STATE)
+                == CobbleputerState.RUNNING) {
+            player.sendSystemMessage(Component.literal("The nearest Cobbleputer is already running."));
+            return 0;
+        }
+
+        String startStateName = StringArgumentType.getString(context, "start-state");
+        player.sendSystemMessage(Component.literal("Looking up your Cobbleware program..."));
+        mainWorkerClient.getProgram(player.getUUID()).thenAccept(result -> source.getServer().execute(
+                () -> completeExecutionStart(player, startStateName, result)));
+        return 1;
+    }
+
+    private static void completeExecutionStart(
+            ServerPlayer player,
+            String startStateName,
+            MainWorkerClient.ProgramResult result) {
+        Optional<CobbleputerTarget> target = findNearestCobbleputer(player);
+        if (target.isEmpty()) {
+            player.sendSystemMessage(Component.literal("No Cobbleputer is within 3m."));
+            return;
+        }
+        if (target.orElseThrow().state().getValue(CobbleputerBlock.STATE) == CobbleputerState.RUNNING) {
+            player.sendSystemMessage(Component.literal("The nearest Cobbleputer is already running."));
+            return;
+        }
+
+        if (result.status() != MainWorkerClient.ProgramStatus.SUCCESS) {
+            sendExecutionProgramFailure(player, result);
+            return;
+        }
+
+        Optional<byte[]> startState = result.program().startState(startStateName);
+        if (startState.isEmpty()) {
+            player.sendSystemMessage(Component.literal(
+                    "Your active Cobbleware program has no start state named '" + startStateName + "'."));
+            return;
+        }
+
+        CobbleputerTarget resolvedTarget = target.orElseThrow();
+        resolvedTarget.blockEntity().startExecution(player.getUUID(), startState.orElseThrow());
+        CobbleputerBlock.setLifecycleState(
+                resolvedTarget.level(),
+                resolvedTarget.pos(),
+                resolvedTarget.state(),
+                CobbleputerState.RUNNING);
+        player.sendSystemMessage(Component.literal(
+                "Started your Cobbleware program at start state '" + startStateName + "'."));
+    }
+
+    private static void sendExecutionProgramFailure(ServerPlayer player, MainWorkerClient.ProgramResult result) {
+        Component message = switch (result.status()) {
+            case NO_PROGRAM -> Component.literal("You do not have an active Cobbleware program.");
+            case CONFIGURATION_ERROR -> Component.literal("Cobbleware is not configured correctly on this server.");
+            case UNAUTHORIZED -> Component.literal(
+                    "Cobbleware could not authenticate with its Main Worker. Contact a server administrator.");
+            case PROGRAM_ERROR -> Component.literal(
+                    "Your Cobbleware program could not provide start states: " + result.detail());
+            case UNAVAILABLE -> Component.literal("Cobbleware could not reach its Main Worker. Try again shortly.");
+            case SUCCESS -> throw new IllegalArgumentException("successful program result is not a failure");
+        };
+        player.sendSystemMessage(message);
+    }
+
+    private static Optional<CobbleputerTarget> findNearestCobbleputer(ServerPlayer player) {
+        Level level = player.level();
+        Vec3 playerPosition = player.position();
+        BlockPos min = BlockPos.containing(playerPosition.x - EXECUTION_RANGE, playerPosition.y - EXECUTION_RANGE,
+                playerPosition.z - EXECUTION_RANGE);
+        BlockPos max = BlockPos.containing(playerPosition.x + EXECUTION_RANGE, playerPosition.y + EXECUTION_RANGE,
+                playerPosition.z + EXECUTION_RANGE);
+        CobbleputerTarget closest = null;
+        double closestDistanceSquared = EXECUTION_RANGE * EXECUTION_RANGE;
+
+        for (BlockPos pos : BlockPos.betweenClosed(min, max)) {
+            if (!level.isLoaded(pos)) {
+                continue;
+            }
+            BlockState state = level.getBlockState(pos);
+            if (!state.is(CobblewareBlocks.COBBLEPUTER)) {
+                continue;
+            }
+            double distanceSquared = playerPosition.distanceToSqr(Vec3.atCenterOf(pos));
+            if (distanceSquared > closestDistanceSquared) {
+                continue;
+            }
+            if (!(level.getBlockEntity(pos) instanceof CobbleputerBlockEntity blockEntity)) {
+                continue;
+            }
+            closest = new CobbleputerTarget(level, pos.immutable(), state, blockEntity);
+            closestDistanceSquared = distanceSquared;
+        }
+        return Optional.ofNullable(closest);
+    }
+
     private static String formatProgram(MainWorkerClient.ProgramInfo program) {
         String startStates = program.startStateNames().isEmpty()
                 ? "(none)"
@@ -99,5 +245,8 @@ public final class CobblewareCommands {
                 + "\nSize: " + program.sizeBytes() + " bytes"
                 + "\nUploaded: " + program.uploadedAt()
                 + "\nStart states: " + startStates;
+    }
+
+    private record CobbleputerTarget(Level level, BlockPos pos, BlockState state, CobbleputerBlockEntity blockEntity) {
     }
 }

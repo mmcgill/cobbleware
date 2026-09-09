@@ -15,20 +15,6 @@ public enum CobbleputerState implements StringRepresentable {
         this.serializedName = serializedName;
     }
 
-    /**
-     * Temporary manual-use transition for the initial block milestone.
-     *
-     * <p>Execution management will replace this with transitions driven by the execution lifecycle.</p>
-     */
-    public CobbleputerState next() {
-        return switch (this) {
-            case UNINITIALIZED -> RUNNING;
-            case RUNNING -> STOPPED;
-            case STOPPED -> CRASHED;
-            case CRASHED -> UNINITIALIZED;
-        };
-    }
-
     @Override
     public String getSerializedName() {
         return serializedName;

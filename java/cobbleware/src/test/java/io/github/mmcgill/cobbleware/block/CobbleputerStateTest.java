@@ -15,14 +15,6 @@ class CobbleputerStateTest {
     }
 
     @Test
-    void temporaryManualCycleVisitsEveryStateAndWraps() {
-        assertEquals(CobbleputerState.RUNNING, CobbleputerState.UNINITIALIZED.next());
-        assertEquals(CobbleputerState.STOPPED, CobbleputerState.RUNNING.next());
-        assertEquals(CobbleputerState.CRASHED, CobbleputerState.STOPPED.next());
-        assertEquals(CobbleputerState.UNINITIALIZED, CobbleputerState.CRASHED.next());
-    }
-
-    @Test
     void mapsEveryLifecycleStateToItsDedicatedPolymerModel() {
         assertEquals(id("cobbleputer_uninitialized"), CobbleputerPolymerModels.modelIdFor(CobbleputerState.UNINITIALIZED));
         assertEquals(id("cobbleputer_running"), CobbleputerPolymerModels.modelIdFor(CobbleputerState.RUNNING));
