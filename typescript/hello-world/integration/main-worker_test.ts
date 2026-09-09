@@ -24,15 +24,12 @@ Deno.test('Hello World runs through the Main Worker API', async () => {
     cookie,
     {
       executionId: { high: '1', low: '2' },
-      state: 'AQID',
+      state: 'AQ==',
       event: {
-        puterPlaced: {
-          levelKey: { ns: 'minecraft', path: 'overworld' },
-          pos: { x: 1, y: 2, z: 3 },
-        },
+        started: { tick: '1' },
       },
     },
-    'AQID',
+    'AQ==',
     [{ sendChat: { msg: 'Hello world' } }],
   );
 
@@ -41,26 +38,40 @@ Deno.test('Hello World runs through the Main Worker API', async () => {
     cookie,
     {
       executionId: { high: '1', low: '2' },
-      state: 'BAU=',
+      state: 'AQ==',
       event: {
-        puterReset: { tick: '123' },
+        resumed: { stopTick: '123', resumeTick: '124' },
       },
     },
-    'BAU=',
+    'AQ==',
     [{ emitBeep: {} }],
+  );
+
+  await assertStep(
+    program.id,
+    cookie,
+    {
+      executionId: { high: '1', low: '2' },
+      state: 'AgA=',
+      event: {
+        chatMessage: { message: 'Testing' },
+      },
+    },
+    'AgE=',
+    [{ sendChat: { msg: 'Echo (1): Testing' } }],
   );
 
   await assertExecutionSync();
 });
 
 async function assertExecutionSync(): Promise<void> {
-  const first = executionState(FIRST_EXECUTION_ID, new Uint8Array([10]), [
+  const first = executionState(FIRST_EXECUTION_ID, new Uint8Array([1]), [
     startedEvent(),
     resumedEvent(10n, 11n),
   ]);
-  const second = executionState(SECOND_EXECUTION_ID, new Uint8Array([20]), [
+  const second = executionState(SECOND_EXECUTION_ID, new Uint8Array([2, 0]), [
     resumedEvent(20n, 22n),
-    startedEvent(),
+    chatMessageEvent('Testing'),
   ]);
 
   let completed: Internal.ExecutionsResponse | undefined;
@@ -79,19 +90,19 @@ async function assertExecutionSync(): Promise<void> {
   assertExecutionResult(
     resultFor(completed, FIRST_EXECUTION_ID),
     FIRST_EXECUTION_ID,
-    [10],
+    [1],
     ['sendChat', 'emitBeep'],
   );
   assertExecutionResult(
     resultFor(completed, SECOND_EXECUTION_ID),
     SECOND_EXECUTION_ID,
-    [20],
-    ['emitBeep', 'sendChat'],
+    [2, 1],
+    ['sendChat'],
   );
 
   const acknowledged = await syncExecutions([
-    executionState(FIRST_EXECUTION_ID, new Uint8Array([10]), [], 3n, 2n),
-    executionState(SECOND_EXECUTION_ID, new Uint8Array([20]), [], 3n, 2n),
+    executionState(FIRST_EXECUTION_ID, new Uint8Array([1]), [], 3n, 2n),
+    executionState(SECOND_EXECUTION_ID, new Uint8Array([2, 1]), [], 3n, 2n),
   ]);
   for (const result of acknowledged.results) {
     assertEquals(result.eventSeqNum, 2n, 'acknowledgement must retain the consumed event sequence');
@@ -217,6 +228,12 @@ function startedEvent(): Events.Event {
 function resumedEvent(stopTick: bigint, resumeTick: bigint): Events.Event {
   return create(Events.EventSchema, {
     event: { case: 'resumed', value: create(Events.ResumedSchema, { resumeTick, stopTick }) },
+  });
+}
+
+function chatMessageEvent(message: string): Events.Event {
+  return create(Events.EventSchema, {
+    event: { case: 'chatMessage', value: create(Events.ChatMessageSchema, { message }) },
   });
 }
 
