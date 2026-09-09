@@ -7,8 +7,8 @@ Deno.test('handle preserves state and emits a beep for a reset', () => {
     state,
     create(Events.EventSchema, {
       event: {
-        case: 'puterReset',
-        value: create(Events.PuterResetSchema, { tick: 1n }),
+        case: 'started',
+        value: create(Events.StartedSchema, { tick: 1n }),
       },
     }),
   );

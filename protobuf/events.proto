@@ -4,24 +4,25 @@ package cobbleware.events;
 
 import "common.proto";
 
-// The Cobbleputer has just powered on, either for the first time or after a
-// reset.
-message PuterReset {
+// The Program has started executing.
+message Started {
   uint64 tick = 1;
 }
 
-// The Cobbleputer has just been placed in a new location.
-message PuterPlaced {
-  // Required by the application contract.
-  cobbleware.common.Identifier level_key = 1;
-  // Required by the application contract.
-  cobbleware.common.Vec3 pos = 2;
+message Resumed {
+  uint64 stop_tick = 1;
+  uint64 resume_tick = 2;
+}
+
+message ChatMessage {
+  string message = 1;
 }
 
 // A single event supplied to a program step.
 message Event {
   oneof event {
-    PuterPlaced puter_placed = 1;
-    PuterReset puter_reset = 2;
+    Started started = 1;
+    Resumed resumed = 2;
+    ChatMessage chat_message = 3;
   }
 }

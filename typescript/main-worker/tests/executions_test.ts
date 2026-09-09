@@ -60,7 +60,7 @@ function execution(
     executionId: options.executionId ?? uuid(1n, 2n),
     playerId: options.playerId ?? uuid(3n, 4n),
     initialState: options.initialState ?? new Uint8Array([1]),
-    events: options.events ?? [resetEvent(1n)],
+    events: options.events ?? [startedEvent(1n)],
     eventSeqNum: options.eventSeqNum ?? 1n,
     effectSeqNum: options.effectSeqNum ?? 0n,
     state: options.state ?? Internal.ExecutionStatus.RUNNING,
@@ -93,9 +93,9 @@ function uuid(high: bigint, low: bigint): Common.Uuid {
   return create(Common.UuidSchema, { high, low });
 }
 
-function resetEvent(tick: bigint): Events.Event {
+function startedEvent(tick: bigint): Events.Event {
   return create(Events.EventSchema, {
-    event: { case: 'puterReset', value: create(Events.PuterResetSchema, { tick }) },
+    event: { case: 'started', value: create(Events.StartedSchema, { tick }) },
   });
 }
 
@@ -210,7 +210,7 @@ Deno.test('Execution sync asynchronously advances state and acknowledges effect 
     }
     const step = fromBinary(Program.StepRequestSchema, receivedStep);
     assertEquals(step.executionId?.high, 1n, 'program should receive the execution id');
-    assertEquals(step.event?.event.case, 'puterReset', 'program should receive the queued event');
+    assertEquals(step.event?.event.case, 'started', 'program should receive the queued event');
     assertEquals(
       receivedPlayer,
       '00000000-0000-0003-0000-000000000004',
@@ -268,7 +268,7 @@ Deno.test('Execution sync crashes an execution when the program response is inva
   });
   const initial = execution({
     initialState: new Uint8Array([4]),
-    events: [resetEvent(7n), resetEvent(8n)],
+    events: [startedEvent(7n), startedEvent(8n)],
   });
   try {
     await decodeResponse(await app.handler(request([initial])));
@@ -333,7 +333,7 @@ Deno.test('Execution sync retains at most ten events and refills after the Mod a
     return Promise.resolve(stepResponse(new Uint8Array([9])));
   });
   const firstBatch = execution({
-    events: Array.from({ length: 11 }, (_, index) => resetEvent(BigInt(index + 1))),
+    events: Array.from({ length: 11 }, (_, index) => startedEvent(BigInt(index + 1))),
   });
   try {
     let result: Internal.ExecutionResult | undefined;
@@ -349,7 +349,7 @@ Deno.test('Execution sync retains at most ten events and refills after the Mod a
 
     const remainingEvent = execution({
       initialState: new Uint8Array([9]),
-      events: [resetEvent(11n)],
+      events: [startedEvent(11n)],
       eventSeqNum: 11n,
     });
     for (let attempt = 0; attempt < 100; attempt += 1) {

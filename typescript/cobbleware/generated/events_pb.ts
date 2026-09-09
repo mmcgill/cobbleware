@@ -4,7 +4,6 @@
 
 import type { GenFile, GenMessage } from "@bufbuild/protobuf/codegenv2";
 import { fileDesc, messageDesc } from "@bufbuild/protobuf/codegenv2";
-import type { Identifier, Vec3 } from "./common_pb.ts";
 import { file_common } from "./common_pb.ts";
 import type { Message } from "@bufbuild/protobuf";
 
@@ -12,15 +11,14 @@ import type { Message } from "@bufbuild/protobuf";
  * Describes the file events.proto.
  */
 export const file_events: GenFile = /*@__PURE__*/
-  fileDesc("CgxldmVudHMucHJvdG8SEWNvYmJsZXdhcmUuZXZlbnRzIhoKClB1dGVyUmVzZXQSDAoEdGljaxgBIAEoBCJlCgtQdXRlclBsYWNlZBIwCglsZXZlbF9rZXkYASABKAsyHS5jb2JibGV3YXJlLmNvbW1vbi5JZGVudGlmaWVyEiQKA3BvcxgCIAEoCzIXLmNvYmJsZXdhcmUuY29tbW9uLlZlYzMifgoFRXZlbnQSNgoMcHV0ZXJfcGxhY2VkGAEgASgLMh4uY29iYmxld2FyZS5ldmVudHMuUHV0ZXJQbGFjZWRIABI0CgtwdXRlcl9yZXNldBgCIAEoCzIdLmNvYmJsZXdhcmUuZXZlbnRzLlB1dGVyUmVzZXRIAEIHCgVldmVudGIIZWRpdGlvbnNw6Qc", [file_common]);
+  fileDesc("CgxldmVudHMucHJvdG8SEWNvYmJsZXdhcmUuZXZlbnRzIhcKB1N0YXJ0ZWQSDAoEdGljaxgBIAEoBCIxCgdSZXN1bWVkEhEKCXN0b3BfdGljaxgBIAEoBBITCgtyZXN1bWVfdGljaxgCIAEoBCIeCgtDaGF0TWVzc2FnZRIPCgdtZXNzYWdlGAEgASgJIqYBCgVFdmVudBItCgdzdGFydGVkGAEgASgLMhouY29iYmxld2FyZS5ldmVudHMuU3RhcnRlZEgAEi0KB3Jlc3VtZWQYAiABKAsyGi5jb2JibGV3YXJlLmV2ZW50cy5SZXN1bWVkSAASNgoMY2hhdF9tZXNzYWdlGAMgASgLMh4uY29iYmxld2FyZS5ldmVudHMuQ2hhdE1lc3NhZ2VIAEIHCgVldmVudGIIZWRpdGlvbnNw6Qc", [file_common]);
 
 /**
- * The Cobbleputer has just powered on, either for the first time or after a
- * reset.
+ * The Program has started executing.
  *
- * @generated from message cobbleware.events.PuterReset
+ * @generated from message cobbleware.events.Started
  */
-export type PuterReset = Message<"cobbleware.events.PuterReset"> & {
+export type Started = Message<"cobbleware.events.Started"> & {
   /**
    * @generated from field: uint64 tick = 1;
    */
@@ -28,39 +26,50 @@ export type PuterReset = Message<"cobbleware.events.PuterReset"> & {
 };
 
 /**
- * Describes the message cobbleware.events.PuterReset.
- * Use `create(PuterResetSchema)` to create a new message.
+ * Describes the message cobbleware.events.Started.
+ * Use `create(StartedSchema)` to create a new message.
  */
-export const PuterResetSchema: GenMessage<PuterReset> = /*@__PURE__*/
+export const StartedSchema: GenMessage<Started> = /*@__PURE__*/
   messageDesc(file_events, 0);
 
 /**
- * The Cobbleputer has just been placed in a new location.
- *
- * @generated from message cobbleware.events.PuterPlaced
+ * @generated from message cobbleware.events.Resumed
  */
-export type PuterPlaced = Message<"cobbleware.events.PuterPlaced"> & {
+export type Resumed = Message<"cobbleware.events.Resumed"> & {
   /**
-   * Required by the application contract.
-   *
-   * @generated from field: cobbleware.common.Identifier level_key = 1;
+   * @generated from field: uint64 stop_tick = 1;
    */
-  levelKey?: Identifier | undefined;
+  stopTick: bigint;
 
   /**
-   * Required by the application contract.
-   *
-   * @generated from field: cobbleware.common.Vec3 pos = 2;
+   * @generated from field: uint64 resume_tick = 2;
    */
-  pos?: Vec3 | undefined;
+  resumeTick: bigint;
 };
 
 /**
- * Describes the message cobbleware.events.PuterPlaced.
- * Use `create(PuterPlacedSchema)` to create a new message.
+ * Describes the message cobbleware.events.Resumed.
+ * Use `create(ResumedSchema)` to create a new message.
  */
-export const PuterPlacedSchema: GenMessage<PuterPlaced> = /*@__PURE__*/
+export const ResumedSchema: GenMessage<Resumed> = /*@__PURE__*/
   messageDesc(file_events, 1);
+
+/**
+ * @generated from message cobbleware.events.ChatMessage
+ */
+export type ChatMessage = Message<"cobbleware.events.ChatMessage"> & {
+  /**
+   * @generated from field: string message = 1;
+   */
+  message: string;
+};
+
+/**
+ * Describes the message cobbleware.events.ChatMessage.
+ * Use `create(ChatMessageSchema)` to create a new message.
+ */
+export const ChatMessageSchema: GenMessage<ChatMessage> = /*@__PURE__*/
+  messageDesc(file_events, 2);
 
 /**
  * A single event supplied to a program step.
@@ -73,16 +82,22 @@ export type Event = Message<"cobbleware.events.Event"> & {
    */
   event: {
     /**
-     * @generated from field: cobbleware.events.PuterPlaced puter_placed = 1;
+     * @generated from field: cobbleware.events.Started started = 1;
      */
-    value: PuterPlaced;
-    case: "puterPlaced";
+    value: Started;
+    case: "started";
   } | {
     /**
-     * @generated from field: cobbleware.events.PuterReset puter_reset = 2;
+     * @generated from field: cobbleware.events.Resumed resumed = 2;
      */
-    value: PuterReset;
-    case: "puterReset";
+    value: Resumed;
+    case: "resumed";
+  } | {
+    /**
+     * @generated from field: cobbleware.events.ChatMessage chat_message = 3;
+     */
+    value: ChatMessage;
+    case: "chatMessage";
   } | { case: undefined; value?: undefined };
 };
 
@@ -91,5 +106,5 @@ export type Event = Message<"cobbleware.events.Event"> & {
  * Use `create(EventSchema)` to create a new message.
  */
 export const EventSchema: GenMessage<Event> = /*@__PURE__*/
-  messageDesc(file_events, 2);
+  messageDesc(file_events, 3);
 

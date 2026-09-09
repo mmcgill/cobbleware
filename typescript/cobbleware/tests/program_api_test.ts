@@ -37,7 +37,10 @@ Deno.test('Program API decodes a step and encodes its result', async () => {
     executionId: create(Common.UuidSchema, { high: 1n, low: 2n }),
     state: new Uint8Array([3]),
     event: create(Events.EventSchema, {
-      event: { case: 'puterReset', value: create(Events.PuterResetSchema, { tick: 4n }) },
+      event: {
+        case: 'resumed',
+        value: create(Events.ResumedSchema, { stopTick: 3n, resumeTick: 4n }),
+      },
     }),
   });
   const response = await handler(
@@ -69,7 +72,10 @@ Deno.test('Program API returns a binary ErrorResponse for invalid and failing st
   });
   const request = create(Program.StepRequestSchema, {
     event: create(Events.EventSchema, {
-      event: { case: 'puterReset', value: create(Events.PuterResetSchema, {}) },
+      event: {
+        case: 'resumed',
+        value: create(Events.ResumedSchema, { stopTick: 12n, resumeTick: 15n }),
+      },
     }),
   });
   const failed = await throwingHandler(
@@ -94,7 +100,7 @@ Deno.test('Program API rejects unsupported routes and methods', async () => {
 });
 
 const handle: EventProgram = (state, event) => {
-  if (event.event.case !== 'puterReset') throw new Error('unexpected event');
+  if (event.event.case !== 'resumed') throw new Error('unexpected event');
   return create(Program.StepResponseSchema, {
     state: new Uint8Array([state[0]! + 1]),
     effects: [

@@ -2,14 +2,14 @@ import { create, Effects, Program, type Program as EventProgram, start } from '@
 
 export const handle: EventProgram = function handle(state, event) {
   let effects: Effects.Effect[] = [];
-  if (event.event.case === 'puterReset') {
+  if (event.event.case === 'started') {
     effects = [create(Effects.EffectSchema, {
       effect: {
         case: 'emitBeep',
         value: create(Effects.EmitBeepSchema, {}),
       },
     })];
-  } else if (event.event.case === 'puterPlaced') {
+  } else if (event.event.case === 'resumed') {
     effects = [create(Effects.EffectSchema, {
       effect: {
         case: 'sendChat',

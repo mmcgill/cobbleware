@@ -55,12 +55,12 @@ Deno.test('Hello World runs through the Main Worker API', async () => {
 
 async function assertExecutionSync(): Promise<void> {
   const first = executionState(FIRST_EXECUTION_ID, new Uint8Array([10]), [
-    puterPlacedEvent(),
-    puterResetEvent(11n),
+    startedEvent(),
+    resumedEvent(10n, 11n),
   ]);
   const second = executionState(SECOND_EXECUTION_ID, new Uint8Array([20]), [
-    puterResetEvent(22n),
-    puterPlacedEvent(),
+    resumedEvent(20n, 22n),
+    startedEvent(),
   ]);
 
   let completed: Internal.ExecutionsResponse | undefined;
@@ -203,21 +203,20 @@ function executionState(
   });
 }
 
-function puterPlacedEvent(): Events.Event {
+function startedEvent(): Events.Event {
   return create(Events.EventSchema, {
     event: {
-      case: 'puterPlaced',
-      value: create(Events.PuterPlacedSchema, {
-        levelKey: create(Common.IdentifierSchema, { ns: 'minecraft', path: 'overworld' }),
-        pos: create(Common.Vec3Schema, { x: 1, y: 2, z: 3 }),
+      case: 'started',
+      value: create(Events.StartedSchema, {
+        tick: 42n,
       }),
     },
   });
 }
 
-function puterResetEvent(tick: bigint): Events.Event {
+function resumedEvent(stopTick: bigint, resumeTick: bigint): Events.Event {
   return create(Events.EventSchema, {
-    event: { case: 'puterReset', value: create(Events.PuterResetSchema, { tick }) },
+    event: { case: 'resumed', value: create(Events.ResumedSchema, { resumeTick, stopTick }) },
   });
 }
 

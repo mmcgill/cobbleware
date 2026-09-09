@@ -8,7 +8,7 @@ Define a set of named initial states and an event handler, then call `start`. Th
 `Deno.serve` and implements the Program API endpoints for you.
 
 ```ts
-import { create, Program, start, type Program as EventHandler } from '@cobbleware/core';
+import { create, Program, type Program as EventHandler, start } from '@cobbleware/core';
 
 const handler: EventHandler = (state, _event) =>
   create(Program.StepResponseSchema, { state, effects: [] });
