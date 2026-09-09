@@ -51,12 +51,20 @@ A placed Cobbleputer block has an associated block entity that stores:
   after each event is enqueued.
 * effect sequence num: a `long` that starts at 0 and advances for each effect processed.
 * state: `null` when execution ID is null, otherwise a byte array holding the current execution state
+* stopped-at tick: `null` unless the Cobbleputer is `STOPPED`; when present, the game tick at
+  which it was stopped, used to populate the next `Resumed` event.
 
 Breaking the Cobbleputer block destroys the block entity; effectively terminating the execution.
 
 Execution state is durable as long as the execution does not crash and the Cobbleputer block is not broken.
 Events and Effects, on the other hand, are ephemeral and best-effort. There is no guarantee that every
 event will be processed, and there is no guarantee that every effect will be applied.
+
+The currently emitted lifecycle events are `Started` after `/cobbleware exec` and `Resumed` after a player
+uses a stopped Cobbleputer. The driver retains at most 10 pending events per active Cobbleputer and offers
+at most 10 to the Runtime in each execution-sync request. Currently `EmitBeep` sends nearby players a
+`beep` system-chat message and `SendChat` sends its message to those same nearby players; neither effect
+has audio or durable delivery semantics yet.
 
 The heart of the Mod is the `ExecutionDriver` singleton. It is owned by the main server thread.
 
@@ -75,7 +83,7 @@ At most once per tick (via `ServerTickEvents.END_SERVER_TICK`), the `ExecutionDr
   * Do nothing further.
 * If there is a response to a previously issued `/modapi/v1/executions` request:
   * Apply all effects in the response.
-  * Pop all events from queues whose event sequence numbers are smaller than the `event_seq_num` in the response.
+  * Pop all events from queues whose event sequence numbers are less than or equal to the `event_seq_num` in the response.
   * Update active Cobbleputer block entities with new states/sequence numbers.
     * If a Cobbleputer block entity goes inactive before in-flight events are processed, the resulting state is discarded.
 * Construct and send a new `/modapi/v1/executions` request.

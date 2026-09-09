@@ -3,6 +3,9 @@ package io.github.mmcgill.cobbleware.api;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
+import cobbleware.internal.ErrorResponse;
+import cobbleware.internal.ExecutionsRequest;
+import cobbleware.internal.ExecutionsResponse;
 import io.github.mmcgill.cobbleware.config.CobblewareConfig;
 import java.math.BigDecimal;
 import java.net.URI;
@@ -93,6 +96,35 @@ public final class MainWorkerClient {
                 });
     }
 
+    /** Synchronizes the Mod's current execution snapshot without blocking the server thread. */
+    public CompletableFuture<ExecutionSyncResult> syncExecutions(ExecutionsRequest executions) {
+        if (executions == null) {
+            throw new IllegalArgumentException("executions must not be null");
+        }
+        if (!config.isEnabled()) {
+            return CompletableFuture.completedFuture(ExecutionSyncResult.configurationError(config.disabledReason()));
+        }
+
+        URI endpoint = config.mainWorkerBaseUri().resolve("modapi/v1/executions");
+        HttpRequest request = HttpRequest.newBuilder(endpoint)
+                .timeout(REQUEST_TIMEOUT)
+                .header("Accept", "application/octet-stream")
+                .header("Authorization", "Bearer " + config.mainWorkerApiKey())
+                .header("Content-Type", "application/octet-stream")
+                .POST(HttpRequest.BodyPublishers.ofByteArray(executions.toByteArray()))
+                .build();
+
+        return httpClient.sendAsync(request, HttpResponse.BodyHandlers.ofByteArray())
+                .handle((response, failure) -> {
+                    if (failure != null) {
+                        Throwable cause = unwrap(failure);
+                        logger.warn("Main Worker execution sync failed: {}", cause.toString());
+                        return ExecutionSyncResult.unavailable("Main Worker request failed");
+                    }
+                    return executionSyncResponseResult(response);
+                });
+    }
+
     private AuthenticationResult responseResult(HttpResponse<String> response) {
         int status = response.statusCode();
         if (status == 201) {
@@ -139,6 +171,35 @@ public final class MainWorkerClient {
 
         logger.warn("Main Worker program request returned HTTP {}: {}", status, errorMessage(response.body()));
         return ProgramResult.unavailable("Main Worker returned HTTP " + status);
+    }
+
+    private ExecutionSyncResult executionSyncResponseResult(HttpResponse<byte[]> response) {
+        int status = response.statusCode();
+        if (status == 200) {
+            try {
+                return ExecutionSyncResult.success(ExecutionsResponse.parseFrom(response.body()));
+            } catch (com.google.protobuf.InvalidProtocolBufferException exception) {
+                logger.warn("Main Worker returned an invalid execution-sync response: {}", exception.toString());
+                return ExecutionSyncResult.unavailable("Main Worker returned an invalid execution response");
+            }
+        }
+
+        String detail = protobufErrorMessage(response.body()).orElse("no error message supplied");
+        if (status == 401) {
+            logger.error("Main Worker rejected the configured API key");
+            return ExecutionSyncResult.unauthorized();
+        }
+        logger.warn("Main Worker execution sync returned HTTP {}: {}", status, detail);
+        return ExecutionSyncResult.unavailable("Main Worker returned HTTP " + status);
+    }
+
+    private static Optional<String> protobufErrorMessage(byte[] responseBody) {
+        try {
+            String error = ErrorResponse.parseFrom(responseBody).getError();
+            return error.isEmpty() ? Optional.empty() : Optional.of(error);
+        } catch (com.google.protobuf.InvalidProtocolBufferException ignored) {
+            return Optional.empty();
+        }
     }
 
     private static ProgramInfo parseProgram(JsonObject body) {
@@ -331,6 +392,32 @@ public final class MainWorkerClient {
         CONFIGURATION_ERROR,
         UNAUTHORIZED,
         PROGRAM_ERROR,
+        UNAVAILABLE
+    }
+
+    /** Result of an asynchronous execution-sync request. */
+    public record ExecutionSyncResult(ExecutionSyncStatus status, ExecutionsResponse response, String detail) {
+        public static ExecutionSyncResult success(ExecutionsResponse response) {
+            return new ExecutionSyncResult(ExecutionSyncStatus.SUCCESS, response, null);
+        }
+
+        public static ExecutionSyncResult configurationError(String detail) {
+            return new ExecutionSyncResult(ExecutionSyncStatus.CONFIGURATION_ERROR, null, detail);
+        }
+
+        public static ExecutionSyncResult unauthorized() {
+            return new ExecutionSyncResult(ExecutionSyncStatus.UNAUTHORIZED, null, null);
+        }
+
+        public static ExecutionSyncResult unavailable(String detail) {
+            return new ExecutionSyncResult(ExecutionSyncStatus.UNAVAILABLE, null, detail);
+        }
+    }
+
+    public enum ExecutionSyncStatus {
+        SUCCESS,
+        CONFIGURATION_ERROR,
+        UNAUTHORIZED,
         UNAVAILABLE
     }
 }

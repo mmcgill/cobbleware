@@ -9,6 +9,7 @@ import io.github.mmcgill.cobbleware.api.MainWorkerClient;
 import io.github.mmcgill.cobbleware.block.CobbleputerBlock;
 import io.github.mmcgill.cobbleware.block.CobbleputerBlockEntity;
 import io.github.mmcgill.cobbleware.block.CobbleputerState;
+import io.github.mmcgill.cobbleware.execution.ExecutionDriver;
 import io.github.mmcgill.cobbleware.registry.CobblewareBlocks;
 import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
@@ -20,6 +21,7 @@ import net.minecraft.commands.Commands;
 import net.minecraft.core.BlockPos;
 import net.minecraft.network.chat.Component;
 import net.minecraft.server.level.ServerPlayer;
+import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.phys.Vec3;
@@ -31,7 +33,7 @@ public final class CobblewareCommands {
     private CobblewareCommands() {
     }
 
-    public static void register(MainWorkerClient mainWorkerClient) {
+    public static void register(MainWorkerClient mainWorkerClient, ExecutionDriver executionDriver) {
         CommandRegistrationCallback.EVENT.register((dispatcher, registryAccess, environment) -> dispatcher.register(
                 Commands.literal("cobbleware")
                         .then(Commands.literal("auth")
@@ -42,7 +44,7 @@ public final class CobblewareCommands {
                         .then(Commands.literal("exec")
                                 .then(Commands.argument("start-state", StringArgumentType.word())
                                         .suggests((context, builder) -> suggestStartStates(context, builder, mainWorkerClient))
-                                        .executes(context -> execute(context, mainWorkerClient))))
+                                        .executes(context -> execute(context, mainWorkerClient, executionDriver))))
         ));
     }
 
@@ -126,7 +128,10 @@ public final class CobblewareCommands {
                         : builder.buildFuture());
     }
 
-    private static int execute(CommandContext<CommandSourceStack> context, MainWorkerClient mainWorkerClient) {
+    private static int execute(
+            CommandContext<CommandSourceStack> context,
+            MainWorkerClient mainWorkerClient,
+            ExecutionDriver executionDriver) {
         CommandSourceStack source = context.getSource();
         ServerPlayer player;
         try {
@@ -150,14 +155,15 @@ public final class CobblewareCommands {
         String startStateName = StringArgumentType.getString(context, "start-state");
         player.sendSystemMessage(Component.literal("Looking up your Cobbleware program..."));
         mainWorkerClient.getProgram(player.getUUID()).thenAccept(result -> source.getServer().execute(
-                () -> completeExecutionStart(player, startStateName, result)));
+                () -> completeExecutionStart(player, startStateName, result, executionDriver)));
         return 1;
     }
 
     private static void completeExecutionStart(
             ServerPlayer player,
             String startStateName,
-            MainWorkerClient.ProgramResult result) {
+            MainWorkerClient.ProgramResult result,
+            ExecutionDriver executionDriver) {
         Optional<CobbleputerTarget> target = findNearestCobbleputer(player);
         if (target.isEmpty()) {
             player.sendSystemMessage(Component.literal("No Cobbleputer is within 3m."));
@@ -181,12 +187,17 @@ public final class CobblewareCommands {
         }
 
         CobbleputerTarget resolvedTarget = target.orElseThrow();
-        resolvedTarget.blockEntity().startExecution(player.getUUID(), startState.orElseThrow());
-        CobbleputerBlock.setLifecycleState(
-                resolvedTarget.level(),
+        if (!(resolvedTarget.level() instanceof ServerLevel serverLevel)) {
+            player.sendSystemMessage(Component.literal("Cobbleware execution can only run on the server."));
+            return;
+        }
+        executionDriver.startExecution(
+                serverLevel,
                 resolvedTarget.pos(),
                 resolvedTarget.state(),
-                CobbleputerState.RUNNING);
+                resolvedTarget.blockEntity(),
+                player.getUUID(),
+                startState.orElseThrow());
         player.sendSystemMessage(Component.literal(
                 "Started your Cobbleware program at start state '" + startStateName + "'."));
     }

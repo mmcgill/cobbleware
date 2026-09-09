@@ -2,11 +2,13 @@ package io.github.mmcgill.cobbleware.block;
 
 import eu.pb4.polymer.blocks.api.PolymerTexturedBlock;
 import io.github.mmcgill.cobbleware.CobblewareMod;
+import io.github.mmcgill.cobbleware.execution.ExecutionDriver;
 import net.fabricmc.fabric.api.networking.v1.context.PacketContext;
 import net.minecraft.core.BlockPos;
 import net.minecraft.world.InteractionResult;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.level.Level;
+import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.EntityBlock;
 import net.minecraft.world.level.block.state.BlockBehaviour;
@@ -46,8 +48,14 @@ public final class CobbleputerBlock extends Block implements EntityBlock, Polyme
         if (nextState == null) {
             return InteractionResult.PASS;
         }
-        if (!level.isClientSide()) {
-            setLifecycleState(level, pos, state, nextState);
+        if (level instanceof ServerLevel serverLevel
+                && level.getBlockEntity(pos) instanceof CobbleputerBlockEntity blockEntity) {
+            ExecutionDriver executionDriver = CobblewareMod.executionDriver();
+            if (nextState == CobbleputerState.STOPPED) {
+                executionDriver.stop(serverLevel, pos, state, blockEntity);
+            } else {
+                executionDriver.resume(serverLevel, pos, state, blockEntity);
+            }
         }
         return InteractionResult.SUCCESS;
     }

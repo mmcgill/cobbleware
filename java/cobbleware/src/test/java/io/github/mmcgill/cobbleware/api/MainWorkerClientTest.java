@@ -3,6 +3,10 @@ package io.github.mmcgill.cobbleware.api;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 
+import cobbleware.common.Uuid;
+import cobbleware.internal.ExecutionStatus;
+import cobbleware.internal.ExecutionsRequest;
+import cobbleware.internal.ExecutionsResponse;
 import com.sun.net.httpserver.HttpServer;
 import io.github.mmcgill.cobbleware.config.CobblewareConfig;
 import java.net.InetSocketAddress;
@@ -142,6 +146,35 @@ class MainWorkerClientTest {
         assertEquals("program exploded", programError.detail());
     }
 
+    @Test
+    void postsBinaryExecutionSnapshotAndParsesProtobufResponse() throws Exception {
+        AtomicReference<String> authorization = new AtomicReference<>();
+        AtomicReference<String> contentType = new AtomicReference<>();
+        AtomicReference<byte[]> requestBody = new AtomicReference<>();
+        ExecutionsResponse expected = ExecutionsResponse.newBuilder()
+                .addResults(cobbleware.internal.ExecutionResult.newBuilder()
+                        .setExecutionId(Uuid.newBuilder().setHigh(1).setLow(2))
+                        .setFinalState(com.google.protobuf.ByteString.copyFrom(new byte[] {9}))
+                        .setEventSeqNum(0)
+                        .setEffectSeqNum(1)
+                        .setState(ExecutionStatus.EXECUTION_STATUS_RUNNING))
+                .build();
+        startBinaryServer("/worker/modapi/v1/executions", 200, expected.toByteArray(), exchange -> {
+            authorization.set(exchange.getRequestHeaders().getFirst("Authorization"));
+            contentType.set(exchange.getRequestHeaders().getFirst("Content-Type"));
+            requestBody.set(exchange.getRequestBody().readAllBytes());
+        });
+
+        ExecutionsRequest request = ExecutionsRequest.newBuilder().build();
+        MainWorkerClient.ExecutionSyncResult result = client("secret").syncExecutions(request).get();
+
+        assertEquals(MainWorkerClient.ExecutionSyncStatus.SUCCESS, result.status());
+        assertEquals(expected, result.response());
+        assertEquals("Bearer secret", authorization.get());
+        assertEquals("application/octet-stream", contentType.get());
+        assertArrayEquals(request.toByteArray(), requestBody.get());
+    }
+
     private void startServer(int status, String responseBody, RequestInspector inspector) throws Exception {
         startServer("/worker/modapi/v1/authentication", status, responseBody, inspector);
     }
@@ -158,6 +191,18 @@ class MainWorkerClientTest {
                 exchange.sendResponseHeaders(status, response.length);
                 exchange.getResponseBody().write(response);
             }
+            exchange.close();
+        });
+        server.start();
+    }
+
+    private void startBinaryServer(String path, int status, byte[] responseBody, RequestInspector inspector) throws Exception {
+        server = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
+        server.createContext(path, exchange -> {
+            inspector.inspect(exchange);
+            exchange.getResponseHeaders().set("Content-Type", "application/octet-stream");
+            exchange.sendResponseHeaders(status, responseBody.length);
+            exchange.getResponseBody().write(responseBody);
             exchange.close();
         });
         server.start();

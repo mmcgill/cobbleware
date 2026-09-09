@@ -52,20 +52,20 @@ be arbitrarily modified by that event handler. The state value has a maximum siz
 given as server configuration. If an event handler returns a state value larger than this size,
 the 'puter crashes and the returned state value is discarded.
 
-Each 'puter has an associated event queue whose length is determined by server configuration.
+Each 'puter has an associated in-memory event queue with a current maximum length of 10.
 If events are produced faster than the 'puter can process them, the queue will eventually fill.
 When the event queue is full, new events are dropped.
 
 ### State Durability
 
-Once an event makes it into the puter's queue, it is durable across Server restarts.
-'puter Queue state is persisted as part of the game state. A queued event will
-be processed. If a function throws a runtime error while processing an event, that
-event is still considered processed. For every processed event that successfully produces
-a result, the effects on both 'puter state and the game world itself are durable and
-will be processed. An effect on the game world is considered processed if the Mod
-attempts to apply the effect; some effects may be not be _applicable_ by the time
-they are processed. When a 'puter is reset or a new Program is loaded, its event queue is cleared.
+The execution id, execution owner, current state, and sequence counters are durable across
+server restarts and chunk reloads while the Cobbleputer has not crashed or been broken.
+Pending events and received effects are held only by the Mod while the Cobbleputer is active;
+they are best-effort and can be lost on server restart or chunk unload. A queued event can be
+dropped when the in-memory queue is full (currently 10 events) or when the Cobbleputer becomes
+inactive. Similarly, an effect is considered processed once the Mod attempts to apply it, but
+an attempt can be missed or repeated around failures. When a 'puter is reset or a new Program
+is loaded, its in-memory event queue is cleared.
 
 ## Wireless Redstone
 

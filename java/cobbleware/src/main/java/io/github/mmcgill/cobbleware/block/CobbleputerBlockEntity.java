@@ -2,6 +2,7 @@ package io.github.mmcgill.cobbleware.block;
 
 import com.mojang.serialization.Codec;
 import io.github.mmcgill.cobbleware.CobblewareMod;
+import io.github.mmcgill.cobbleware.execution.ExecutionDriver;
 import io.github.mmcgill.cobbleware.registry.CobblewareBlockEntities;
 import java.nio.ByteBuffer;
 import java.util.Arrays;
@@ -11,6 +12,7 @@ import net.minecraft.core.BlockPos;
 import net.minecraft.core.UUIDUtil;
 import net.minecraft.world.level.block.entity.BlockEntity;
 import net.minecraft.world.level.block.state.BlockState;
+import net.minecraft.world.level.Level;
 import net.minecraft.world.level.storage.ValueInput;
 import net.minecraft.world.level.storage.ValueOutput;
 
@@ -21,15 +23,35 @@ public final class CobbleputerBlockEntity extends BlockEntity {
     private static final String NEXT_EVENT_SEQUENCE_NUM_TAG = "next_event_sequence_num";
     private static final String EFFECT_SEQUENCE_NUM_TAG = "effect_sequence_num";
     private static final String EXECUTION_STATE_TAG = "execution_state";
+    private static final String STOPPED_AT_TICK_TAG = "stopped_at_tick";
 
     private UUID executionId;
     private UUID ownerPlayerId;
     private long nextEventSequenceNum = 1;
     private long effectSequenceNum;
     private byte[] executionState;
+    private Long stoppedAtTick;
 
     public CobbleputerBlockEntity(BlockPos pos, BlockState state) {
         super(CobblewareBlockEntities.COBBLEPUTER, pos, state);
+    }
+
+    @Override
+    public void setLevel(Level level) {
+        super.setLevel(level);
+        ExecutionDriver executionDriver = CobblewareMod.executionDriverOrNull();
+        if (executionDriver != null && !level.isClientSide()) {
+            executionDriver.activate(this);
+        }
+    }
+
+    @Override
+    public void setRemoved() {
+        ExecutionDriver executionDriver = CobblewareMod.executionDriverOrNull();
+        if (executionDriver != null && level != null && !level.isClientSide()) {
+            executionDriver.deactivate(this);
+        }
+        super.setRemoved();
     }
 
     /** Starts a fresh execution owned by {@code owner}, replacing any previous execution record. */
@@ -43,6 +65,7 @@ public final class CobbleputerBlockEntity extends BlockEntity {
         nextEventSequenceNum = 1;
         effectSequenceNum = 0;
         executionState = Arrays.copyOf(initialState, initialState.length);
+        stoppedAtTick = null;
         setChanged();
         CobblewareMod.LOGGER.info(
                 "Started Cobbleputer execution {} at {} for player {}",
@@ -63,6 +86,17 @@ public final class CobbleputerBlockEntity extends BlockEntity {
         return nextEventSequenceNum;
     }
 
+    /** Assigns and persists the next event sequence number. */
+    public long claimNextEventSequenceNum() {
+        if (!hasExecution() || nextEventSequenceNum == Long.MAX_VALUE) {
+            throw new IllegalStateException("Cobbleputer event sequence cannot be advanced");
+        }
+        long assigned = nextEventSequenceNum;
+        nextEventSequenceNum += 1;
+        setChanged();
+        return assigned;
+    }
+
     public long effectSequenceNum() {
         return effectSequenceNum;
     }
@@ -71,6 +105,54 @@ public final class CobbleputerBlockEntity extends BlockEntity {
         return executionState == null
                 ? Optional.empty()
                 : Optional.of(Arrays.copyOf(executionState, executionState.length));
+    }
+
+    /** Returns whether this block entity has a complete execution record. */
+    public boolean hasExecution() {
+        return executionId != null && ownerPlayerId != null && executionState != null;
+    }
+
+    /** Replaces the durable execution state received from the Runtime. */
+    public void updateExecutionState(byte[] newState) {
+        if (!hasExecution() || newState == null) {
+            throw new IllegalArgumentException("execution state cannot be updated without a complete execution record");
+        }
+        executionState = Arrays.copyOf(newState, newState.length);
+        setChanged();
+    }
+
+    /** Records that application of the next effect sequence was attempted. */
+    public void acknowledgeEffect(long sequenceNum) {
+        if (!hasExecution() || sequenceNum != effectSequenceNum + 1) {
+            throw new IllegalArgumentException("effect acknowledgement sequence is not contiguous");
+        }
+        effectSequenceNum = sequenceNum;
+        setChanged();
+    }
+
+    /** Records the game tick at which this execution was stopped. */
+    public void setStoppedAtTick(long tick) {
+        if (!hasExecution() || tick < 0) {
+            throw new IllegalArgumentException("stop tick requires a complete execution record");
+        }
+        stoppedAtTick = tick;
+        setChanged();
+    }
+
+    /** Returns and clears the durable stop tick after a resume event has been enqueued. */
+    public Optional<Long> takeStoppedAtTick() {
+        Optional<Long> result = Optional.ofNullable(stoppedAtTick);
+        stoppedAtTick = null;
+        if (result.isPresent()) {
+            setChanged();
+        }
+        return result;
+    }
+
+    /** Clears a crashed execution record. */
+    public void crashExecution() {
+        clearExecution();
+        setChanged();
     }
 
     @Override
@@ -82,6 +164,9 @@ public final class CobbleputerBlockEntity extends BlockEntity {
         output.putLong(EFFECT_SEQUENCE_NUM_TAG, effectSequenceNum);
         if (executionState != null) {
             output.store(EXECUTION_STATE_TAG, Codec.BYTE_BUFFER, ByteBuffer.wrap(executionState));
+        }
+        if (stoppedAtTick != null) {
+            output.putLong(STOPPED_AT_TICK_TAG, stoppedAtTick);
         }
     }
 
@@ -96,9 +181,11 @@ public final class CobbleputerBlockEntity extends BlockEntity {
         executionState = input.read(EXECUTION_STATE_TAG, Codec.BYTE_BUFFER)
                 .map(CobbleputerBlockEntity::copyBytes)
                 .orElse(null);
+        long loadedStoppedAtTick = input.getLongOr(STOPPED_AT_TICK_TAG, -1);
+        stoppedAtTick = loadedStoppedAtTick < 0 ? null : loadedStoppedAtTick;
 
         if (executionId == null || ownerPlayerId == null || executionState == null || nextEventSequenceNum < 1
-                || effectSequenceNum < 0) {
+                || effectSequenceNum < 0 || (stoppedAtTick != null && stoppedAtTick < 0)) {
             clearExecution();
         }
     }
@@ -109,6 +196,7 @@ public final class CobbleputerBlockEntity extends BlockEntity {
         nextEventSequenceNum = 1;
         effectSequenceNum = 0;
         executionState = null;
+        stoppedAtTick = null;
     }
 
     private static byte[] copyBytes(ByteBuffer source) {
