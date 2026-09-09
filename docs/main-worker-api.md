@@ -194,6 +194,21 @@ Listing returns `409` with a JSON `error` property if another program operation 
 The Player API does not provide an operation for deleting or deactivating the active program; uploading a replacement
 is the only way to change it.
 
+#### Start states
+
+The `GET /playerapi/v1/programs/{id}/startStates` operation returns the names of the authenticated Player's active
+program start states. The `{id}` path component must identify that active program. A successful response is:
+
+```json
+{
+    "startStates": ["default", "paused"]
+}
+```
+
+If the Player has no active program, or `{id}` is not the active program id, the operation returns `404`. It returns
+`422` with a JSON `error` property when the active program cannot provide a valid `/startStates` response. Other
+methods receive `405` with `Allow: GET`.
+
 Because these operations authenticate with a cookie and are intended for browser use, the Runtime validates
 that upload and logout requests have a same-origin `Origin` header. Cross-origin requests are rejected
 with `403`; the API does not rely solely on the cookie's `SameSite` attribute for CSRF protection.

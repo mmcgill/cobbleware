@@ -118,6 +118,39 @@ export async function handleProgram(
   }
 }
 
+/** Returns the names of an authenticated Player's active program start states. */
+export async function handlePlayerProgramStartStates(
+  request: Request,
+  store: ProgramStore,
+  runner: ProgramRunner,
+  playerUUID: string,
+  programId: string,
+): Promise<Response> {
+  if (request.method !== 'GET') {
+    return methodNotAllowed('GET');
+  }
+
+  let program;
+  try {
+    program = await store.readActive(playerUUID);
+  } catch (error) {
+    return handleStoreError(error);
+  }
+
+  if (program === null || program.metadata.id !== programId) {
+    return emptyResponse(404);
+  }
+
+  try {
+    return jsonResponse({
+      startStates: Object.keys(await runner.startStates(request, playerUUID, program)),
+    });
+  } catch (error) {
+    const detail = error instanceof Error ? error.message : String(error);
+    return jsonError(`program could not provide start states: ${detail}`, 422);
+  }
+}
+
 export async function handleProgramStep(
   request: Request,
   store: ProgramStore,

@@ -2,11 +2,18 @@ import { type AppConfig, configFromEnv } from '../src/config.ts';
 import { DurableAuthStore } from '../src/auth/store.ts';
 import { createHandler } from '../src/index.ts';
 import { DurableProgramStore } from '../src/programs/store.ts';
-import { ProgramOperationConflictError, type ProgramStore } from '../src/programs/types.ts';
+import type { ProgramRunner } from '../src/programs/start-states.ts';
+import {
+  type ActiveProgram,
+  ProgramOperationConflictError,
+  type ProgramStore,
+} from '../src/programs/types.ts';
 
 const MOD_AUTH_PATH = 'http://localhost/modapi/v1/authentication';
 const PLAYER_AUTH_PATH = 'http://localhost/playerapi/v1/authenticate';
 const PROGRAMS_PATH = 'http://localhost/playerapi/v1/programs';
+const START_STATES_PATH =
+  `${PROGRAMS_PATH}/AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA/startStates`;
 const API_KEY = 'test-api-key';
 const PLAYER_UUID = '123e4567-e89b-12d3-a456-426614174000';
 
@@ -19,6 +26,7 @@ type TestApp = {
 async function createTestApp(
   playerProgramQuotaBytes: number,
   programStore?: ProgramStore,
+  programRunner?: ProgramRunner,
 ): Promise<TestApp> {
   const storageDir = await Deno.makeTempDir({ prefix: 'cobbleware-program-test-' });
   const config = configFromEnv({
@@ -29,11 +37,51 @@ async function createTestApp(
   const authStore = await DurableAuthStore.open(config);
 
   return {
-    handler: await createHandler({ config, store: authStore, programStore }),
+    handler: await createHandler({ config, store: authStore, programStore, programRunner }),
     config,
     cleanup: () => Deno.remove(storageDir, { recursive: true }),
   };
 }
+
+Deno.test('Player program start states returns names for the active program', async () => {
+  const activeProgram: ActiveProgram = {
+    metadata: {
+      id: 'AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA',
+      name: 'test.eszip',
+      uploadedAt: '2026-09-09T00:00:00.000Z',
+      sizeBytes: 2,
+    },
+    content: new Uint8Array([1, 2]),
+  };
+  const programStore: ProgramStore = {
+    list: () =>
+      Promise.resolve({
+        programs: [activeProgram.metadata],
+        quotaBytes: 2,
+        usedBytes: 2,
+        remainingBytes: 0,
+      }),
+    readActive: () => Promise.resolve(activeProgram),
+    upload: () => Promise.resolve({ metadata: activeProgram.metadata, created: false }),
+  };
+  const programRunner: ProgramRunner = {
+    startStates: () => Promise.resolve({ default: [1], paused: [2] }),
+    step: () => Promise.reject(new Error('step is not used by this test')),
+  };
+  const app = await createTestApp(1024, programStore, programRunner);
+  try {
+    const cookie = await authenticatePlayerSession(app.handler);
+    const response = await app.handler(new Request(START_STATES_PATH, { headers: { cookie } }));
+    assertEquals(response.status, 200, 'active program start states should be returned');
+    assertEquals(
+      JSON.stringify(await response.json()),
+      JSON.stringify({ startStates: ['default', 'paused'] }),
+      'start state names should be returned in program order',
+    );
+  } finally {
+    await app.cleanup();
+  }
+});
 
 function jsonRequest(url: string, body: unknown): Request {
   return new Request(url, {

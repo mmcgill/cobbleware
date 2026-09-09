@@ -3,7 +3,7 @@
   <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>Cobbleware programs</title>
+    <title>Cobbleware Dashboard</title>
     <link rel="icon" href="./favicon.svg" type="image/svg+xml">
     <link rel="stylesheet" href="./style.css">
   </head>
@@ -11,7 +11,7 @@
     <main>
       <header class="page-header">
         <div>
-          <h1>Cobbleware programs</h1>
+          <h1>Cobbleware Dashboard</h1>
           <p
             class="intro">Upload and replace your active program on this server. Programs are private to your
             Minecraft player and can be loaded onto Cobbleputers in game.</p>
@@ -25,19 +25,8 @@
 
       <p id="page-status" class="status" role="status" aria-live="polite"></p>
 
-      <section class="card" aria-labelledby="quota-heading">
-        <h2 id="quota-heading">Program storage</h2>
-        <div class="quota-summary">
-          <strong id="quota-used">Loading storage...</strong>
-          <span id="quota-remaining" class="muted"></span>
-        </div>
-        <progress id="quota-progress" max="1" value="0"
-          aria-label="Program storage used"></progress>
-        <p id="quota-detail"
-          class="quota-detail muted">Storage details will appear after loading.</p>
-      </section>
-
-      <section class="card" aria-labelledby="programs-heading">
+      <section id="active-program-section" class="card active-program-card"
+        aria-labelledby="programs-heading" aria-describedby="upload-hint">
         <div class="table-header">
           <h2 id="programs-heading">Your active program</h2>
           <button id="refresh-button" class="secondary" type="button">Refresh</button>
@@ -58,35 +47,24 @@
             <tbody id="programs-body"></tbody>
           </table>
         </div>
-      </section>
-
-      <section class="card" aria-labelledby="upload-heading">
-        <h2 id="upload-heading">Upload a program</h2>
-        <form id="upload-form" class="upload-form">
-          <div id="drop-zone" class="drop-zone" tabindex="0" role="button"
-            aria-describedby="drop-hint">
-            <p><strong>Drop an ESZip bundle here</strong></p>
-            <p id="drop-hint" class="hint">You can also choose a file from your device.</p>
-            <button id="browse-button" class="secondary" type="button">Choose a file</button>
-            <input id="file-input" class="visually-hidden" type="file"
-              accept=".eszip,application/octet-stream">
-          </div>
+        <section class="start-states" aria-labelledby="start-states-heading">
+          <h3 id="start-states-heading">Start states</h3>
+          <p id="start-states-loading" class="muted" hidden>Loading start states...</p>
+          <p id="start-states-empty" class="empty-state"
+            hidden>This program has no start states.</p>
+          <ul id="start-states-list" class="start-states-list" hidden></ul>
+        </section>
+        <div class="upload-controls">
+          <p id="upload-hint"
+            class="hint">Drag an ESZip bundle anywhere in this section, or choose a file.</p>
+          <input id="file-input" class="visually-hidden" type="file"
+            accept=".eszip,application/octet-stream">
           <p id="selected-file" class="selected-file" aria-live="polite"></p>
-
-          <label class="field" for="program-name">
-            <span>Program name <span class="muted">(optional)</span></span>
-            <input id="program-name" type="text" maxlength="128" autocomplete="off"
-              aria-describedby="name-hint">
-            <span id="name-hint"
-              class="hint">Leave blank to use the uploaded filename. Maximum 128 Unicode
-              characters.</span>
-          </label>
-
           <div class="button-row">
-            <button id="upload-button" type="submit" disabled>Upload program</button>
+            <button id="browse-button" class="secondary" type="button">Choose a file</button>
             <span id="upload-status" class="muted" role="status" aria-live="polite"></span>
           </div>
-        </form>
+        </div>
       </section>
     </main>
 
@@ -98,23 +76,19 @@
         pageStatus: document.querySelector('#page-status'),
         playerProfileName: document.querySelector('#player-profile-name'),
         logoutButton: document.querySelector('#logout-button'),
-        quotaUsed: document.querySelector('#quota-used'),
-        quotaRemaining: document.querySelector('#quota-remaining'),
-        quotaProgress: document.querySelector('#quota-progress'),
-        quotaDetail: document.querySelector('#quota-detail'),
-        uploadForm: document.querySelector('#upload-form'),
-        dropZone: document.querySelector('#drop-zone'),
+        activeProgramSection: document.querySelector('#active-program-section'),
         browseButton: document.querySelector('#browse-button'),
         fileInput: document.querySelector('#file-input'),
         selectedFile: document.querySelector('#selected-file'),
-        programName: document.querySelector('#program-name'),
-        uploadButton: document.querySelector('#upload-button'),
         uploadStatus: document.querySelector('#upload-status'),
         refreshButton: document.querySelector('#refresh-button'),
         programsLoading: document.querySelector('#programs-loading'),
         emptyState: document.querySelector('#empty-state'),
         programsTable: document.querySelector('#programs-table'),
         programsBody: document.querySelector('#programs-body'),
+        startStatesLoading: document.querySelector('#start-states-loading'),
+        startStatesEmpty: document.querySelector('#start-states-empty'),
+        startStatesList: document.querySelector('#start-states-list'),
       };
 
       const byteFormatter = new Intl.NumberFormat(undefined, { maximumFractionDigits: 1 });
@@ -124,6 +98,7 @@
       });
 
       let programList = null;
+      let startStates = null;
       let selectedFile = null;
       let operation = 'idle';
 
@@ -243,31 +218,6 @@
         return body;
       }
 
-      function renderQuota() {
-        if (programList === null) {
-          elements.quotaUsed.textContent = 'Loading storage...';
-          elements.quotaRemaining.textContent = '';
-          elements.quotaDetail.textContent = 'Storage details will appear after loading.';
-          elements.quotaProgress.max = '1';
-          elements.quotaProgress.value = '0';
-          return;
-        }
-
-        const quota = programList.quotaBytes;
-        const used = programList.usedBytes;
-        elements.quotaUsed.textContent = `${formatBytes(used)} used`;
-        elements.quotaRemaining.textContent = `${formatBytes(programList.remainingBytes)} remaining`;
-        elements.quotaDetail.textContent = `${formatBytes(used)} of ${
-          formatBytes(quota)
-        } total program storage`;
-        elements.quotaProgress.max = String(Math.max(quota, 1));
-        elements.quotaProgress.value = String(Math.min(used, Math.max(quota, 1)));
-        elements.quotaProgress.setAttribute(
-          'aria-label',
-          `${formatBytes(used)} of ${formatBytes(quota)} program storage used`,
-        );
-      }
-
       function renderPrograms() {
         elements.programsLoading.hidden = programList !== null || operation !== 'loading';
         elements.programsBody.replaceChildren();
@@ -311,18 +261,32 @@
         }
       }
 
+      function renderStartStates() {
+        elements.startStatesList.replaceChildren();
+        const hasActiveProgram = programList !== null && programList.programs.length === 1;
+        elements.startStatesLoading.hidden = !(hasActiveProgram && startStates === null);
+        elements.startStatesEmpty.hidden = !hasActiveProgram || startStates === null ||
+          startStates.length !== 0;
+        elements.startStatesList.hidden = !hasActiveProgram || startStates === null ||
+          startStates.length === 0;
+
+        if (startStates === null) {
+          return;
+        }
+        for (const stateName of startStates) {
+          const item = document.createElement('li');
+          item.textContent = stateName;
+          elements.startStatesList.append(item);
+        }
+      }
+
       function renderControls() {
         const busy = operation !== 'idle';
         elements.logoutButton.disabled = busy;
         elements.logoutButton.textContent = operation === 'logging-out' ? 'Logging out...' : 'Log out';
         elements.browseButton.disabled = busy;
         elements.fileInput.disabled = busy;
-        elements.programName.disabled = busy;
-        elements.uploadButton.disabled = busy || selectedFile === null;
         elements.refreshButton.disabled = busy;
-        elements.uploadButton.textContent = operation === 'uploading'
-          ? 'Uploading...'
-          : 'Upload program';
       }
 
       function renderSelectedFile() {
@@ -336,8 +300,8 @@
       }
 
       function render() {
-        renderQuota();
         renderPrograms();
+        renderStartStates();
         renderControls();
         renderSelectedFile();
       }
@@ -357,10 +321,20 @@
 
       async function loadPrograms() {
         operation = 'loading';
+        startStates = null;
         render();
         try {
           const response = await request('/playerapi/v1/programs');
           programList = parseProgramList(await response.json());
+          if (programList.programs.length === 1) {
+            const program = programList.programs[0];
+            const startStatesResponse = await request(
+              `/playerapi/v1/programs/${encodeURIComponent(program.id)}/startStates`,
+            );
+            startStates = parseStartStates(await startStatesResponse.json());
+          } else {
+            startStates = [];
+          }
           return true;
         } catch (error) {
           displayError(error);
@@ -369,6 +343,16 @@
           operation = 'idle';
           render();
         }
+      }
+
+      function parseStartStates(body) {
+        if (
+          !body || !Array.isArray(body.startStates) ||
+          body.startStates.some((name) => typeof name !== 'string')
+        ) {
+          throw makeError('The server returned invalid start states.');
+        }
+        return body.startStates;
       }
 
       async function loadPlayerIdentity() {
@@ -389,9 +373,12 @@
       }
 
       function selectFile(file) {
+        if (operation !== 'idle') {
+          return;
+        }
         selectedFile = file;
         render();
-        setUploadMessage(`Ready to upload ${file.name}.`);
+        uploadProgram();
       }
 
       function selectDroppedFiles(files) {
@@ -402,41 +389,14 @@
         selectFile(files[0]);
       }
 
-      function validateName(value) {
-        const trimmed = value.trim();
-        if (trimmed.length === 0) {
-          return null;
-        }
-        if (
-          Array.from(trimmed).length > 128 ||
-          /[\u0000-\u001f\u007f]/u.test(trimmed)
-        ) {
-          throw makeError(
-            'The program name must be 128 or fewer characters and contain no control characters.',
-          );
-        }
-        return trimmed;
-      }
-
       async function uploadProgram() {
         if (selectedFile === null) {
           setMessage('Choose a program file before uploading.', 'error');
           return;
         }
 
-        let name;
-        try {
-          name = validateName(elements.programName.value);
-        } catch (error) {
-          displayError(error);
-          return;
-        }
-
         const form = new FormData();
         form.append('program', selectedFile, selectedFile.name);
-        if (name !== null) {
-          form.append('name', name);
-        }
 
         operation = 'uploading';
         setUploadMessage('Uploading program...');
@@ -453,7 +413,6 @@
           await response.json();
           selectedFile = null;
           elements.fileInput.value = '';
-          elements.programName.value = '';
           const refreshed = await loadPrograms();
           if (refreshed) {
             setUploadMessage('Uploaded!');
@@ -463,7 +422,9 @@
           }
         } catch (error) {
           displayError(error);
-          setUploadMessage('Upload failed. Your selected file is still available to retry.');
+          selectedFile = null;
+          elements.fileInput.value = '';
+          setUploadMessage('Upload failed. Choose or drop a file to try again.');
         } finally {
           operation = 'idle';
           render();
@@ -498,32 +459,17 @@
           selectFile(elements.fileInput.files[0]);
         }
       });
-      elements.dropZone.addEventListener('click', (event) => {
-        if (event.target === elements.dropZone) {
-          elements.fileInput.click();
-        }
-      });
-      elements.dropZone.addEventListener('keydown', (event) => {
-        if (event.key === 'Enter' || event.key === ' ') {
-          event.preventDefault();
-          elements.fileInput.click();
-        }
-      });
-      elements.dropZone.addEventListener('dragover', (event) => {
+      elements.activeProgramSection.addEventListener('dragover', (event) => {
         event.preventDefault();
-        elements.dropZone.classList.add('drag-over');
+        elements.activeProgramSection.classList.add('drag-over');
       });
-      elements.dropZone.addEventListener('dragleave', () => {
-        elements.dropZone.classList.remove('drag-over');
+      elements.activeProgramSection.addEventListener('dragleave', () => {
+        elements.activeProgramSection.classList.remove('drag-over');
       });
-      elements.dropZone.addEventListener('drop', (event) => {
+      elements.activeProgramSection.addEventListener('drop', (event) => {
         event.preventDefault();
-        elements.dropZone.classList.remove('drag-over');
+        elements.activeProgramSection.classList.remove('drag-over');
         selectDroppedFiles(event.dataTransfer.files);
-      });
-      elements.uploadForm.addEventListener('submit', (event) => {
-        event.preventDefault();
-        uploadProgram();
       });
       elements.refreshButton.addEventListener('click', () => loadPrograms());
       elements.logoutButton.addEventListener('click', () => logout());

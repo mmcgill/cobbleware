@@ -11,20 +11,17 @@ to `/auth.html`.
 
 ## Index page
 
-The `/index.html` page presents the logged-in player's Minecraft profile name and a logout control, along with a
-table that lists their active program, if one exists. The page loads the profile name from `/playerapi/v1/whoami` and
-loads the program list from `/playerapi/v1/programs`. The table contains columns for program id, name, upload date,
-and size. It has at most one row and has no delete action.
+The `/index.html` page presents the logged-in player's Minecraft profile name and a logout control, along with one
+active-program section. It loads the profile name from `/playerapi/v1/whoami`, program metadata from
+`/playerapi/v1/programs`, and the active program's start-state names from
+`/playerapi/v1/programs/{id}/startStates`. The section shows the program id, name, upload date, size, and start
+states. It has no delete action.
 
-The page also shows a program quota usage bar showing the active program's size and the remaining program space
-available to the player.
-
-The page provides a drag-and-drop upload area for ESZip bundles and a file-picker fallback. Dropping or choosing
-one file starts a `POST /playerapi/v1/programs` upload using `multipart/form-data`. The uploaded filename is used
-as the program name when the optional name field is blank; otherwise the supplied name is sent to the server.
-On success, the program list and quota usage are refreshed without a full page reload. If an active program already
-exists, the refreshed row represents the replacement. Upload errors are shown and the currently displayed active
-program is preserved.
+The active-program section is also the drag-and-drop target for ESZip bundles and provides a file-picker fallback.
+Dropping or choosing one file immediately starts a `POST /playerapi/v1/programs` upload using `multipart/form-data`;
+there is no separate upload confirmation control. The UI does not offer a program-name field, so it always uses the
+uploaded filename. On success, the active-program metadata and start states are refreshed without a full page reload.
+Upload errors are shown and the currently displayed active program is preserved.
 
 The UI does not provide a way to delete the active program; uploading a replacement is the only program-management
 operation.

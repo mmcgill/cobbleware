@@ -99,65 +99,46 @@ h2 {
   font-size: 1.1rem;
 }
 
-.quota-summary {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.5rem 1.5rem;
-  margin-bottom: 0.75rem;
-}
-
-progress {
-  display: block;
-  width: 100%;
-  height: 1rem;
-  accent-color: var(--accent);
-}
-
-.quota-detail {
-  margin: 0.75rem 0 0;
-}
-
-.upload-form {
+.upload-controls {
   display: grid;
   gap: 1rem;
+  margin-top: 1.5rem;
 }
 
-.drop-zone {
-  display: grid;
-  justify-items: center;
-  gap: 0.5rem;
-  padding: 2rem 1rem;
-  border: 2px dashed var(--border);
-  border-radius: 0.5rem;
-  background: var(--surface-subtle);
-  text-align: center;
+.active-program-card {
   transition: border-color 120ms ease, background 120ms ease;
 }
 
-.drop-zone.drag-over,
-.drop-zone:focus-visible {
+.active-program-card.drag-over {
   border-color: var(--accent-strong);
   background: #294337;
 }
 
-.drop-zone p {
-  margin-bottom: 0;
+.start-states {
+  margin-top: 1.5rem;
+  padding-top: 1.25rem;
+  border-top: 1px solid var(--border);
 }
 
-.field {
-  display: grid;
-  gap: 0.4rem;
+.start-states h3 {
+  margin: 0 0 0.75rem;
+  font-size: 1rem;
 }
 
-input[type="text"] {
-  width: 100%;
-  max-width: 34rem;
-  padding: 0.65rem 0.75rem;
+.start-states-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  padding: 0;
+  margin: 0;
+  list-style: none;
+}
+
+.start-states-list li {
+  padding: 0.3rem 0.55rem;
   border: 1px solid var(--border);
-  border-radius: 0.35rem;
+  border-radius: 999px;
   background: var(--surface-subtle);
-  color: inherit;
-  font: inherit;
 }
 
 button {

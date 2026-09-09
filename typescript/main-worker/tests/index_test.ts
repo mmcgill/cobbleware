@@ -36,10 +36,10 @@ Deno.test('/index.html contains the programs UI', async () => {
   const body = await response.text();
   for (
     const landmark of [
-      'Program storage',
-      'Drop an ESZip bundle here',
-      'Program name',
       'Your active program',
+      'Start states',
+      'Drag an ESZip bundle anywhere in this section',
+      'Choose a file',
       'Program ID',
       'Uploaded',
       'Size',
@@ -55,6 +55,18 @@ Deno.test('/index.html contains the programs UI', async () => {
   }
   if (body.includes('program management UI is not implemented yet')) {
     throw new Error('index page still contains the placeholder UI');
+  }
+  for (
+    const removedControl of [
+      'Program storage',
+      'Program name',
+      'id="drop-zone"',
+      'id="upload-button"',
+    ]
+  ) {
+    if (body.includes(removedControl)) {
+      throw new Error(`index page still contains removed UI: ${removedControl}`);
+    }
   }
 });
 

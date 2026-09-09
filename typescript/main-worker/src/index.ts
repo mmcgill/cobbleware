@@ -10,7 +10,12 @@ import { DurableAuthStore } from './auth/store.ts';
 import type { AuthStore } from './auth/types.ts';
 import { serveStatic } from './static.ts';
 import { jsonError } from './auth/http.ts';
-import { handleProgram, handleProgramCollection, handleProgramStep } from './programs/handlers.ts';
+import {
+  handlePlayerProgramStartStates,
+  handleProgram,
+  handleProgramCollection,
+  handleProgramStep,
+} from './programs/handlers.ts';
 import { DurableProgramStore } from './programs/store.ts';
 import { PROGRAM_ID_PATTERN, type ProgramStore } from './programs/types.ts';
 import { type ProgramRunner, RuntimeProgramRunner } from './programs/start-states.ts';
@@ -104,6 +109,34 @@ async function routeRequest(
     const context: RequestContext = {};
     const authError = await requirePlayerAuth(request, config, store, context, 'api');
     return authError ?? handleProgramCollection(request, programStore, context.player!.playerUUID);
+  }
+
+  const programStartStatesMatch = /^\/playerapi\/v1\/programs\/([^/]+)\/startStates$/.exec(
+    pathname,
+  );
+  if (programStartStatesMatch !== null) {
+    const context: RequestContext = {};
+    const authError = await requirePlayerAuth(request, config, store, context, 'api');
+    if (authError !== null) {
+      return authError;
+    }
+
+    let programId: string;
+    try {
+      programId = decodeURIComponent(programStartStatesMatch[1]);
+    } catch {
+      return new Response(null, { status: 404 });
+    }
+    if (!PROGRAM_ID_PATTERN.test(programId)) {
+      return new Response(null, { status: 404 });
+    }
+    return handlePlayerProgramStartStates(
+      request,
+      programStore,
+      programRunner,
+      context.player!.playerUUID,
+      programId,
+    );
   }
 
   const programStepMatch = /^\/playerapi\/v1\/programs\/([^/]+)\/step$/.exec(pathname);
