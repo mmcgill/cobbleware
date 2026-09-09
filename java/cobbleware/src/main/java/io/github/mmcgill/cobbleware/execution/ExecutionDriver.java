@@ -2,6 +2,7 @@ package io.github.mmcgill.cobbleware.execution;
 
 import cobbleware.common.Uuid;
 import cobbleware.effects.Effect;
+import cobbleware.events.ChatMessage;
 import cobbleware.events.Event;
 import cobbleware.events.Resumed;
 import cobbleware.events.Started;
@@ -24,6 +25,7 @@ import java.util.Optional;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 import net.fabricmc.fabric.api.event.lifecycle.v1.ServerTickEvents;
+import net.fabricmc.fabric.api.message.v1.ServerMessageEvents;
 import net.minecraft.core.BlockPos;
 import net.minecraft.network.chat.Component;
 import net.minecraft.server.MinecraftServer;
@@ -56,6 +58,8 @@ public final class ExecutionDriver {
         this.mainWorkerClient = mainWorkerClient;
         this.logger = logger;
         ServerTickEvents.END_SERVER_TICK.register(this::tick);
+        ServerMessageEvents.CHAT_MESSAGE.register(
+                (message, sender, parameters) -> dispatchChatMessage(sender, message.signedContent()));
     }
 
     /** Adds a loaded Cobbleputer to the driver's active set. */
@@ -117,6 +121,28 @@ public final class ExecutionDriver {
             throw new IllegalArgumentException("Cobbleputer event arguments must not be null");
         }
         ActiveExecution active = activeExecutions.get(blockEntity);
+        if (active != null) {
+            enqueueActiveEvent(blockEntity, active, event);
+        }
+    }
+
+    /** Delivers raw player chat to every eligible active Cobbleputer in the sender's level and range. */
+    private void dispatchChatMessage(ServerPlayer sender, String message) {
+        Event event = Event.newBuilder()
+                .setChatMessage(ChatMessage.newBuilder().setMessage(message))
+                .build();
+        Level senderLevel = sender.level();
+        for (Map.Entry<CobbleputerBlockEntity, ActiveExecution> entry : activeExecutions.entrySet()) {
+            CobbleputerBlockEntity blockEntity = entry.getKey();
+            if (blockEntity.getLevel() != senderLevel
+                    || sender.distanceToSqr(Vec3.atCenterOf(blockEntity.getBlockPos())) > CHAT_RADIUS_SQUARED) {
+                continue;
+            }
+            enqueueActiveEvent(blockEntity, entry.getValue(), event);
+        }
+    }
+
+    private void enqueueActiveEvent(CobbleputerBlockEntity blockEntity, ActiveExecution active, Event event) {
         if (active == null || !blockEntity.hasExecution()
                 || blockEntity.getBlockState().getValue(CobbleputerBlock.STATE) != CobbleputerState.RUNNING) {
             return;
