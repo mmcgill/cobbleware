@@ -7,9 +7,13 @@ They are the source of truth -- when the implementation and spec differ,
 assume the implementation is wrong unless specifically instructed otherwise.
 
 * [Gameplay](docs/gameplay.md) describes intended gameplay mechanics, at the level a player would encounter/understand them.
-* [Architecture](docs/architecture.md) describes the high-level system architecture.
+* [Cobbleware Mod](docs/mod.md) describes mod configuration and command syntax.
 * [Use Cases](docs/usecases.md) gives a more formal, labeled set of use cases that describe functionality
   without specifying concrete design/implementation details.
+* [Architecture](docs/architecture.md) describes the high-level system architecture.
 * [Main Worker API](docs/api.md) describes the Main Worker API, both the Mod-facing portion and the Player-facing portion.
+* [Program API](docs/program-api.md) describes the API presented by a Program to the Main Worker. The cobbleware TS library
+  provides reusable code for hosting this API, so Players generally do not need this information. It serves as a spec
+  for mod developers.
 
 When working in the mc-edge-runtime submodule, be sure to check its AGENTS.md as well.
