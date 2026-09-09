@@ -22,7 +22,18 @@ The Mod is in currently in early stages of design and development, and is not in
 
 ## Installation
 
-TBD
+Cobbleware is a server-only Fabric mod. Install Fabric API, Cobbleware, and the matching
+`polymer-bundled-0.17.4+26.2` JAR in the server's `mods/` directory. Players use a normal,
+unmodded Minecraft 26.2 client; they do not install Cobbleware or Polymer.
+
+Cobbleware requires Polymer's generated resource pack so vanilla clients can render Cobbleputers.
+After installing the mods, start the server once, set `"enabled": true` in
+`config/polymer/auto-host.json`, then restart. On a direct server AutoHost reuses the game port;
+for proxies or a separate HTTP port, configure `forced_address` or the HTTP settings documented by
+Polymer. Players who decline the resource pack cannot join.
+
+Use `/polymer generate-pack` to create `polymer/resourcepack.zip` for diagnostics or manual
+hosting.
 
 ## Configuration
 

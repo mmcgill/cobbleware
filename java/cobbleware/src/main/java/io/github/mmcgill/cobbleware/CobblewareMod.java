@@ -4,6 +4,9 @@ import io.github.mmcgill.cobbleware.api.MainWorkerClient;
 import io.github.mmcgill.cobbleware.command.CobblewareCommands;
 import io.github.mmcgill.cobbleware.config.CobblewareConfig;
 import io.github.mmcgill.cobbleware.config.CobblewareConfigLoader;
+import io.github.mmcgill.cobbleware.polymer.CobblewarePolymer;
+import io.github.mmcgill.cobbleware.registry.CobblewareBlocks;
+import io.github.mmcgill.cobbleware.registry.CobblewareItems;
 import net.fabricmc.api.ModInitializer;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -15,6 +18,10 @@ public final class CobblewareMod implements ModInitializer {
 
     @Override
     public void onInitialize() {
+        CobblewarePolymer.initialize();
+        CobblewareBlocks.initialize();
+        CobblewareItems.initialize();
+
         CobblewareConfig config = CobblewareConfigLoader.load(LOGGER);
         if (config.configurationError() == null && config.mainWorkerApiKey().isEmpty()) {
             LOGGER.error("Cobbleware mainWorkerApiKey is empty; authentication commands are disabled until it is configured");

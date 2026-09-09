@@ -33,6 +33,17 @@ Generation is also wired into Java compilation. Gradle regenerates bindings when
 On a fresh development server, Minecraft creates `run/eula.txt`. Accept Mojang's EULA by setting `eula=true` before
 starting the server again. The scaffold's `/cobbleware startstates` command currently responds with `hello world`.
 
+## Server-only deployment
+
+Cobbleware is installed on the server only. Deploy its remapped JAR together with Fabric API and the matching
+`polymer-bundled-0.17.4+26.2` JAR; clients need neither mod. Polymer supplies vanilla client representations and a
+required resource pack for Cobbleputers.
+
+Start the server once, set `"enabled": true` in `config/polymer/auto-host.json`, and restart to have Polymer AutoHost
+generate and offer the pack. Direct servers can reuse the game port. Configure `forced_address` or a separate HTTP
+listener in that file when deploying behind a proxy. `/polymer generate-pack` writes a diagnostic/manual-hosting pack
+to `polymer/resourcepack.zip`.
+
 ## Main Worker configuration
 
 On first startup, the Mod creates `config/cobbleware.json` in Fabric's config directory:

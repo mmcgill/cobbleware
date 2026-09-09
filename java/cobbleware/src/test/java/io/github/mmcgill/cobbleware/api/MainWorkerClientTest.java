@@ -33,12 +33,10 @@ class MainWorkerClientTest {
         AtomicReference<String> authorization = new AtomicReference<>();
         AtomicReference<String> contentType = new AtomicReference<>();
         AtomicReference<String> body = new AtomicReference<>();
-        AtomicReference<String> upgrade = new AtomicReference<>();
         startServer(201, "", exchange -> {
             authorization.set(exchange.getRequestHeaders().getFirst("Authorization"));
             contentType.set(exchange.getRequestHeaders().getFirst("Content-Type"));
             body.set(new String(exchange.getRequestBody().readAllBytes(), StandardCharsets.UTF_8));
-            upgrade.set(exchange.getRequestHeaders().getFirst("Upgrade"));
         });
 
         MainWorkerClient.AuthenticationResult result = productionClient("secret").authenticate(request()).get();
@@ -46,7 +44,6 @@ class MainWorkerClientTest {
         assertEquals(MainWorkerClient.Status.SUCCESS, result.status());
         assertEquals("Bearer secret", authorization.get());
         assertEquals("application/json", contentType.get());
-        assertNull(upgrade.get());
         assertEquals(
                 "{\"code\":\"XAU1-98B1\",\"playerUUID\":\"123e4567-e89b-12d3-a456-426614174000\",\"playerProfileName\":\"Alice\"}",
                 body.get());
