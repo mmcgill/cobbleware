@@ -11,7 +11,10 @@ The mod introduces:
 
 Programs are ESZip-bundled JS/TS programs uploaded by players externally via a browser-based UI.
 Programs are not first-class from a gameplay standpoint. They have no explicit
-in-game representation as blocks, items or entities.
+in-game representation as blocks, items or entities. Each player has one active program at a time.
+All the Cobbleputer executions started by that player run the player's active program.
+When the player uploads a new program, all executions continue executing with their current
+states using the new program.
 
 ## Cobbleputers
 
@@ -19,13 +22,13 @@ A Cobbleputer block executes Programs. Cobbleputer programs are event handlers.
 They are invoked by the 'puter as a result of Events that happen in the Minecraft world, and they can return
 Effects to be processed by the Mainframe as output.
 
-Each 'puter block has a unique, persistent identity. When the block is broken, the resulting item
-retains all 'puter state. Distinct 'puter items do not stack. Each 'puter has a name.
-Its name is initially auto-generated, but may be changed via Nametag in the usual way.
+When a 'puter block is placed, it is _uninitialized_: it has no state and is not executing a program.
+A player can run their active program on a placed 'puter block via the `/cobbleware run <initial-state>`
+command. An executing 'puter block stores its own runtime state, which persists across
+chunk reloads and server restarts.
 
-A player loads a program on a placed `puter block by right-clicking and selecting one of their
-programs in the in-game UI. Loading a new program causes it to begin executing immediately.
-A 'puter can also be _reset_ in its UI, without reloading the current program.
+When an executing 'puter block is broken, its associated execution is terminated and its
+execution state is destroyed. 'puter block items are from one another.
 
 The Mod does not itself provide any notion of player ownership
 of 'puter blocks. Once a 'puter is placed, any player can interact with it.
@@ -40,14 +43,14 @@ A Cobbleputer is single-threaded, and executes events sequentially in the order 
 
 A 'puter is either `UNINITIALIZED`, `RUNNING`, `STOPPED` or `CRASHED`. A newly placed 'puter
 is in the `UNINITIALIZED` state. A User can load a program as described above for a 'puter in any
-state. On successful load, the 'puter state set to `RUNNING`. The user may stop a running
-'puter via the use menu. If an unhandled exception bubbles up out of a Program's event handler function,
-the 'puter enters the `CRASHED` state. The user can see the error in the use menu, and restart the 'puter.
+state. On successful load, the 'puter state is set to `RUNNING`. The user may stop and restart a
+'puter by using it. If an unhandled exception bubbles up out of a Program's event handler function,
+the 'puter enters the `CRASHED` state.
 
-Each 'puter has a JSON-serializable state value that is provided as input to each event handler, and can
+Each 'puter has a state value that is provided as input to each event handler, and can
 be arbitrarily modified by that event handler. The state value has a maximum size in bytes
 given as server configuration. If an event handler returns a state value larger than this size,
-the function fails with a runtime value and the returned state value is discarded.
+the 'puter crashes and the returned state value is discarded.
 
 Each 'puter has an associated event queue whose length is determined by server configuration.
 If events are produced faster than the 'puter can process them, the queue will eventually fill.
@@ -70,16 +73,14 @@ Wireless Redstone blocks allow a Cobbleputer to control Redstone-enabled blocks 
 Wireless Redstone blocks come in 16 colors, one for each of the 16 dye variants.
 A Wireless Redstone block is initially unpaired when placed, and breaking a paired Wireless Redstone block
 unpairs it.
-A Wireless Redstone block may be paired to a specific 'puter by using the block on the 'puter,
-or by using a paired Debug Tool on the placed Wireless Redstone block.
-Unpaired Wireless Redstone stack with one another. Wireless Redstone paired to the same
-'puter stack with one another. Wireless Redstone paired to different 'puters do not
-stack with one another or unpaired Wireless Redstone blocks.
+A placed Wireless Redstone block may be paired to a specific 'puter by
+using a paired Debug Tool on the placed Wireless Redstone block.
 
 ## Debug Tool
 
-A Debug tool can be used by the player to troubleshoot a 'puter. A Debug tool is initially
-unpaired. An unpaired Debug tool can be paired with a 'puter by using it on that Mainframe.
+A Debug tool can be used by the player to pair Wireless Redstone blocks and troubleshoot 'puters.
+A Debug tool is initially unpaired.
+An unpaired Debug tool can be paired with a 'puter by using it on that Mainframe.
 
 When the player holds a paired Debug tool and its paired 'puter is being simulated by the
 Server (regardless of distance!), console output from that 'puter's function executions is
