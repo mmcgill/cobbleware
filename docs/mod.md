@@ -38,6 +38,21 @@ Prints an appropriate error message if no program can be started because:
 * the player has no active program, or
 * the named start state does not exist
 
+### Pausing and Resuming Execution
+
+```
+/cobbleware pause
+/cobbleware resume
+```
+
+`pause` stops the closest Running Cobbleputer within 3m, and `resume` restarts
+the closest Stopped Cobbleputer within 3m. Selection is identical to
+`/cobbleware exec`. Only the Player associated with that execution may use
+either command. Each command prints confirmation on success and an appropriate
+error message when there is no Cobbleputer within 3m, the nearest Cobbleputer is
+not in the required lifecycle state, or its execution belongs to another Player.
+Right-clicking a Cobbleputer does not change its lifecycle state.
+
 ## Program Execution Design
 
 A placed Cobbleputer block has an associated block entity that stores:
@@ -60,8 +75,8 @@ Execution state is durable as long as the execution does not crash and the Cobbl
 Events and Effects, on the other hand, are ephemeral and best-effort. There is no guarantee that every
 event will be processed, and there is no guarantee that every effect will be applied.
 
-The currently emitted lifecycle events are `Started` after `/cobbleware exec` and `Resumed` after a player
-uses a stopped Cobbleputer. The driver retains at most 10 pending events per active Cobbleputer and offers
+The currently emitted lifecycle events are `Started` after `/cobbleware exec` and `Resumed` after its owner
+uses `/cobbleware resume`. The driver retains at most 10 pending events per active Cobbleputer and offers
 at most 10 to the Runtime in each execution-sync request. Currently `EmitBeep` sends nearby players a
 `beep` system-chat message and `SendChat` sends its message to those same nearby players; neither effect
 has audio or durable delivery semantics yet.

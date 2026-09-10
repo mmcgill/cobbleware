@@ -33,9 +33,12 @@ execution state is destroyed. 'puter block items are from one another.
 The Mod does not itself provide any notion of player ownership
 of 'puter blocks. Once a 'puter is placed, any player can interact with it.
 The 'puter _state_, however, remains associated with the player that loaded the
-associated program. Loading a new program creates a new execution state that is
-associated with the player doing the loading, even if the previous execution
-state was bound to a different player. Resetting a 'puter _preserves_ execution ownership.
+associated program. Only that player can pause or resume the execution with
+`/cobbleware pause` or `/cobbleware resume`. Those commands select the closest
+'puter within 3m, as `/cobbleware exec` does. Loading a new program creates a
+new execution state that is associated with the player doing the loading, even
+if the previous execution state was bound to a different player. Resetting a
+'puter _preserves_ execution ownership.
 
 ### Execution Model
 
@@ -43,9 +46,11 @@ A Cobbleputer is single-threaded, and executes events sequentially in the order 
 
 A 'puter is either `UNINITIALIZED`, `RUNNING`, `STOPPED` or `CRASHED`. A newly placed 'puter
 is in the `UNINITIALIZED` state. A User can load a program as described above for a 'puter in any
-state. On successful load, the 'puter state is set to `RUNNING`. The user may stop and restart a
-'puter by using it. If an unhandled exception bubbles up out of a Program's event handler function,
-the 'puter enters the `CRASHED` state.
+state. On successful load, the 'puter state is set to `RUNNING`. Its associated
+player may pause a running 'puter with `/cobbleware pause` and resume a stopped
+'puter with `/cobbleware resume`; right-clicking the block does not change its
+lifecycle state. If an unhandled exception bubbles up out of a Program's event
+handler function, the 'puter enters the `CRASHED` state.
 
 Each 'puter has a state value that is provided as input to each event handler, and can
 be arbitrarily modified by that event handler. The state value has a maximum size in bytes

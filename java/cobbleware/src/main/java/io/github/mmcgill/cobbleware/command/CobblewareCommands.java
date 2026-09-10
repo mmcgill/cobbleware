@@ -45,6 +45,10 @@ public final class CobblewareCommands {
                                 .then(Commands.argument("start-state", StringArgumentType.word())
                                         .suggests((context, builder) -> suggestStartStates(context, builder, mainWorkerClient))
                                         .executes(context -> execute(context, mainWorkerClient, executionDriver))))
+                        .then(Commands.literal("pause")
+                                .executes(context -> pause(context, executionDriver)))
+                        .then(Commands.literal("resume")
+                                .executes(context -> resume(context, executionDriver)))
         ));
     }
 
@@ -214,6 +218,58 @@ public final class CobblewareCommands {
             case SUCCESS -> throw new IllegalArgumentException("successful program result is not a failure");
         };
         player.sendSystemMessage(message);
+    }
+
+    private static int pause(CommandContext<CommandSourceStack> context, ExecutionDriver executionDriver) {
+        return changeExecutionState(context, executionDriver, CobbleputerState.RUNNING);
+    }
+
+    private static int resume(CommandContext<CommandSourceStack> context, ExecutionDriver executionDriver) {
+        return changeExecutionState(context, executionDriver, CobbleputerState.STOPPED);
+    }
+
+    private static int changeExecutionState(
+            CommandContext<CommandSourceStack> context,
+            ExecutionDriver executionDriver,
+            CobbleputerState requiredState) {
+        CommandSourceStack source = context.getSource();
+        ServerPlayer player;
+        try {
+            player = source.getPlayerOrException();
+        } catch (CommandSyntaxException exception) {
+            source.sendFailure(Component.literal("Only a player can change a Cobbleware execution's state."));
+            return 0;
+        }
+
+        Optional<CobbleputerTarget> target = findNearestCobbleputer(player);
+        if (target.isEmpty()) {
+            player.sendSystemMessage(Component.literal("No Cobbleputer is within 3m."));
+            return 0;
+        }
+
+        CobbleputerTarget resolvedTarget = target.orElseThrow();
+        if (resolvedTarget.state().getValue(CobbleputerBlock.STATE) != requiredState) {
+            String requiredStateName = requiredState == CobbleputerState.RUNNING ? "running" : "stopped";
+            player.sendSystemMessage(Component.literal("The nearest Cobbleputer is not " + requiredStateName + "."));
+            return 0;
+        }
+        if (!player.getUUID().equals(resolvedTarget.blockEntity().ownerPlayerId().orElse(null))) {
+            player.sendSystemMessage(Component.literal("You can only change the state of your own Cobbleputer execution."));
+            return 0;
+        }
+        if (!(resolvedTarget.level() instanceof ServerLevel serverLevel)) {
+            player.sendSystemMessage(Component.literal("Cobbleware executions can only change state on the server."));
+            return 0;
+        }
+
+        if (requiredState == CobbleputerState.RUNNING) {
+            executionDriver.stop(serverLevel, resolvedTarget.pos(), resolvedTarget.state(), resolvedTarget.blockEntity());
+            player.sendSystemMessage(Component.literal("Paused your Cobbleputer execution."));
+        } else {
+            executionDriver.resume(serverLevel, resolvedTarget.pos(), resolvedTarget.state(), resolvedTarget.blockEntity());
+            player.sendSystemMessage(Component.literal("Resumed your Cobbleputer execution."));
+        }
+        return 1;
     }
 
     private static Optional<CobbleputerTarget> findNearestCobbleputer(ServerPlayer player) {
