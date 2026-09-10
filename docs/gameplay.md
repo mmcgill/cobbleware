@@ -5,7 +5,7 @@ The mod introduces:
 * Cobbleware _programs_, immutable ESZip-bundled JS/TS programs uploaded and owned by Players.
 * A Cobbleputer ('puter) block for executing programs.
 * A Wireless Redstone block that acts as both a sensor and a switchable Redstone signal source.
-* A Debug tool that can be used to view 'puter outputs.
+* A Cobblemeter item that can be used to pair Wireless Redstone blocks and troubleshoot Cobbleputers.
 
 ## Programs
 
@@ -74,14 +74,14 @@ Wireless Redstone blocks come in 16 colors, one for each of the 16 dye variants.
 A Wireless Redstone block is initially unpaired when placed, and breaking a paired Wireless Redstone block
 unpairs it.
 A placed Wireless Redstone block may be paired to a specific 'puter by
-using a paired Debug Tool on the placed Wireless Redstone block.
+using a paired Cobblemeter on the placed Wireless Redstone block.
 
 ## Cobblemeter
 
 A Cobblemeter is an item that can be used by the player to pair Wireless Redstone blocks
 and troubleshoot Cobbleputers.
 A Cobblemeter is initially unpaired.
-An unpaired Cobblemeter can be paired with a Cobbleputer by using it on the Cobbleputer.
+A Cobblemeter (whether already paired or not) can be paired with a Cobbleputer by using it on the Cobbleputer.
 
-While holding a paired Debug Tool the player can "see"
+While holding a paired Cobblemeter the player can "see"
 the wireless transmission paths from the paired 'puter to its paired Wireless Redstone blocks.

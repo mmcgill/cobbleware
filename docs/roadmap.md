@@ -10,8 +10,8 @@ Here's a rough sketch of the current plan to getting something working end-to-en
 * [x] Initial program execution in the Mod API
 * [x] Basic Mod scaffold
 * [x] First interactions
-* [ ] Cobblemeter
-  * Pairing
+* [x] Cobblemeter
+  * [x] Pairing
 * [ ] Wireless Redstone
   * Pairing
   * Color

@@ -1,4 +1,7 @@
 {
   "block.cobbleware.cobbleputer": "Cobbleputer",
-  "item.cobbleware.cobbleputer": "Cobbleputer"
+  "item.cobbleware.cobbleputer": "Cobbleputer",
+  "item.cobbleware.cobblemeter": "Cobblemeter",
+  "item.cobbleware.cobblemeter.paired_name": "Cobblemeter (paired)",
+  "item.cobbleware.cobblemeter.paired": "Cobblemeter paired to Cobbleputer at %s, %s, %s"
 }
