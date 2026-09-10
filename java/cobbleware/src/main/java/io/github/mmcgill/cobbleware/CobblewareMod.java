@@ -5,6 +5,8 @@ import io.github.mmcgill.cobbleware.command.CobblewareCommands;
 import io.github.mmcgill.cobbleware.config.CobblewareConfig;
 import io.github.mmcgill.cobbleware.config.CobblewareConfigLoader;
 import io.github.mmcgill.cobbleware.execution.ExecutionDriver;
+import io.github.mmcgill.cobbleware.block.WirelessObserverBlockEntity;
+import io.github.mmcgill.cobbleware.block.WirelessObserverNetwork;
 import io.github.mmcgill.cobbleware.polymer.CobblewarePolymer;
 import io.github.mmcgill.cobbleware.registry.CobblewareBlockEntities;
 import io.github.mmcgill.cobbleware.registry.CobblewareBlocks;
@@ -19,6 +21,7 @@ public final class CobblewareMod implements ModInitializer {
     public static final String MOD_ID = "cobbleware";
     public static final Logger LOGGER = LoggerFactory.getLogger(MOD_ID);
     private static ExecutionDriver executionDriver;
+    private static WirelessObserverNetwork wirelessObserverNetwork;
 
     /** Returns the server-owned execution driver after Mod initialization. */
     public static ExecutionDriver executionDriver() {
@@ -31,6 +34,11 @@ public final class CobblewareMod implements ModInitializer {
     /** Returns the driver when common initialization has completed, otherwise {@code null}. */
     public static ExecutionDriver executionDriverOrNull() {
         return executionDriver;
+    }
+
+    /** Returns the loaded-observer index after Mod initialization, otherwise {@code null}. */
+    public static WirelessObserverNetwork wirelessObserverNetworkOrNull() {
+        return wirelessObserverNetwork;
     }
 
     @Override
@@ -46,14 +54,21 @@ public final class CobblewareMod implements ModInitializer {
         }
         MainWorkerClient mainWorkerClient = new MainWorkerClient(config, LOGGER);
         executionDriver = new ExecutionDriver(mainWorkerClient, LOGGER);
+        wirelessObserverNetwork = new WirelessObserverNetwork();
         ServerChunkEvents.CHUNK_LOAD.register((level, chunk, generated) -> chunk.getBlockEntities().values().forEach(blockEntity -> {
             if (blockEntity instanceof io.github.mmcgill.cobbleware.block.CobbleputerBlockEntity cobbleputer) {
                 executionDriver.activate(cobbleputer);
+            }
+            if (blockEntity instanceof WirelessObserverBlockEntity observer) {
+                wirelessObserverNetwork.activate(observer);
             }
         }));
         ServerChunkEvents.CHUNK_UNLOAD.register((level, chunk) -> chunk.getBlockEntities().values().forEach(blockEntity -> {
             if (blockEntity instanceof io.github.mmcgill.cobbleware.block.CobbleputerBlockEntity cobbleputer) {
                 executionDriver.deactivate(cobbleputer);
+            }
+            if (blockEntity instanceof WirelessObserverBlockEntity observer) {
+                wirelessObserverNetwork.deactivate(observer);
             }
         }));
         CobblewareCommands.register(mainWorkerClient, executionDriver);

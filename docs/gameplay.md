@@ -4,8 +4,8 @@ The mod introduces:
 
 * Cobbleware _programs_, immutable ESZip-bundled JS/TS programs uploaded and owned by Players.
 * A Cobbleputer ('puter) block for executing programs.
-* A Wireless Redstone block that acts as both a sensor and a switchable Redstone signal source.
-* A Cobblemeter item that can be used to pair Wireless Redstone blocks and troubleshoot Cobbleputers.
+* A Wireless Observer block that acts as both a sensor and a switchable Redstone signal source.
+* A Cobblemeter item that can be used to pair Wireless Observers and troubleshoot Cobbleputers.
 
 ## Programs
 
@@ -72,21 +72,25 @@ inactive. Similarly, an effect is considered processed once the Mod attempts to 
 an attempt can be missed or repeated around failures. When a 'puter is reset or a new Program
 is loaded, its in-memory event queue is cleared.
 
-## Wireless Redstone
+## Wireless Observer
 
-Wireless Redstone blocks allow a Cobbleputer to control Redstone-enabled blocks and Redstone circuits.
-Wireless Redstone blocks come in 16 colors, one for each of the 16 dye variants.
-A Wireless Redstone block is initially unpaired when placed, and breaking a paired Wireless Redstone block
-unpairs it.
-A placed Wireless Redstone block may be paired to a specific 'puter by
-using a paired Cobblemeter on the placed Wireless Redstone block.
+Wireless Observer blocks allow a Cobbleputer to detect block state changes and control
+Redstone-enabled blocks and Redstone circuits.
+Wireless Observers come in 16 colors, one for each of the 16 dye variants.
+A Wireless Observer is initially unpaired when placed, and breaking a paired Wireless Observer unpairs it.
+A placed Wireless Observer may be paired to a specific 'puter by
+using a paired Cobblemeter on the placed Wireless Observer.
+
+A placed Wireless Observer has an orientation: it points along an axis. Orientation is
+determined during placement as with pistons and observers: The Wireless Observer faces
+the block it was placed against.
 
 ## Cobblemeter
 
-A Cobblemeter is an item that can be used by the player to pair Wireless Redstone blocks
+A Cobblemeter is an item that can be used by the player to pair Wireless Observers
 and troubleshoot Cobbleputers.
 A Cobblemeter is initially unpaired.
 A Cobblemeter (whether already paired or not) can be paired with a Cobbleputer by using it on the Cobbleputer.
 
 While holding a paired Cobblemeter the player can "see"
-the wireless transmission paths from the paired 'puter to its paired Wireless Redstone blocks.
+the wireless transmission paths from the paired 'puter to its paired Wireless Observers.

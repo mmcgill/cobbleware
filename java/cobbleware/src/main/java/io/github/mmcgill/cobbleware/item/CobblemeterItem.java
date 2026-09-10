@@ -2,6 +2,8 @@ package io.github.mmcgill.cobbleware.item;
 
 import eu.pb4.polymer.core.api.item.SimplePolymerItem;
 import io.github.mmcgill.cobbleware.registry.CobblewareBlocks;
+import io.github.mmcgill.cobbleware.block.WirelessObserverBlockEntity;
+import java.util.Optional;
 import net.minecraft.core.GlobalPos;
 import net.minecraft.core.component.DataComponents;
 import net.minecraft.network.chat.Component;
@@ -19,7 +21,30 @@ public final class CobblemeterItem extends SimplePolymerItem {
     @Override
     public InteractionResult useOn(UseOnContext context) {
         if (!context.getLevel().getBlockState(context.getClickedPos()).is(CobblewareBlocks.COBBLEPUTER)) {
-            return InteractionResult.PASS;
+            if (!CobblewareBlocks.isWirelessObserver(context.getLevel().getBlockState(context.getClickedPos()))) {
+                return InteractionResult.PASS;
+            }
+            if (context.getLevel() instanceof ServerLevel level) {
+                Optional<GlobalPos> target = CobblemeterPairing.getPairedCobbleputer(context.getItemInHand());
+                if (target.isEmpty()) {
+                    if (context.getPlayer() != null) {
+                        context.getPlayer().sendSystemMessage(Component.translatable(
+                                "item.cobbleware.cobblemeter.observer_unpaired"));
+                    }
+                    return InteractionResult.SUCCESS;
+                }
+                if (level.getBlockEntity(context.getClickedPos()) instanceof WirelessObserverBlockEntity observer) {
+                    observer.setPairedCobbleputer(target.orElseThrow());
+                    if (context.getPlayer() != null) {
+                        context.getPlayer().sendSystemMessage(Component.translatable(
+                                "item.cobbleware.cobblemeter.observer_paired",
+                                context.getClickedPos().getX(),
+                                context.getClickedPos().getY(),
+                                context.getClickedPos().getZ()));
+                    }
+                }
+            }
+            return InteractionResult.SUCCESS;
         }
 
         if (context.getLevel() instanceof ServerLevel level) {

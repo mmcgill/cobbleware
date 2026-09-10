@@ -1,0 +1,15 @@
+{
+  "type": "minecraft:block",
+  "pools": [
+    {
+      "conditions": [
+        {"condition": "minecraft:survives_explosion"}
+      ],
+      "entries": [
+        {"type": "minecraft:item", "name": "cobbleware:purple_wireless_observer"}
+      ],
+      "rolls": 1.0
+    }
+  ],
+  "random_sequence": "cobbleware:blocks/purple_wireless_observer"
+}

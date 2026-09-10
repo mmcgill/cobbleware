@@ -12,9 +12,10 @@ Here's a rough sketch of the current plan to getting something working end-to-en
 * [x] First interactions
 * [x] Cobblemeter
   * [x] Pairing
-* [ ] Wireless Redstone
-  * Pairing
-  * Color
+* [ ] Wireless Observer
+  * [x] Pairing
+  * [x] Color
+  * [x] Cobblemeter path visualization
   * Block state change
   * Emit Redstone pulse
   * Set Redstone level
