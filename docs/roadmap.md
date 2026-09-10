@@ -8,12 +8,13 @@ Here's a rough sketch of the current plan to getting something working end-to-en
 * [x] Sketch out a minimal set of starting events and effects
 * [x] Get a "hello world" program written
 * [x] Initial program execution in the Mod API
-* Basic Mod scaffold
-  * Minecraft-side Cobbleputer basics, no UI
-* First interactions
-  * slash command to list initial states
-  * slash command to start an execution
-* Wireless Redstone
-  * Console command to pair all Wireless Redstone itemstacks in inventory
-    with a specific 'puter
-  * Emitting events
+* [x] Basic Mod scaffold
+* [x] First interactions
+* [ ] Cobblemeter
+  * Pairing
+* [ ] Wireless Redstone
+  * Pairing
+  * Color
+  * Block state change
+  * Emit Redstone pulse
+  * Set Redstone level

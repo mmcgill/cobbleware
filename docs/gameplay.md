@@ -76,13 +76,12 @@ unpairs it.
 A placed Wireless Redstone block may be paired to a specific 'puter by
 using a paired Debug Tool on the placed Wireless Redstone block.
 
-## Debug Tool
+## Cobblemeter
 
-A Debug tool can be used by the player to pair Wireless Redstone blocks and troubleshoot 'puters.
-A Debug tool is initially unpaired.
-An unpaired Debug tool can be paired with a 'puter by using it on that Mainframe.
+A Cobblemeter is an item that can be used by the player to pair Wireless Redstone blocks
+and troubleshoot Cobbleputers.
+A Cobblemeter is initially unpaired.
+An unpaired Cobblemeter can be paired with a Cobbleputer by using it on the Cobbleputer.
 
-When the player holds a paired Debug tool and its paired 'puter is being simulated by the
-Server (regardless of distance!), console output from that 'puter's function executions is
-printed to the player's chat. Similarly, while holding a paired Debug Tool the player can "see"
-the wireless transmission lines from the paired 'puter to its paired Wireless Redstone blocks.
+While holding a paired Debug Tool the player can "see"
+the wireless transmission paths from the paired 'puter to its paired Wireless Redstone blocks.

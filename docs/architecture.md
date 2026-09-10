@@ -9,6 +9,9 @@ The mod comprises:
 The Mod bundles native binaries for the Runtime, and is responsible for unpacking the correct
 platform-specific version and maintaining the Runtime process.
 
+The Mod is server-only, and uses Polymer to introduce new block types and items without
+requiring a client-side mod install.
+
 The Runtime is the [Edge Runtime](../mc-edge-runtime/) with minor modifications/extensions
 (like native Windows support). The Runtime runs a Main Worker that serves APIs targetted
 at the Mod and at Players, and is responsible for managing the User Workers that run player-supplied
