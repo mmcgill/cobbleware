@@ -1,4 +1,5 @@
 import { create, Effects, Program, type Program as EventProgram, start } from '@cobbleware/core';
+import { DyeColor, DyeColorSchema } from '../../cobbleware/generated/common_pb.ts';
 
 const HELLO = 1;
 const ECHO = 2;
@@ -33,6 +34,18 @@ export const echoHandler: EventProgram = function handle(state, event) {
         case: 'sendChat',
         value: create(Effects.SendChatSchema, {
           msg: `Echo (${state[1]}): ${event.event.value.message}`,
+        }),
+      },
+    })];
+  } else if (event.event.case === 'blockStateChange') {
+    const v = event.event.value;
+    const props = JSON.stringify(v.newState?.properties);
+    const msg = `Observer colored ${v.observerColor} saw block change: ${v.newState?.blockType?.path} ${props}`;
+    effects = [create(Effects.EffectSchema, {
+      effect: {
+        case: 'sendChat',
+        value: create(Effects.SendChatSchema, {
+          msg,
         }),
       },
     })];

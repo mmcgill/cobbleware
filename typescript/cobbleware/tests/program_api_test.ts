@@ -60,6 +60,43 @@ Deno.test('Program API decodes a step and encodes its result', async () => {
   assertEquals(decoded.effects[0]?.effect.case, 'emitBeep', 'handler effects should round-trip');
 });
 
+Deno.test('Program API delivers a BlockStateChange to the event handler', async () => {
+  let received: Events.BlockStateChange | undefined;
+  const blockStateHandler = createProgramApiHandler({
+    startStates: {},
+    program: (state, event) => {
+      if (event.event.case !== 'blockStateChange') throw new Error('unexpected event');
+      received = event.event.value;
+      return create(Program.StepResponseSchema, { state, effects: [] });
+    },
+  });
+  const request = create(Program.StepRequestSchema, {
+    state: new Uint8Array([3]),
+    event: create(Events.EventSchema, {
+      event: {
+        case: 'blockStateChange',
+        value: create(Events.BlockStateChangeSchema, {
+          observerColor: Common.DyeColor.RED,
+          observerDir: Common.Direction.EAST,
+          observerPos: globalPos(1, 64, 1),
+          blockPos: globalPos(2, 64, 1),
+          oldState: blockInfo('redstone_lamp', { lit: 'false' }),
+          newState: blockInfo('redstone_lamp', { lit: 'true' }),
+        }),
+      },
+    }),
+  });
+
+  const response = await blockStateHandler(
+    binaryRequest('/nextState', toBinary(Program.StepRequestSchema, request)),
+  );
+
+  assertEquals(response.status, 200, 'block-state step should succeed');
+  if (received === undefined) throw new Error('handler did not receive the BlockStateChange');
+  assertEquals(received.observerColor, Common.DyeColor.RED, 'observer color should reach handler');
+  assertEquals(received.newState?.properties.lit, 'true', 'new state should reach handler');
+});
+
 Deno.test('Program API returns a binary ErrorResponse for invalid and failing steps', async () => {
   const malformed = await handler(binaryRequest('/nextState', new Uint8Array([1, 2, 3])));
   await assertErrorResponse(malformed);
@@ -124,6 +161,20 @@ function binaryRequest(path: string, body: Uint8Array): Request {
     method: 'POST',
     headers: { 'content-type': binaryContentType },
     body: new Blob([body.slice().buffer as ArrayBuffer]),
+  });
+}
+
+function globalPos(x: number, y: number, z: number): Common.GlobalPos {
+  return create(Common.GlobalPosSchema, {
+    dimension: create(Common.IdentifierSchema, { ns: 'minecraft', path: 'overworld' }),
+    position: create(Common.Vec3iSchema, { x, y, z }),
+  });
+}
+
+function blockInfo(path: string, properties: Record<string, string>): Events.BlockInfo {
+  return create(Events.BlockInfoSchema, {
+    blockType: create(Common.IdentifierSchema, { ns: 'minecraft', path }),
+    properties,
   });
 }
 

@@ -34,7 +34,31 @@ message Identifier {
   string path = 2;
 }
 
+message GlobalPos {
+  Identifier dimension = 1;
+  Vec3i position = 2;
+}
+
 message Uuid {
   int64 high = 1;
   int64 low = 2;
+}
+
+enum DyeColor {
+  WHITE = 0;
+  ORANGE = 1;
+  MAGENTA = 2;
+  LIGHT_BLUE = 3;
+  YELLOW = 4;
+  LIME = 5;
+  PINK = 6;
+  GRAY = 7;
+  LIGHT_GRAY = 8;
+  CYAN = 9;
+  PURPLE = 10;
+  BLUE = 11;
+  BROWN = 12;
+  GREEN = 13;
+  RED = 14;
+  BLACK = 15;
 }

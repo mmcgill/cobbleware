@@ -4,6 +4,7 @@
 
 import type { GenFile, GenMessage } from "@bufbuild/protobuf/codegenv2";
 import { fileDesc, messageDesc } from "@bufbuild/protobuf/codegenv2";
+import type { Direction, DyeColor, GlobalPos, Identifier } from "./common_pb.ts";
 import { file_common } from "./common_pb.ts";
 import type { Message } from "@bufbuild/protobuf";
 
@@ -11,7 +12,7 @@ import type { Message } from "@bufbuild/protobuf";
  * Describes the file events.proto.
  */
 export const file_events: GenFile = /*@__PURE__*/
-  fileDesc("CgxldmVudHMucHJvdG8SEWNvYmJsZXdhcmUuZXZlbnRzIhcKB1N0YXJ0ZWQSDAoEdGljaxgBIAEoBCIxCgdSZXN1bWVkEhEKCXN0b3BfdGljaxgBIAEoBBITCgtyZXN1bWVfdGljaxgCIAEoBCIeCgtDaGF0TWVzc2FnZRIPCgdtZXNzYWdlGAEgASgJIqYBCgVFdmVudBItCgdzdGFydGVkGAEgASgLMhouY29iYmxld2FyZS5ldmVudHMuU3RhcnRlZEgAEi0KB3Jlc3VtZWQYAiABKAsyGi5jb2JibGV3YXJlLmV2ZW50cy5SZXN1bWVkSAASNgoMY2hhdF9tZXNzYWdlGAMgASgLMh4uY29iYmxld2FyZS5ldmVudHMuQ2hhdE1lc3NhZ2VIAEIHCgVldmVudGIIZWRpdGlvbnNw6Qc", [file_common]);
+  fileDesc("CgxldmVudHMucHJvdG8SEWNvYmJsZXdhcmUuZXZlbnRzIhcKB1N0YXJ0ZWQSDAoEdGljaxgBIAEoBCIxCgdSZXN1bWVkEhEKCXN0b3BfdGljaxgBIAEoBBITCgtyZXN1bWVfdGljaxgCIAEoBCIeCgtDaGF0TWVzc2FnZRIPCgdtZXNzYWdlGAEgASgJIrMBCglCbG9ja0luZm8SMQoKYmxvY2tfdHlwZRgBIAEoCzIdLmNvYmJsZXdhcmUuY29tbW9uLklkZW50aWZpZXISQAoKcHJvcGVydGllcxgCIAMoCzIsLmNvYmJsZXdhcmUuZXZlbnRzLkJsb2NrSW5mby5Qcm9wZXJ0aWVzRW50cnkaMQoPUHJvcGVydGllc0VudHJ5EgsKA2tleRgBIAEoCRINCgV2YWx1ZRgCIAEoCToCOAEiwgIKEEJsb2NrU3RhdGVDaGFuZ2USMwoOb2JzZXJ2ZXJfY29sb3IYASABKA4yGy5jb2JibGV3YXJlLmNvbW1vbi5EeWVDb2xvchIyCgxvYnNlcnZlcl9kaXIYAiABKA4yHC5jb2JibGV3YXJlLmNvbW1vbi5EaXJlY3Rpb24SMgoMb2JzZXJ2ZXJfcG9zGAMgASgLMhwuY29iYmxld2FyZS5jb21tb24uR2xvYmFsUG9zEi8KCWJsb2NrX3BvcxgEIAEoCzIcLmNvYmJsZXdhcmUuY29tbW9uLkdsb2JhbFBvcxIvCglvbGRfc3RhdGUYBSABKAsyHC5jb2JibGV3YXJlLmV2ZW50cy5CbG9ja0luZm8SLwoJbmV3X3N0YXRlGAYgASgLMhwuY29iYmxld2FyZS5ldmVudHMuQmxvY2tJbmZvIukBCgVFdmVudBItCgdzdGFydGVkGAEgASgLMhouY29iYmxld2FyZS5ldmVudHMuU3RhcnRlZEgAEi0KB3Jlc3VtZWQYAiABKAsyGi5jb2JibGV3YXJlLmV2ZW50cy5SZXN1bWVkSAASNgoMY2hhdF9tZXNzYWdlGAMgASgLMh4uY29iYmxld2FyZS5ldmVudHMuQ2hhdE1lc3NhZ2VIABJBChJibG9ja19zdGF0ZV9jaGFuZ2UYBCABKAsyIy5jb2JibGV3YXJlLmV2ZW50cy5CbG9ja1N0YXRlQ2hhbmdlSABCBwoFZXZlbnRiCGVkaXRpb25zcOkH", [file_common]);
 
 /**
  * The Program has started executing.
@@ -72,6 +73,74 @@ export const ChatMessageSchema: GenMessage<ChatMessage> = /*@__PURE__*/
   messageDesc(file_events, 2);
 
 /**
+ * @generated from message cobbleware.events.BlockInfo
+ */
+export type BlockInfo = Message<"cobbleware.events.BlockInfo"> & {
+  /**
+   * The block registry identifier and all serialized block-state properties.
+   *
+   * @generated from field: cobbleware.common.Identifier block_type = 1;
+   */
+  blockType?: Identifier | undefined;
+
+  /**
+   * @generated from field: map<string, string> properties = 2;
+   */
+  properties: { [key: string]: string };
+};
+
+/**
+ * Describes the message cobbleware.events.BlockInfo.
+ * Use `create(BlockInfoSchema)` to create a new message.
+ */
+export const BlockInfoSchema: GenMessage<BlockInfo> = /*@__PURE__*/
+  messageDesc(file_events, 3);
+
+/**
+ * Emitted by a Wireless Observer when the block it's facing undergoes a block state change.
+ *
+ * @generated from message cobbleware.events.BlockStateChange
+ */
+export type BlockStateChange = Message<"cobbleware.events.BlockStateChange"> & {
+  /**
+   * @generated from field: cobbleware.common.DyeColor observer_color = 1;
+   */
+  observerColor: DyeColor;
+
+  /**
+   * @generated from field: cobbleware.common.Direction observer_dir = 2;
+   */
+  observerDir: Direction;
+
+  /**
+   * @generated from field: cobbleware.common.GlobalPos observer_pos = 3;
+   */
+  observerPos?: GlobalPos | undefined;
+
+  /**
+   * @generated from field: cobbleware.common.GlobalPos block_pos = 4;
+   */
+  blockPos?: GlobalPos | undefined;
+
+  /**
+   * @generated from field: cobbleware.events.BlockInfo old_state = 5;
+   */
+  oldState?: BlockInfo | undefined;
+
+  /**
+   * @generated from field: cobbleware.events.BlockInfo new_state = 6;
+   */
+  newState?: BlockInfo | undefined;
+};
+
+/**
+ * Describes the message cobbleware.events.BlockStateChange.
+ * Use `create(BlockStateChangeSchema)` to create a new message.
+ */
+export const BlockStateChangeSchema: GenMessage<BlockStateChange> = /*@__PURE__*/
+  messageDesc(file_events, 4);
+
+/**
  * A single event supplied to a program step.
  *
  * @generated from message cobbleware.events.Event
@@ -98,6 +167,12 @@ export type Event = Message<"cobbleware.events.Event"> & {
      */
     value: ChatMessage;
     case: "chatMessage";
+  } | {
+    /**
+     * @generated from field: cobbleware.events.BlockStateChange block_state_change = 4;
+     */
+    value: BlockStateChange;
+    case: "blockStateChange";
   } | { case: undefined; value?: undefined };
 };
 
@@ -106,5 +181,5 @@ export type Event = Message<"cobbleware.events.Event"> & {
  * Use `create(EventSchema)` to create a new message.
  */
 export const EventSchema: GenMessage<Event> = /*@__PURE__*/
-  messageDesc(file_events, 3);
+  messageDesc(file_events, 5);
 

@@ -1,6 +1,8 @@
 package io.github.mmcgill.cobbleware.execution;
 
 import cobbleware.common.Uuid;
+import cobbleware.events.BlockInfo;
+import cobbleware.events.BlockStateChange;
 import cobbleware.effects.Effect;
 import cobbleware.events.ChatMessage;
 import cobbleware.events.Event;
@@ -15,24 +17,34 @@ import io.github.mmcgill.cobbleware.api.MainWorkerClient;
 import io.github.mmcgill.cobbleware.block.CobbleputerBlock;
 import io.github.mmcgill.cobbleware.block.CobbleputerBlockEntity;
 import io.github.mmcgill.cobbleware.block.CobbleputerState;
+import io.github.mmcgill.cobbleware.block.WirelessObserverBlock;
+import io.github.mmcgill.cobbleware.block.WirelessObserverBlockEntity;
 import java.util.ArrayDeque;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.IdentityHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 import net.fabricmc.fabric.api.event.lifecycle.v1.ServerTickEvents;
 import net.fabricmc.fabric.api.message.v1.ServerMessageEvents;
 import net.minecraft.core.BlockPos;
+import net.minecraft.core.Direction;
+import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.network.chat.Component;
+import net.minecraft.resources.Identifier;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.state.BlockState;
+import net.minecraft.world.level.block.state.properties.Property;
+import net.minecraft.world.level.block.DirectionalBlock;
+import net.minecraft.world.item.DyeColor;
 import net.minecraft.world.phys.Vec3;
 import org.slf4j.Logger;
 
@@ -46,6 +58,10 @@ public final class ExecutionDriver {
     private final MainWorkerClient mainWorkerClient;
     private final Logger logger;
     private final Map<CobbleputerBlockEntity, ActiveExecution> activeExecutions = new IdentityHashMap<>();
+    private final Set<WirelessObserverBlockEntity> pendingObserverInitializations =
+            Collections.newSetFromMap(new IdentityHashMap<>());
+    private final Set<WirelessObserverBlockEntity> pendingObserverChanges =
+            Collections.newSetFromMap(new IdentityHashMap<>());
 
     private CompletableFuture<MainWorkerClient.ExecutionSyncResult> inFlight;
     private Flight flight;
@@ -70,6 +86,26 @@ public final class ExecutionDriver {
     /** Removes a Cobbleputer and intentionally drops its ephemeral pending events. */
     public void deactivate(CobbleputerBlockEntity blockEntity) {
         activeExecutions.remove(blockEntity);
+    }
+
+    /** Records a changed observer for coalesced processing on the next available server tick. */
+    public void registerObserverChange(WirelessObserverBlockEntity observer) {
+        if (observer != null) {
+            pendingObserverChanges.add(observer);
+        }
+    }
+
+    /** Schedules baseline initialization after chunk attachment has completed. */
+    public void registerObserverInitialization(WirelessObserverBlockEntity observer) {
+        if (observer != null) {
+            pendingObserverInitializations.add(observer);
+        }
+    }
+
+    /** Removes an unloaded or broken observer from the ephemeral pending-change set. */
+    public void deactivate(WirelessObserverBlockEntity observer) {
+        pendingObserverInitializations.remove(observer);
+        pendingObserverChanges.remove(observer);
     }
 
     /** Starts a fresh execution and queues its first lifecycle event. */
@@ -184,6 +220,8 @@ public final class ExecutionDriver {
             flight = null;
         }
 
+        drainObserverInitializations();
+        drainObserverChanges(server);
         Flight nextFlight = buildFlight();
         if (!nextFlight.hadExecutions() && !runtimeMayHaveExecutions) {
             return;
@@ -193,6 +231,71 @@ public final class ExecutionDriver {
         }
         flight = nextFlight;
         inFlight = mainWorkerClient.syncExecutions(nextFlight.request);
+    }
+
+    private void drainObserverChanges(MinecraftServer server) {
+        if (pendingObserverChanges.isEmpty()) {
+            return;
+        }
+        List<WirelessObserverBlockEntity> observers = List.copyOf(pendingObserverChanges);
+        pendingObserverChanges.clear();
+        for (WirelessObserverBlockEntity observer : observers) {
+            if (observer.isRemoved() || !(observer.getLevel() instanceof ServerLevel observerLevel)) {
+                continue;
+            }
+            if (!observerLevel.isLoaded(observer.observedBlockPos())) {
+                pendingObserverChanges.add(observer);
+                continue;
+            }
+            observer.takeObservedStateChange().ifPresent(change ->
+                    deliverBlockStateChange(server, observer, observerLevel, change));
+        }
+    }
+
+    private void drainObserverInitializations() {
+        if (pendingObserverInitializations.isEmpty()) {
+            return;
+        }
+        List<WirelessObserverBlockEntity> observers = List.copyOf(pendingObserverInitializations);
+        pendingObserverInitializations.clear();
+        for (WirelessObserverBlockEntity observer : observers) {
+            if (observer.isRemoved() || !(observer.getLevel() instanceof ServerLevel)) {
+                continue;
+            }
+            if (!observer.initializeObservedState()) {
+                pendingObserverInitializations.add(observer);
+            }
+        }
+    }
+
+    private void deliverBlockStateChange(
+            MinecraftServer server,
+            WirelessObserverBlockEntity observer,
+            ServerLevel observerLevel,
+            WirelessObserverBlockEntity.ObservedBlockStateChange change) {
+        Optional<net.minecraft.core.GlobalPos> pairedTarget = observer.pairedCobbleputer();
+        if (pairedTarget.isEmpty()) {
+            return;
+        }
+        net.minecraft.core.GlobalPos target = pairedTarget.orElseThrow();
+        ServerLevel targetLevel = server.getLevel(target.dimension());
+        if (targetLevel == null || !targetLevel.isLoaded(target.pos())
+                || !(targetLevel.getBlockEntity(target.pos()) instanceof CobbleputerBlockEntity cobbleputer)) {
+            return;
+        }
+        BlockState observerState = observer.getBlockState();
+        if (!(observerState.getBlock() instanceof WirelessObserverBlock wirelessObserver)) {
+            return;
+        }
+        BlockStateChange event = BlockStateChange.newBuilder()
+                .setObserverColor(protoDyeColor(wirelessObserver.color()))
+                .setObserverDir(protoDirection(observerState.getValue(DirectionalBlock.FACING)))
+                .setObserverPos(protoGlobalPos(observerLevel, observer.getBlockPos()))
+                .setBlockPos(protoGlobalPos(observerLevel, change.pos()))
+                .setOldState(protoBlockInfo(change.oldState()))
+                .setNewState(protoBlockInfo(change.newState()))
+                .build();
+        enqueueEvent(cobbleputer, Event.newBuilder().setBlockStateChange(event).build());
     }
 
     private Flight buildFlight() {
@@ -373,6 +476,69 @@ public final class ExecutionDriver {
                 .setHigh(uuid.getMostSignificantBits())
                 .setLow(uuid.getLeastSignificantBits())
                 .build();
+    }
+
+    static BlockInfo protoBlockInfo(BlockState state) {
+        Identifier blockId = BuiltInRegistries.BLOCK.getKey(state.getBlock());
+        Map<String, String> properties = new HashMap<>();
+        for (Property<?> property : state.getProperties()) {
+            properties.put(property.getName(), propertyValue(state, property));
+        }
+        return BlockInfo.newBuilder()
+                .setBlockType(cobbleware.common.Identifier.newBuilder()
+                        .setNs(blockId.getNamespace())
+                        .setPath(blockId.getPath()))
+                .putAllProperties(properties)
+                .build();
+    }
+
+    private static <T extends Comparable<T>> String propertyValue(BlockState state, Property<T> property) {
+        return property.getName(state.getValue(property));
+    }
+
+    private static cobbleware.common.GlobalPos protoGlobalPos(ServerLevel level, BlockPos pos) {
+        Identifier dimension = level.dimension().identifier();
+        return cobbleware.common.GlobalPos.newBuilder()
+                .setDimension(cobbleware.common.Identifier.newBuilder()
+                        .setNs(dimension.getNamespace())
+                        .setPath(dimension.getPath()))
+                .setPosition(cobbleware.common.Vec3i.newBuilder()
+                        .setX(pos.getX())
+                        .setY(pos.getY())
+                        .setZ(pos.getZ()))
+                .build();
+    }
+
+    private static cobbleware.common.DyeColor protoDyeColor(DyeColor color) {
+        return switch (color) {
+            case WHITE -> cobbleware.common.DyeColor.WHITE;
+            case ORANGE -> cobbleware.common.DyeColor.ORANGE;
+            case MAGENTA -> cobbleware.common.DyeColor.MAGENTA;
+            case LIGHT_BLUE -> cobbleware.common.DyeColor.LIGHT_BLUE;
+            case YELLOW -> cobbleware.common.DyeColor.YELLOW;
+            case LIME -> cobbleware.common.DyeColor.LIME;
+            case PINK -> cobbleware.common.DyeColor.PINK;
+            case GRAY -> cobbleware.common.DyeColor.GRAY;
+            case LIGHT_GRAY -> cobbleware.common.DyeColor.LIGHT_GRAY;
+            case CYAN -> cobbleware.common.DyeColor.CYAN;
+            case PURPLE -> cobbleware.common.DyeColor.PURPLE;
+            case BLUE -> cobbleware.common.DyeColor.BLUE;
+            case BROWN -> cobbleware.common.DyeColor.BROWN;
+            case GREEN -> cobbleware.common.DyeColor.GREEN;
+            case RED -> cobbleware.common.DyeColor.RED;
+            case BLACK -> cobbleware.common.DyeColor.BLACK;
+        };
+    }
+
+    private static cobbleware.common.Direction protoDirection(Direction direction) {
+        return switch (direction) {
+            case DOWN -> cobbleware.common.Direction.DOWN;
+            case UP -> cobbleware.common.Direction.UP;
+            case NORTH -> cobbleware.common.Direction.NORTH;
+            case SOUTH -> cobbleware.common.Direction.SOUTH;
+            case WEST -> cobbleware.common.Direction.WEST;
+            case EAST -> cobbleware.common.Direction.EAST;
+        };
     }
 
     private static String uuidKey(UUID uuid) {

@@ -18,11 +18,28 @@ message ChatMessage {
   string message = 1;
 }
 
+message BlockInfo {
+  // The block registry identifier and all serialized block-state properties.
+  cobbleware.common.Identifier block_type = 1;
+  map<string, string> properties = 2;
+}
+
+// Emitted by a Wireless Observer when the block it's facing undergoes a block state change.
+message BlockStateChange {
+  cobbleware.common.DyeColor observer_color = 1;
+  cobbleware.common.Direction observer_dir = 2;
+  cobbleware.common.GlobalPos observer_pos = 3;
+  cobbleware.common.GlobalPos block_pos = 4;
+  BlockInfo old_state = 5;
+  BlockInfo new_state = 6;
+}
+
 // A single event supplied to a program step.
 message Event {
   oneof event {
     Started started = 1;
     Resumed resumed = 2;
     ChatMessage chat_message = 3;
+    BlockStateChange block_state_change = 4;
   }
 }

@@ -85,6 +85,14 @@ A placed Wireless Observer has an orientation: it points along an axis. Orientat
 determined during placement as with pistons and observers: The Wireless Observer faces
 the block it was placed against.
 
+When the block in front of a Wireless Observer changes type or block state, the paired
+Cobbleputer receives a `BlockStateChange` event. Changes occurring during one server tick
+are combined into one event containing the state before the first change and the final
+state. Delivery is best-effort: changes can be dropped while the paired Cobbleputer is
+unloaded, not running, or has a full event queue, and are not replayed later. Observers
+continue tracking their facing block while unpaired so pairing does not produce stale
+changes.
+
 ## Cobblemeter
 
 A Cobblemeter is an item that can be used by the player to pair Wireless Observers

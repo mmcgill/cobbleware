@@ -103,3 +103,17 @@ At most once per tick (via `ServerTickEvents.END_SERVER_TICK`), the `ExecutionDr
     * If a Cobbleputer block entity goes inactive before in-flight events are processed, the resulting state is discarded.
 * Construct and send a new `/modapi/v1/executions` request.
   * Include up to `MAX_OFFERED_EVENTS_PER_EXECUTION` events for each active Cobbleputer.
+
+### Wireless Observers and Block State Changes
+
+A Wireless Observer produces a BlockStateChange event whenever the block type or block state of
+the block it faces is changed. After a Wireless Observer block is attached to a loaded chunk, the next server tick
+caches the block type and state of the block it faces in its block entity data. The Wireless Observer block
+overrides the `updateShape()` neighbor callback and checks the block type/state of the block it faces against
+its cached data. If there is a difference, the Wireless Observer registers itself with the `ExecutionDriver`.
+
+When the `ExecutionDriver` runs its per-tick processing, it drains its list of Wireless Observers with updated
+blocks. For each one, it compares the cached and current values, emits at most one `BlockStateChange` event to the
+paired Cobbleputer, and updates the cached block type/state values. Repeated changes before that processing are
+coalesced into the same event. The cache is updated even when the observer is unpaired or delivery is not possible,
+so changes are best-effort and are not replayed after a later pairing, resume, or chunk load.

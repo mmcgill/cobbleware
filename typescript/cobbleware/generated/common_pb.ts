@@ -10,7 +10,7 @@ import type { Message } from "@bufbuild/protobuf";
  * Describes the file common.proto.
  */
 export const file_common: GenFile = /*@__PURE__*/
-  fileDesc("Cgxjb21tb24ucHJvdG8SEWNvYmJsZXdhcmUuY29tbW9uIicKBFZlYzMSCQoBeBgBIAEoARIJCgF5GAIgASgBEgkKAXoYAyABKAEiKAoFVmVjM2kSCQoBeBgBIAEoBRIJCgF5GAIgASgFEgkKAXoYAyABKAUiIAoIQ2h1bmtQb3MSCQoBeBgBIAEoBRIJCgF6GAIgASgFIiYKCklkZW50aWZpZXISCgoCbnMYASABKAkSDAoEcGF0aBgCIAEoCSIhCgRVdWlkEgwKBGhpZ2gYASABKAMSCwoDbG93GAIgASgDKkcKCURpcmVjdGlvbhIICgRET1dOEAASBgoCVVAQARIJCgVOT1JUSBACEgkKBVNPVVRIEAMSCAoEV0VTVBAEEggKBEVBU1QQBWIIZWRpdGlvbnNw6Qc");
+  fileDesc("Cgxjb21tb24ucHJvdG8SEWNvYmJsZXdhcmUuY29tbW9uIicKBFZlYzMSCQoBeBgBIAEoARIJCgF5GAIgASgBEgkKAXoYAyABKAEiKAoFVmVjM2kSCQoBeBgBIAEoBRIJCgF5GAIgASgFEgkKAXoYAyABKAUiIAoIQ2h1bmtQb3MSCQoBeBgBIAEoBRIJCgF6GAIgASgFIiYKCklkZW50aWZpZXISCgoCbnMYASABKAkSDAoEcGF0aBgCIAEoCSJpCglHbG9iYWxQb3MSMAoJZGltZW5zaW9uGAEgASgLMh0uY29iYmxld2FyZS5jb21tb24uSWRlbnRpZmllchIqCghwb3NpdGlvbhgCIAEoCzIYLmNvYmJsZXdhcmUuY29tbW9uLlZlYzNpIiEKBFV1aWQSDAoEaGlnaBgBIAEoAxILCgNsb3cYAiABKAMqRwoJRGlyZWN0aW9uEggKBERPV04QABIGCgJVUBABEgkKBU5PUlRIEAISCQoFU09VVEgQAxIICgRXRVNUEAQSCAoERUFTVBAFKsIBCghEeWVDb2xvchIJCgVXSElURRAAEgoKBk9SQU5HRRABEgsKB01BR0VOVEEQAhIOCgpMSUdIVF9CTFVFEAMSCgoGWUVMTE9XEAQSCAoETElNRRAFEggKBFBJTksQBhIICgRHUkFZEAcSDgoKTElHSFRfR1JBWRAIEggKBENZQU4QCRIKCgZQVVJQTEUQChIICgRCTFVFEAsSCQoFQlJPV04QDBIJCgVHUkVFThANEgcKA1JFRBAOEgkKBUJMQUNLEA9iCGVkaXRpb25zcOkH");
 
 /**
  * Shared value types used by Cobbleware's public and internal APIs.
@@ -113,6 +113,28 @@ export const IdentifierSchema: GenMessage<Identifier> = /*@__PURE__*/
   messageDesc(file_common, 3);
 
 /**
+ * @generated from message cobbleware.common.GlobalPos
+ */
+export type GlobalPos = Message<"cobbleware.common.GlobalPos"> & {
+  /**
+   * @generated from field: cobbleware.common.Identifier dimension = 1;
+   */
+  dimension?: Identifier | undefined;
+
+  /**
+   * @generated from field: cobbleware.common.Vec3i position = 2;
+   */
+  position?: Vec3i | undefined;
+};
+
+/**
+ * Describes the message cobbleware.common.GlobalPos.
+ * Use `create(GlobalPosSchema)` to create a new message.
+ */
+export const GlobalPosSchema: GenMessage<GlobalPos> = /*@__PURE__*/
+  messageDesc(file_common, 4);
+
+/**
  * @generated from message cobbleware.common.Uuid
  */
 export type Uuid = Message<"cobbleware.common.Uuid"> & {
@@ -132,7 +154,7 @@ export type Uuid = Message<"cobbleware.common.Uuid"> & {
  * Use `create(UuidSchema)` to create a new message.
  */
 export const UuidSchema: GenMessage<Uuid> = /*@__PURE__*/
-  messageDesc(file_common, 4);
+  messageDesc(file_common, 5);
 
 /**
  * @generated from enum cobbleware.common.Direction
@@ -174,4 +196,95 @@ export enum Direction {
  */
 export const DirectionSchema: GenEnum<Direction> = /*@__PURE__*/
   enumDesc(file_common, 0);
+
+/**
+ * @generated from enum cobbleware.common.DyeColor
+ */
+export enum DyeColor {
+  /**
+   * @generated from enum value: WHITE = 0;
+   */
+  WHITE = 0,
+
+  /**
+   * @generated from enum value: ORANGE = 1;
+   */
+  ORANGE = 1,
+
+  /**
+   * @generated from enum value: MAGENTA = 2;
+   */
+  MAGENTA = 2,
+
+  /**
+   * @generated from enum value: LIGHT_BLUE = 3;
+   */
+  LIGHT_BLUE = 3,
+
+  /**
+   * @generated from enum value: YELLOW = 4;
+   */
+  YELLOW = 4,
+
+  /**
+   * @generated from enum value: LIME = 5;
+   */
+  LIME = 5,
+
+  /**
+   * @generated from enum value: PINK = 6;
+   */
+  PINK = 6,
+
+  /**
+   * @generated from enum value: GRAY = 7;
+   */
+  GRAY = 7,
+
+  /**
+   * @generated from enum value: LIGHT_GRAY = 8;
+   */
+  LIGHT_GRAY = 8,
+
+  /**
+   * @generated from enum value: CYAN = 9;
+   */
+  CYAN = 9,
+
+  /**
+   * @generated from enum value: PURPLE = 10;
+   */
+  PURPLE = 10,
+
+  /**
+   * @generated from enum value: BLUE = 11;
+   */
+  BLUE = 11,
+
+  /**
+   * @generated from enum value: BROWN = 12;
+   */
+  BROWN = 12,
+
+  /**
+   * @generated from enum value: GREEN = 13;
+   */
+  GREEN = 13,
+
+  /**
+   * @generated from enum value: RED = 14;
+   */
+  RED = 14,
+
+  /**
+   * @generated from enum value: BLACK = 15;
+   */
+  BLACK = 15,
+}
+
+/**
+ * Describes the enum cobbleware.common.DyeColor.
+ */
+export const DyeColorSchema: GenEnum<DyeColor> = /*@__PURE__*/
+  enumDesc(file_common, 1);
 
