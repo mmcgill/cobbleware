@@ -147,3 +147,9 @@ A Wireless Observer has a redstone power level from 0 to 15, stored in block sta
 The Polymer-managed client state only differentiates between powered (level > 0) and unpowered (level == 0).
 A powered Wireless Observer only emits signal in the direction it's facing, and only weakly
 (i.e. via `getWeakRedstonePower`).
+
+`SetRedstonePower` effects apply only to loaded observers currently paired to the
+emitting Cobbleputer. An effect with neither selector changes all of those observers;
+`observer_id` and `observer_color` independently narrow that set, and both selectors
+must match when both are supplied. Unspecified or unrecognized selected colors are
+ignored rather than treated as an unfiltered effect.

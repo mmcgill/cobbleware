@@ -102,8 +102,13 @@ changes.
 
 Paired Wireless Observers are also controllable redstone emitters. In their initially
 placed state they emit no redstone signal. Once paired, a Cobbleputer can emit
-a `SetRedstonePower` effect targetted at a specific Wireless Observer to set its
-redstone signal power level to any level from 0 (off, the default) to 15.
+a `SetRedstonePower` effect to set the redstone signal power level of paired
+Wireless Observers to any level from 0 (off, the default) to 15.
+With no target selector, the effect applies to every loaded Wireless Observer
+paired with the emitting Cobbleputer. It can instead target observers of a
+specific color or one specific observer; when both selectors are present, an
+observer must match both. Observers paired to another Cobbleputer, unloaded
+observers, and invalid color selectors are not affected.
 Pairing a Wireless Observer to a different Cobbleputer resets its power level to 0.
 Wireless Observers emit redstone signal in the direction they're facing.
 

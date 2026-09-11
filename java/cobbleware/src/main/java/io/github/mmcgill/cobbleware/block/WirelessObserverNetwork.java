@@ -16,6 +16,7 @@ import net.minecraft.core.particles.DustParticleOptions;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
+import net.minecraft.world.item.DyeColor;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.phys.Vec3;
@@ -55,24 +56,35 @@ public final class WirelessObserverNetwork {
         });
     }
 
-    /** Applies a power level only to a loaded observer still paired to the emitting Cobbleputer. */
-    public boolean setRedstonePower(GlobalPos target, UUID observerId, int powerLevel) {
+    /** Applies a power level to every matching loaded observer still paired to the emitting Cobbleputer. */
+    public boolean setRedstonePower(
+            GlobalPos target, Optional<UUID> observerId, Optional<DyeColor> observerColor, int powerLevel) {
         Set<WirelessObserverBlockEntity> indexedObservers = observersByTarget.get(target);
         if (indexedObservers == null) {
             return false;
         }
+        boolean changed = false;
         for (WirelessObserverBlockEntity observer : List.copyOf(indexedObservers)) {
             if (observer.isRemoved()
-                    || !observerId.equals(observer.observerId())
                     || !observer.pairedCobbleputer().filter(target::equals).isPresent()
                     || !(observer.getLevel() instanceof ServerLevel level)
                     || !(observer.getBlockState().getBlock() instanceof WirelessObserverBlock wirelessObserver)) {
                 continue;
             }
-            return WirelessObserverBlock.setPower(
+            if (!matchesRedstonePowerTarget(
+                    observer.observerId(), wirelessObserver.color(), observerId, observerColor)) {
+                continue;
+            }
+            changed |= WirelessObserverBlock.setPower(
                     level, observer.getBlockPos(), observer.getBlockState(), powerLevel);
         }
-        return false;
+        return changed;
+    }
+
+    static boolean matchesRedstonePowerTarget(
+            UUID observerId, DyeColor observerColor, Optional<UUID> targetObserverId, Optional<DyeColor> targetColor) {
+        return targetObserverId.map(observerId::equals).orElse(true)
+                && targetColor.map(observerColor::equals).orElse(true);
     }
 
     private void removeFromTarget(GlobalPos target, WirelessObserverBlockEntity observer) {

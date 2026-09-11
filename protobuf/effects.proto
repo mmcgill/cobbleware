@@ -15,7 +15,10 @@ message EmitBeep {
 }
 
 message SetRedstonePower {
+  // When set, identifies the specific observer whose power level is modified.
   cobbleware.common.Uuid observer_id = 1;
+  // When set, only wireless observers of this color have power levels modified.
+  cobbleware.common.DyeColor observer_color = 3;
   // Clamped to 15
   uint32 power_level = 2;
 }

@@ -60,23 +60,33 @@ Deno.test('Program API decodes a step and encodes its result', async () => {
   assertEquals(decoded.effects[0]?.effect.case, 'emitBeep', 'handler effects should round-trip');
 });
 
-Deno.test('Program API round-trips SetRedstonePower effects', async () => {
+Deno.test('Program API round-trips ID-targeted and color-targeted SetRedstonePower effects', async () => {
   const powerHandler = createProgramApiHandler({
     startStates: {},
-    program: (state) => create(Program.StepResponseSchema, {
-      state,
-      effects: [
-        create(Effects.EffectSchema, {
-          effect: {
-            case: 'setRedstonePower',
-            value: create(Effects.SetRedstonePowerSchema, {
-              observerId: observerId(),
-              powerLevel: 15,
-            }),
-          },
-        }),
-      ],
-    }),
+    program: (state) =>
+      create(Program.StepResponseSchema, {
+        state,
+        effects: [
+          create(Effects.EffectSchema, {
+            effect: {
+              case: 'setRedstonePower',
+              value: create(Effects.SetRedstonePowerSchema, {
+                observerId: observerId(),
+                powerLevel: 15,
+              }),
+            },
+          }),
+          create(Effects.EffectSchema, {
+            effect: {
+              case: 'setRedstonePower',
+              value: create(Effects.SetRedstonePowerSchema, {
+                observerColor: Common.DyeColor.LIGHT_BLUE,
+                powerLevel: 9,
+              }),
+            },
+          }),
+        ],
+      }),
   });
   const request = create(Program.StepRequestSchema, {
     state: new Uint8Array([3]),
@@ -96,12 +106,43 @@ Deno.test('Program API round-trips SetRedstonePower effects', async () => {
     new Uint8Array(await response.arrayBuffer()),
   );
 
-  assertEquals(decoded.effects[0]?.effect.case, 'setRedstonePower', 'power effect should round-trip');
+  assertEquals(
+    decoded.effects[0]?.effect.case,
+    'setRedstonePower',
+    'power effect should round-trip',
+  );
   if (decoded.effects[0]?.effect.case !== 'setRedstonePower') {
     throw new Error('SetRedstonePower payload missing');
   }
-  assertEquals(decoded.effects[0].effect.value.observerId?.high, 10n, 'observer id should round-trip');
+  assertEquals(
+    decoded.effects[0].effect.value.observerId?.high,
+    10n,
+    'observer id should round-trip',
+  );
   assertEquals(decoded.effects[0].effect.value.powerLevel, 15, 'power level should round-trip');
+  assertEquals(
+    decoded.effects[1]?.effect.case,
+    'setRedstonePower',
+    'color power effect should round-trip',
+  );
+  if (decoded.effects[1]?.effect.case !== 'setRedstonePower') {
+    throw new Error('color SetRedstonePower payload missing');
+  }
+  assertEquals(
+    decoded.effects[1].effect.value.observerId,
+    undefined,
+    'color effect should not have an observer id',
+  );
+  assertEquals(
+    decoded.effects[1].effect.value.observerColor,
+    Common.DyeColor.LIGHT_BLUE,
+    'observer color should round-trip',
+  );
+  assertEquals(
+    decoded.effects[1].effect.value.powerLevel,
+    9,
+    'color power level should round-trip',
+  );
 });
 
 Deno.test('Program API delivers a BlockStateChange to the event handler', async () => {

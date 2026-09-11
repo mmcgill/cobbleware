@@ -566,9 +566,19 @@ public final class ExecutionDriver {
         if (network == null) {
             return;
         }
+        Optional<UUID> observerId = effect.hasObserverId()
+                ? Optional.of(new UUID(effect.getObserverId().getHigh(), effect.getObserverId().getLow()))
+                : Optional.empty();
+        Optional<DyeColor> observerColor = effect.hasObserverColor()
+                ? minecraftDyeColor(effect.getObserverColor())
+                : Optional.empty();
+        if (effect.hasObserverColor() && observerColor.isEmpty()) {
+            return;
+        }
         network.setRedstonePower(
                 net.minecraft.core.GlobalPos.of(level.dimension(), blockEntity.getBlockPos()),
-                new UUID(effect.getObserverId().getHigh(), effect.getObserverId().getLow()),
+                observerId,
+                observerColor,
                 effect.getPowerLevel());
     }
 
@@ -652,6 +662,28 @@ public final class ExecutionDriver {
             case GREEN -> cobbleware.common.DyeColor.DYE_COLOR_GREEN;
             case RED -> cobbleware.common.DyeColor.DYE_COLOR_RED;
             case BLACK -> cobbleware.common.DyeColor.DYE_COLOR_BLACK;
+        };
+    }
+
+    static Optional<DyeColor> minecraftDyeColor(cobbleware.common.DyeColor color) {
+        return switch (color) {
+            case DYE_COLOR_WHITE -> Optional.of(DyeColor.WHITE);
+            case DYE_COLOR_ORANGE -> Optional.of(DyeColor.ORANGE);
+            case DYE_COLOR_MAGENTA -> Optional.of(DyeColor.MAGENTA);
+            case DYE_COLOR_LIGHT_BLUE -> Optional.of(DyeColor.LIGHT_BLUE);
+            case DYE_COLOR_YELLOW -> Optional.of(DyeColor.YELLOW);
+            case DYE_COLOR_LIME -> Optional.of(DyeColor.LIME);
+            case DYE_COLOR_PINK -> Optional.of(DyeColor.PINK);
+            case DYE_COLOR_GRAY -> Optional.of(DyeColor.GRAY);
+            case DYE_COLOR_LIGHT_GRAY -> Optional.of(DyeColor.LIGHT_GRAY);
+            case DYE_COLOR_CYAN -> Optional.of(DyeColor.CYAN);
+            case DYE_COLOR_PURPLE -> Optional.of(DyeColor.PURPLE);
+            case DYE_COLOR_BLUE -> Optional.of(DyeColor.BLUE);
+            case DYE_COLOR_BROWN -> Optional.of(DyeColor.BROWN);
+            case DYE_COLOR_GREEN -> Optional.of(DyeColor.GREEN);
+            case DYE_COLOR_RED -> Optional.of(DyeColor.RED);
+            case DYE_COLOR_BLACK -> Optional.of(DyeColor.BLACK);
+            case DYE_COLOR_UNSPECIFIED, UNRECOGNIZED -> Optional.empty();
         };
     }
 

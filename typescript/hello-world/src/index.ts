@@ -29,14 +29,36 @@ export const echoHandler: EventProgram = function handle(state, event) {
   let effects: Effects.Effect[] = [];
   if (event.event.case === 'chatMessage') {
     state[1]++;
-    effects = [create(Effects.EffectSchema, {
-      effect: {
-        case: 'sendChat',
-        value: create(Effects.SendChatSchema, {
-          msg: `Echo (${state[1]}): ${event.event.value.message}`,
-        }),
-      },
-    })];
+    if (event.event.value.message == 'off') {
+      effects = [create(Effects.EffectSchema, {
+        effect: {
+          case: 'setRedstonePower',
+          value: create(Effects.SetRedstonePowerSchema, {
+            observerColor: DyeColor.BLACK,
+            powerLevel: 0,
+          }),
+        }
+      })];
+    } else if (event.event.value.message == 'on') {
+      effects = [create(Effects.EffectSchema, {
+        effect: {
+          case: 'setRedstonePower',
+          value: create(Effects.SetRedstonePowerSchema, {
+            observerColor: DyeColor.BLACK,
+            powerLevel: 15,
+          }),
+        }
+      })];
+    } else {
+      effects = [create(Effects.EffectSchema, {
+        effect: {
+          case: 'sendChat',
+          value: create(Effects.SendChatSchema, {
+            msg: `Echo (${state[1]}): ${event.event.value.message}`,
+          }),
+        },
+      })];
+    }
   } else if (event.event.case === 'blockStateChange') {
     const v = event.event.value;
     const props = JSON.stringify(v.newState?.properties);

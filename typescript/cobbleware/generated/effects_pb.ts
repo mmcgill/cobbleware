@@ -4,7 +4,7 @@
 
 import type { GenFile, GenMessage } from "@bufbuild/protobuf/codegenv2";
 import { fileDesc, messageDesc } from "@bufbuild/protobuf/codegenv2";
-import type { Uuid } from "./common_pb.ts";
+import type { DyeColor, Uuid } from "./common_pb.ts";
 import { file_common } from "./common_pb.ts";
 import type { Message } from "@bufbuild/protobuf";
 
@@ -12,7 +12,7 @@ import type { Message } from "@bufbuild/protobuf";
  * Describes the file effects.proto.
  */
 export const file_effects: GenFile = /*@__PURE__*/
-  fileDesc("Cg1lZmZlY3RzLnByb3RvEhJjb2JibGV3YXJlLmVmZmVjdHMiFwoIU2VuZENoYXQSCwoDbXNnGAEgASgJIhoKCEVtaXRCZWVwEg4KBm1pbGxpcxgBIAEoDSJVChBTZXRSZWRzdG9uZVBvd2VyEiwKC29ic2VydmVyX2lkGAEgASgLMhcuY29iYmxld2FyZS5jb21tb24uVXVpZBITCgtwb3dlcl9sZXZlbBgCIAEoDSK8AQoGRWZmZWN0EjEKCXNlbmRfY2hhdBgBIAEoCzIcLmNvYmJsZXdhcmUuZWZmZWN0cy5TZW5kQ2hhdEgAEjEKCWVtaXRfYmVlcBgCIAEoCzIcLmNvYmJsZXdhcmUuZWZmZWN0cy5FbWl0QmVlcEgAEkIKEnNldF9yZWRzdG9uZV9wb3dlchgDIAEoCzIkLmNvYmJsZXdhcmUuZWZmZWN0cy5TZXRSZWRzdG9uZVBvd2VySABCCAoGZWZmZWN0YghlZGl0aW9uc3DpBw", [file_common]);
+  fileDesc("Cg1lZmZlY3RzLnByb3RvEhJjb2JibGV3YXJlLmVmZmVjdHMiFwoIU2VuZENoYXQSCwoDbXNnGAEgASgJIhoKCEVtaXRCZWVwEg4KBm1pbGxpcxgBIAEoDSKKAQoQU2V0UmVkc3RvbmVQb3dlchIsCgtvYnNlcnZlcl9pZBgBIAEoCzIXLmNvYmJsZXdhcmUuY29tbW9uLlV1aWQSMwoOb2JzZXJ2ZXJfY29sb3IYAyABKA4yGy5jb2JibGV3YXJlLmNvbW1vbi5EeWVDb2xvchITCgtwb3dlcl9sZXZlbBgCIAEoDSK8AQoGRWZmZWN0EjEKCXNlbmRfY2hhdBgBIAEoCzIcLmNvYmJsZXdhcmUuZWZmZWN0cy5TZW5kQ2hhdEgAEjEKCWVtaXRfYmVlcBgCIAEoCzIcLmNvYmJsZXdhcmUuZWZmZWN0cy5FbWl0QmVlcEgAEkIKEnNldF9yZWRzdG9uZV9wb3dlchgDIAEoCzIkLmNvYmJsZXdhcmUuZWZmZWN0cy5TZXRSZWRzdG9uZVBvd2VySABCCAoGZWZmZWN0YghlZGl0aW9uc3DpBw", [file_common]);
 
 /**
  * @generated from message cobbleware.effects.SendChat
@@ -57,9 +57,18 @@ export const EmitBeepSchema: GenMessage<EmitBeep> = /*@__PURE__*/
  */
 export type SetRedstonePower = Message<"cobbleware.effects.SetRedstonePower"> & {
   /**
+   * When set, identifies the specific observer whose power level is modified.
+   *
    * @generated from field: cobbleware.common.Uuid observer_id = 1;
    */
   observerId?: Uuid | undefined;
+
+  /**
+   * When set, only wireless observers of this color have power levels modified.
+   *
+   * @generated from field: cobbleware.common.DyeColor observer_color = 3;
+   */
+  observerColor: DyeColor;
 
   /**
    * Clamped to 15
