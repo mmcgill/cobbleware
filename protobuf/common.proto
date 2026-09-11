@@ -21,12 +21,13 @@ message ChunkPos {
 }
 
 enum Direction {
-  DOWN = 0;
-  UP = 1;
-  NORTH = 2;
-  SOUTH = 3;
-  WEST = 4;
-  EAST = 5;
+  DIRECTION_UNSPECIFIED = 0;
+  DIRECTION_DOWN = 1;
+  DIRECTION_UP = 2;
+  DIRECTION_NORTH = 3;
+  DIRECTION_SOUTH = 4;
+  DIRECTION_WEST = 5;
+  DIRECTION_EAST = 6;
 }
 
 message Identifier {
@@ -45,20 +46,21 @@ message Uuid {
 }
 
 enum DyeColor {
-  WHITE = 0;
-  ORANGE = 1;
-  MAGENTA = 2;
-  LIGHT_BLUE = 3;
-  YELLOW = 4;
-  LIME = 5;
-  PINK = 6;
-  GRAY = 7;
-  LIGHT_GRAY = 8;
-  CYAN = 9;
-  PURPLE = 10;
-  BLUE = 11;
-  BROWN = 12;
-  GREEN = 13;
-  RED = 14;
-  BLACK = 15;
+  DYE_COLOR_UNSPECIFIED = 0;
+  DYE_COLOR_WHITE = 1;
+  DYE_COLOR_ORANGE = 2;
+  DYE_COLOR_MAGENTA = 3;
+  DYE_COLOR_LIGHT_BLUE = 4;
+  DYE_COLOR_YELLOW = 5;
+  DYE_COLOR_LIME = 6;
+  DYE_COLOR_PINK = 7;
+  DYE_COLOR_GRAY = 8;
+  DYE_COLOR_LIGHT_GRAY = 9;
+  DYE_COLOR_CYAN = 10;
+  DYE_COLOR_PURPLE = 11;
+  DYE_COLOR_BLUE = 12;
+  DYE_COLOR_BROWN = 13;
+  DYE_COLOR_GREEN = 14;
+  DYE_COLOR_RED = 15;
+  DYE_COLOR_BLACK = 16;
 }

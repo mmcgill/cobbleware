@@ -636,33 +636,33 @@ public final class ExecutionDriver {
 
     private static cobbleware.common.DyeColor protoDyeColor(DyeColor color) {
         return switch (color) {
-            case WHITE -> cobbleware.common.DyeColor.WHITE;
-            case ORANGE -> cobbleware.common.DyeColor.ORANGE;
-            case MAGENTA -> cobbleware.common.DyeColor.MAGENTA;
-            case LIGHT_BLUE -> cobbleware.common.DyeColor.LIGHT_BLUE;
-            case YELLOW -> cobbleware.common.DyeColor.YELLOW;
-            case LIME -> cobbleware.common.DyeColor.LIME;
-            case PINK -> cobbleware.common.DyeColor.PINK;
-            case GRAY -> cobbleware.common.DyeColor.GRAY;
-            case LIGHT_GRAY -> cobbleware.common.DyeColor.LIGHT_GRAY;
-            case CYAN -> cobbleware.common.DyeColor.CYAN;
-            case PURPLE -> cobbleware.common.DyeColor.PURPLE;
-            case BLUE -> cobbleware.common.DyeColor.BLUE;
-            case BROWN -> cobbleware.common.DyeColor.BROWN;
-            case GREEN -> cobbleware.common.DyeColor.GREEN;
-            case RED -> cobbleware.common.DyeColor.RED;
-            case BLACK -> cobbleware.common.DyeColor.BLACK;
+            case WHITE -> cobbleware.common.DyeColor.DYE_COLOR_WHITE;
+            case ORANGE -> cobbleware.common.DyeColor.DYE_COLOR_ORANGE;
+            case MAGENTA -> cobbleware.common.DyeColor.DYE_COLOR_MAGENTA;
+            case LIGHT_BLUE -> cobbleware.common.DyeColor.DYE_COLOR_LIGHT_BLUE;
+            case YELLOW -> cobbleware.common.DyeColor.DYE_COLOR_YELLOW;
+            case LIME -> cobbleware.common.DyeColor.DYE_COLOR_LIME;
+            case PINK -> cobbleware.common.DyeColor.DYE_COLOR_PINK;
+            case GRAY -> cobbleware.common.DyeColor.DYE_COLOR_GRAY;
+            case LIGHT_GRAY -> cobbleware.common.DyeColor.DYE_COLOR_LIGHT_GRAY;
+            case CYAN -> cobbleware.common.DyeColor.DYE_COLOR_CYAN;
+            case PURPLE -> cobbleware.common.DyeColor.DYE_COLOR_PURPLE;
+            case BLUE -> cobbleware.common.DyeColor.DYE_COLOR_BLUE;
+            case BROWN -> cobbleware.common.DyeColor.DYE_COLOR_BROWN;
+            case GREEN -> cobbleware.common.DyeColor.DYE_COLOR_GREEN;
+            case RED -> cobbleware.common.DyeColor.DYE_COLOR_RED;
+            case BLACK -> cobbleware.common.DyeColor.DYE_COLOR_BLACK;
         };
     }
 
     private static cobbleware.common.Direction protoDirection(Direction direction) {
         return switch (direction) {
-            case DOWN -> cobbleware.common.Direction.DOWN;
-            case UP -> cobbleware.common.Direction.UP;
-            case NORTH -> cobbleware.common.Direction.NORTH;
-            case SOUTH -> cobbleware.common.Direction.SOUTH;
-            case WEST -> cobbleware.common.Direction.WEST;
-            case EAST -> cobbleware.common.Direction.EAST;
+            case DOWN -> cobbleware.common.Direction.DIRECTION_DOWN;
+            case UP -> cobbleware.common.Direction.DIRECTION_UP;
+            case NORTH -> cobbleware.common.Direction.DIRECTION_NORTH;
+            case SOUTH -> cobbleware.common.Direction.DIRECTION_SOUTH;
+            case WEST -> cobbleware.common.Direction.DIRECTION_WEST;
+            case EAST -> cobbleware.common.Direction.DIRECTION_EAST;
         };
     }
 

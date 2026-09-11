@@ -10,7 +10,7 @@ import type { Message } from "@bufbuild/protobuf";
  * Describes the file common.proto.
  */
 export const file_common: GenFile = /*@__PURE__*/
-  fileDesc("Cgxjb21tb24ucHJvdG8SEWNvYmJsZXdhcmUuY29tbW9uIicKBFZlYzMSCQoBeBgBIAEoARIJCgF5GAIgASgBEgkKAXoYAyABKAEiKAoFVmVjM2kSCQoBeBgBIAEoBRIJCgF5GAIgASgFEgkKAXoYAyABKAUiIAoIQ2h1bmtQb3MSCQoBeBgBIAEoBRIJCgF6GAIgASgFIiYKCklkZW50aWZpZXISCgoCbnMYASABKAkSDAoEcGF0aBgCIAEoCSJpCglHbG9iYWxQb3MSMAoJZGltZW5zaW9uGAEgASgLMh0uY29iYmxld2FyZS5jb21tb24uSWRlbnRpZmllchIqCghwb3NpdGlvbhgCIAEoCzIYLmNvYmJsZXdhcmUuY29tbW9uLlZlYzNpIiEKBFV1aWQSDAoEaGlnaBgBIAEoAxILCgNsb3cYAiABKAMqRwoJRGlyZWN0aW9uEggKBERPV04QABIGCgJVUBABEgkKBU5PUlRIEAISCQoFU09VVEgQAxIICgRXRVNUEAQSCAoERUFTVBAFKsIBCghEeWVDb2xvchIJCgVXSElURRAAEgoKBk9SQU5HRRABEgsKB01BR0VOVEEQAhIOCgpMSUdIVF9CTFVFEAMSCgoGWUVMTE9XEAQSCAoETElNRRAFEggKBFBJTksQBhIICgRHUkFZEAcSDgoKTElHSFRfR1JBWRAIEggKBENZQU4QCRIKCgZQVVJQTEUQChIICgRCTFVFEAsSCQoFQlJPV04QDBIJCgVHUkVFThANEgcKA1JFRBAOEgkKBUJMQUNLEA9iCGVkaXRpb25zcOkH");
+  fileDesc("Cgxjb21tb24ucHJvdG8SEWNvYmJsZXdhcmUuY29tbW9uIicKBFZlYzMSCQoBeBgBIAEoARIJCgF5GAIgASgBEgkKAXoYAyABKAEiKAoFVmVjM2kSCQoBeBgBIAEoBRIJCgF5GAIgASgFEgkKAXoYAyABKAUiIAoIQ2h1bmtQb3MSCQoBeBgBIAEoBRIJCgF6GAIgASgFIiYKCklkZW50aWZpZXISCgoCbnMYASABKAkSDAoEcGF0aBgCIAEoCSJpCglHbG9iYWxQb3MSMAoJZGltZW5zaW9uGAEgASgLMh0uY29iYmxld2FyZS5jb21tb24uSWRlbnRpZmllchIqCghwb3NpdGlvbhgCIAEoCzIYLmNvYmJsZXdhcmUuY29tbW9uLlZlYzNpIiEKBFV1aWQSDAoEaGlnaBgBIAEoAxILCgNsb3cYAiABKAMqngEKCURpcmVjdGlvbhIZChVESVJFQ1RJT05fVU5TUEVDSUZJRUQQABISCg5ESVJFQ1RJT05fRE9XThABEhAKDERJUkVDVElPTl9VUBACEhMKD0RJUkVDVElPTl9OT1JUSBADEhMKD0RJUkVDVElPTl9TT1VUSBAEEhIKDkRJUkVDVElPTl9XRVNUEAUSEgoORElSRUNUSU9OX0VBU1QQBir9AgoIRHllQ29sb3ISGQoVRFlFX0NPTE9SX1VOU1BFQ0lGSUVEEAASEwoPRFlFX0NPTE9SX1dISVRFEAESFAoQRFlFX0NPTE9SX09SQU5HRRACEhUKEURZRV9DT0xPUl9NQUdFTlRBEAMSGAoURFlFX0NPTE9SX0xJR0hUX0JMVUUQBBIUChBEWUVfQ09MT1JfWUVMTE9XEAUSEgoORFlFX0NPTE9SX0xJTUUQBhISCg5EWUVfQ09MT1JfUElOSxAHEhIKDkRZRV9DT0xPUl9HUkFZEAgSGAoURFlFX0NPTE9SX0xJR0hUX0dSQVkQCRISCg5EWUVfQ09MT1JfQ1lBThAKEhQKEERZRV9DT0xPUl9QVVJQTEUQCxISCg5EWUVfQ09MT1JfQkxVRRAMEhMKD0RZRV9DT0xPUl9CUk9XThANEhMKD0RZRV9DT0xPUl9HUkVFThAOEhEKDURZRV9DT0xPUl9SRUQQDxITCg9EWUVfQ09MT1JfQkxBQ0sQEGIIZWRpdGlvbnNw6Qc");
 
 /**
  * Shared value types used by Cobbleware's public and internal APIs.
@@ -161,34 +161,39 @@ export const UuidSchema: GenMessage<Uuid> = /*@__PURE__*/
  */
 export enum Direction {
   /**
-   * @generated from enum value: DOWN = 0;
+   * @generated from enum value: DIRECTION_UNSPECIFIED = 0;
    */
-  DOWN = 0,
+  UNSPECIFIED = 0,
 
   /**
-   * @generated from enum value: UP = 1;
+   * @generated from enum value: DIRECTION_DOWN = 1;
    */
-  UP = 1,
+  DOWN = 1,
 
   /**
-   * @generated from enum value: NORTH = 2;
+   * @generated from enum value: DIRECTION_UP = 2;
    */
-  NORTH = 2,
+  UP = 2,
 
   /**
-   * @generated from enum value: SOUTH = 3;
+   * @generated from enum value: DIRECTION_NORTH = 3;
    */
-  SOUTH = 3,
+  NORTH = 3,
 
   /**
-   * @generated from enum value: WEST = 4;
+   * @generated from enum value: DIRECTION_SOUTH = 4;
    */
-  WEST = 4,
+  SOUTH = 4,
 
   /**
-   * @generated from enum value: EAST = 5;
+   * @generated from enum value: DIRECTION_WEST = 5;
    */
-  EAST = 5,
+  WEST = 5,
+
+  /**
+   * @generated from enum value: DIRECTION_EAST = 6;
+   */
+  EAST = 6,
 }
 
 /**
@@ -202,84 +207,89 @@ export const DirectionSchema: GenEnum<Direction> = /*@__PURE__*/
  */
 export enum DyeColor {
   /**
-   * @generated from enum value: WHITE = 0;
+   * @generated from enum value: DYE_COLOR_UNSPECIFIED = 0;
    */
-  WHITE = 0,
+  UNSPECIFIED = 0,
 
   /**
-   * @generated from enum value: ORANGE = 1;
+   * @generated from enum value: DYE_COLOR_WHITE = 1;
    */
-  ORANGE = 1,
+  WHITE = 1,
 
   /**
-   * @generated from enum value: MAGENTA = 2;
+   * @generated from enum value: DYE_COLOR_ORANGE = 2;
    */
-  MAGENTA = 2,
+  ORANGE = 2,
 
   /**
-   * @generated from enum value: LIGHT_BLUE = 3;
+   * @generated from enum value: DYE_COLOR_MAGENTA = 3;
    */
-  LIGHT_BLUE = 3,
+  MAGENTA = 3,
 
   /**
-   * @generated from enum value: YELLOW = 4;
+   * @generated from enum value: DYE_COLOR_LIGHT_BLUE = 4;
    */
-  YELLOW = 4,
+  LIGHT_BLUE = 4,
 
   /**
-   * @generated from enum value: LIME = 5;
+   * @generated from enum value: DYE_COLOR_YELLOW = 5;
    */
-  LIME = 5,
+  YELLOW = 5,
 
   /**
-   * @generated from enum value: PINK = 6;
+   * @generated from enum value: DYE_COLOR_LIME = 6;
    */
-  PINK = 6,
+  LIME = 6,
 
   /**
-   * @generated from enum value: GRAY = 7;
+   * @generated from enum value: DYE_COLOR_PINK = 7;
    */
-  GRAY = 7,
+  PINK = 7,
 
   /**
-   * @generated from enum value: LIGHT_GRAY = 8;
+   * @generated from enum value: DYE_COLOR_GRAY = 8;
    */
-  LIGHT_GRAY = 8,
+  GRAY = 8,
 
   /**
-   * @generated from enum value: CYAN = 9;
+   * @generated from enum value: DYE_COLOR_LIGHT_GRAY = 9;
    */
-  CYAN = 9,
+  LIGHT_GRAY = 9,
 
   /**
-   * @generated from enum value: PURPLE = 10;
+   * @generated from enum value: DYE_COLOR_CYAN = 10;
    */
-  PURPLE = 10,
+  CYAN = 10,
 
   /**
-   * @generated from enum value: BLUE = 11;
+   * @generated from enum value: DYE_COLOR_PURPLE = 11;
    */
-  BLUE = 11,
+  PURPLE = 11,
 
   /**
-   * @generated from enum value: BROWN = 12;
+   * @generated from enum value: DYE_COLOR_BLUE = 12;
    */
-  BROWN = 12,
+  BLUE = 12,
 
   /**
-   * @generated from enum value: GREEN = 13;
+   * @generated from enum value: DYE_COLOR_BROWN = 13;
    */
-  GREEN = 13,
+  BROWN = 13,
 
   /**
-   * @generated from enum value: RED = 14;
+   * @generated from enum value: DYE_COLOR_GREEN = 14;
    */
-  RED = 14,
+  GREEN = 14,
 
   /**
-   * @generated from enum value: BLACK = 15;
+   * @generated from enum value: DYE_COLOR_RED = 15;
    */
-  BLACK = 15,
+  RED = 15,
+
+  /**
+   * @generated from enum value: DYE_COLOR_BLACK = 16;
+   */
+  BLACK = 16,
 }
 
 /**
