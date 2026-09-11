@@ -12,7 +12,7 @@
     "check": "deno check src/index.ts tests/**/*.ts",
     "fmt": "deno fmt",
     "bundle": "deno run --allow-env --allow-read --allow-run --allow-write scripts/bundle.ts",
-    "start": "deno task bundle && deno run --allow-env --allow-run scripts/start.ts"
+    "start": "deno task bundle && COBBLEWARE_API_KEY=secret deno run --allow-env --allow-run scripts/start.ts"
   },
   "fmt": {
     "useTabs": false,
