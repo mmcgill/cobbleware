@@ -75,11 +75,18 @@ is loaded, its in-memory event queue is cleared.
 ## Wireless Observer
 
 Wireless Observer blocks allow a Cobbleputer to detect block state changes and control
-Redstone-enabled blocks and Redstone circuits.
+Redstone-enabled blocks and Redstone circuits. A placed Wireless Observer block
+has a UUID in its block entity that uniquely identifies it. That UUID is not preserved
+when the block is broken.
 Wireless Observers come in 16 colors, one for each of the 16 dye variants.
 A Wireless Observer is initially unpaired when placed, and breaking a paired Wireless Observer unpairs it.
 A placed Wireless Observer may be paired to a specific 'puter by
 using a paired Cobblemeter on the placed Wireless Observer.
+When a Wireless Observer is paired, the associated Cobbleputer receives a
+`WirelessObserverPaired` event. If the Observer was previously paired with a different
+Cobbleputer, that Cobbleputer receives a `WirelessObserverUnpaired` event.
+A `WirelessObserverUnpaired` event is also emitted when a Wireless Observer block
+is broken.
 
 A placed Wireless Observer has an orientation: it points along an axis. Orientation is
 determined during placement as with pistons and observers: The Wireless Observer faces

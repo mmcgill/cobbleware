@@ -4,7 +4,9 @@ import io.github.mmcgill.cobbleware.CobblewareMod;
 import io.github.mmcgill.cobbleware.execution.ExecutionDriver;
 import io.github.mmcgill.cobbleware.registry.CobblewareBlockEntities;
 import java.util.Optional;
+import java.util.UUID;
 import net.minecraft.core.BlockPos;
+import net.minecraft.core.UUIDUtil;
 import net.minecraft.core.GlobalPos;
 import net.minecraft.core.registries.Registries;
 import net.minecraft.resources.Identifier;
@@ -18,15 +20,20 @@ import net.minecraft.world.level.storage.ValueOutput;
 
 /** Durable pairing data for one placed Wireless Observer. */
 public final class WirelessObserverBlockEntity extends BlockEntity {
+    static final String OBSERVER_ID_TAG = "observer_id";
     static final String PAIRED_DIMENSION_TAG = "paired_dimension";
     static final String PAIRED_POSITION_TAG = "paired_pos";
     static final String OBSERVED_STATE_TAG = "observed_state";
 
+    private UUID observerId;
     private GlobalPos pairedCobbleputer;
     private BlockState observedState;
+    private boolean observerIdNeedsPersistence;
 
     public WirelessObserverBlockEntity(BlockPos pos, BlockState state) {
         super(CobblewareBlockEntities.WIRELESS_OBSERVER, pos, state);
+        observerId = UUID.randomUUID();
+        observerIdNeedsPersistence = true;
     }
 
     @Override
@@ -36,6 +43,9 @@ public final class WirelessObserverBlockEntity extends BlockEntity {
             ExecutionDriver executionDriver = CobblewareMod.executionDriverOrNull();
             if (observedState == null && executionDriver != null) {
                 executionDriver.registerObserverInitialization(this);
+            }
+            if (observerIdNeedsPersistence && executionDriver != null) {
+                executionDriver.registerObserverIdMigration(this);
             }
             WirelessObserverNetwork network = CobblewareMod.wirelessObserverNetworkOrNull();
             if (network != null) {
@@ -59,8 +69,24 @@ public final class WirelessObserverBlockEntity extends BlockEntity {
         super.setRemoved();
     }
 
+    @Override
+    public void preRemoveSideEffects(BlockPos pos, BlockState state) {
+        if (level instanceof net.minecraft.server.level.ServerLevel) {
+            ExecutionDriver executionDriver = CobblewareMod.executionDriverOrNull();
+            if (executionDriver != null) {
+                executionDriver.observerRemoved(this);
+            }
+        }
+        super.preRemoveSideEffects(pos, state);
+    }
+
     public Optional<GlobalPos> pairedCobbleputer() {
         return Optional.ofNullable(pairedCobbleputer);
+    }
+
+    /** Returns the durable identity of this placed Wireless Observer. */
+    public UUID observerId() {
+        return observerId;
     }
 
     /** Returns the position of the block observed by this endpoint. */
@@ -99,10 +125,11 @@ public final class WirelessObserverBlockEntity extends BlockEntity {
     }
 
     /** Replaces the paired Cobbleputer and updates the loaded-observer index. */
-    public void setPairedCobbleputer(GlobalPos target) {
+    public Optional<GlobalPos> setPairedCobbleputer(GlobalPos target) {
         if (target == null) {
             throw new IllegalArgumentException("paired Cobbleputer must not be null");
         }
+        GlobalPos previous = pairedCobbleputer;
         pairedCobbleputer = target;
         setChanged();
         if (level != null && !level.isClientSide()) {
@@ -111,11 +138,14 @@ public final class WirelessObserverBlockEntity extends BlockEntity {
                 network.reindex(this);
             }
         }
+        return Optional.ofNullable(previous);
     }
 
     @Override
     protected void saveAdditional(ValueOutput output) {
         super.saveAdditional(output);
+        output.store(OBSERVER_ID_TAG, UUIDUtil.CODEC, observerId);
+        observerIdNeedsPersistence = false;
         if (pairedCobbleputer != null) {
             output.putString(PAIRED_DIMENSION_TAG, pairedCobbleputer.dimension().identifier().toString());
             output.putLong(PAIRED_POSITION_TAG, pairedCobbleputer.pos().asLong());
@@ -126,6 +156,9 @@ public final class WirelessObserverBlockEntity extends BlockEntity {
     @Override
     protected void loadAdditional(ValueInput input) {
         super.loadAdditional(input);
+        Optional<UUID> loadedObserverId = input.read(OBSERVER_ID_TAG, UUIDUtil.CODEC);
+        observerId = loadedObserverId.orElseGet(UUID::randomUUID);
+        observerIdNeedsPersistence = loadedObserverId.isEmpty();
         pairedCobbleputer = readPairing(input).orElse(null);
         observedState = input.read(OBSERVED_STATE_TAG, BlockState.CODEC).orElse(null);
     }
@@ -159,6 +192,15 @@ public final class WirelessObserverBlockEntity extends BlockEntity {
         observedState = level.getBlockState(observedBlockPos());
         setChanged();
         return true;
+    }
+
+    /** Persists a UUID generated while loading legacy observer data after chunk attachment. */
+    public void persistMigratedObserverId() {
+        if (!observerIdNeedsPersistence) {
+            return;
+        }
+        observerIdNeedsPersistence = false;
+        setChanged();
     }
 
     /** A before/after snapshot captured while draining one dirty observer. */

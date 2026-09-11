@@ -4,7 +4,7 @@
 
 import type { GenFile, GenMessage } from "@bufbuild/protobuf/codegenv2";
 import { fileDesc, messageDesc } from "@bufbuild/protobuf/codegenv2";
-import type { Direction, DyeColor, GlobalPos, Identifier } from "./common_pb.ts";
+import type { Direction, DyeColor, GlobalPos, Identifier, Uuid } from "./common_pb.ts";
 import { file_common } from "./common_pb.ts";
 import type { Message } from "@bufbuild/protobuf";
 
@@ -12,7 +12,7 @@ import type { Message } from "@bufbuild/protobuf";
  * Describes the file events.proto.
  */
 export const file_events: GenFile = /*@__PURE__*/
-  fileDesc("CgxldmVudHMucHJvdG8SEWNvYmJsZXdhcmUuZXZlbnRzIhcKB1N0YXJ0ZWQSDAoEdGljaxgBIAEoBCIxCgdSZXN1bWVkEhEKCXN0b3BfdGljaxgBIAEoBBITCgtyZXN1bWVfdGljaxgCIAEoBCIeCgtDaGF0TWVzc2FnZRIPCgdtZXNzYWdlGAEgASgJIrMBCglCbG9ja0luZm8SMQoKYmxvY2tfdHlwZRgBIAEoCzIdLmNvYmJsZXdhcmUuY29tbW9uLklkZW50aWZpZXISQAoKcHJvcGVydGllcxgCIAMoCzIsLmNvYmJsZXdhcmUuZXZlbnRzLkJsb2NrSW5mby5Qcm9wZXJ0aWVzRW50cnkaMQoPUHJvcGVydGllc0VudHJ5EgsKA2tleRgBIAEoCRINCgV2YWx1ZRgCIAEoCToCOAEiwgIKEEJsb2NrU3RhdGVDaGFuZ2USMwoOb2JzZXJ2ZXJfY29sb3IYASABKA4yGy5jb2JibGV3YXJlLmNvbW1vbi5EeWVDb2xvchIyCgxvYnNlcnZlcl9kaXIYAiABKA4yHC5jb2JibGV3YXJlLmNvbW1vbi5EaXJlY3Rpb24SMgoMb2JzZXJ2ZXJfcG9zGAMgASgLMhwuY29iYmxld2FyZS5jb21tb24uR2xvYmFsUG9zEi8KCWJsb2NrX3BvcxgEIAEoCzIcLmNvYmJsZXdhcmUuY29tbW9uLkdsb2JhbFBvcxIvCglvbGRfc3RhdGUYBSABKAsyHC5jb2JibGV3YXJlLmV2ZW50cy5CbG9ja0luZm8SLwoJbmV3X3N0YXRlGAYgASgLMhwuY29iYmxld2FyZS5ldmVudHMuQmxvY2tJbmZvIukBCgVFdmVudBItCgdzdGFydGVkGAEgASgLMhouY29iYmxld2FyZS5ldmVudHMuU3RhcnRlZEgAEi0KB3Jlc3VtZWQYAiABKAsyGi5jb2JibGV3YXJlLmV2ZW50cy5SZXN1bWVkSAASNgoMY2hhdF9tZXNzYWdlGAMgASgLMh4uY29iYmxld2FyZS5ldmVudHMuQ2hhdE1lc3NhZ2VIABJBChJibG9ja19zdGF0ZV9jaGFuZ2UYBCABKAsyIy5jb2JibGV3YXJlLmV2ZW50cy5CbG9ja1N0YXRlQ2hhbmdlSABCBwoFZXZlbnRiCGVkaXRpb25zcOkH", [file_common]);
+  fileDesc("CgxldmVudHMucHJvdG8SEWNvYmJsZXdhcmUuZXZlbnRzIhcKB1N0YXJ0ZWQSDAoEdGljaxgBIAEoBCIxCgdSZXN1bWVkEhEKCXN0b3BfdGljaxgBIAEoBBITCgtyZXN1bWVfdGljaxgCIAEoBCIeCgtDaGF0TWVzc2FnZRIPCgdtZXNzYWdlGAEgASgJIrMBCglCbG9ja0luZm8SMQoKYmxvY2tfdHlwZRgBIAEoCzIdLmNvYmJsZXdhcmUuY29tbW9uLklkZW50aWZpZXISQAoKcHJvcGVydGllcxgCIAMoCzIsLmNvYmJsZXdhcmUuZXZlbnRzLkJsb2NrSW5mby5Qcm9wZXJ0aWVzRW50cnkaMQoPUHJvcGVydGllc0VudHJ5EgsKA2tleRgBIAEoCRINCgV2YWx1ZRgCIAEoCToCOAEi8AIKEEJsb2NrU3RhdGVDaGFuZ2USMwoOb2JzZXJ2ZXJfY29sb3IYASABKA4yGy5jb2JibGV3YXJlLmNvbW1vbi5EeWVDb2xvchIsCgtvYnNlcnZlcl9pZBgHIAEoCzIXLmNvYmJsZXdhcmUuY29tbW9uLlV1aWQSMgoMb2JzZXJ2ZXJfZGlyGAIgASgOMhwuY29iYmxld2FyZS5jb21tb24uRGlyZWN0aW9uEjIKDG9ic2VydmVyX3BvcxgDIAEoCzIcLmNvYmJsZXdhcmUuY29tbW9uLkdsb2JhbFBvcxIvCglibG9ja19wb3MYBCABKAsyHC5jb2JibGV3YXJlLmNvbW1vbi5HbG9iYWxQb3MSLwoJb2xkX3N0YXRlGAUgASgLMhwuY29iYmxld2FyZS5ldmVudHMuQmxvY2tJbmZvEi8KCW5ld19zdGF0ZRgGIAEoCzIcLmNvYmJsZXdhcmUuZXZlbnRzLkJsb2NrSW5mbyLjAQoWV2lyZWxlc3NPYnNlcnZlclBhaXJlZBIzCg5vYnNlcnZlcl9jb2xvchgBIAEoDjIbLmNvYmJsZXdhcmUuY29tbW9uLkR5ZUNvbG9yEiwKC29ic2VydmVyX2lkGAIgASgLMhcuY29iYmxld2FyZS5jb21tb24uVXVpZBIyCgxvYnNlcnZlcl9kaXIYAyABKA4yHC5jb2JibGV3YXJlLmNvbW1vbi5EaXJlY3Rpb24SMgoMb2JzZXJ2ZXJfcG9zGAQgASgLMhwuY29iYmxld2FyZS5jb21tb24uR2xvYmFsUG9zIuUBChhXaXJlbGVzc09ic2VydmVyVW5wYWlyZWQSMwoOb2JzZXJ2ZXJfY29sb3IYASABKA4yGy5jb2JibGV3YXJlLmNvbW1vbi5EeWVDb2xvchIsCgtvYnNlcnZlcl9pZBgCIAEoCzIXLmNvYmJsZXdhcmUuY29tbW9uLlV1aWQSMgoMb2JzZXJ2ZXJfZGlyGAMgASgOMhwuY29iYmxld2FyZS5jb21tb24uRGlyZWN0aW9uEjIKDG9ic2VydmVyX3BvcxgEIAEoCzIcLmNvYmJsZXdhcmUuY29tbW9uLkdsb2JhbFBvcyKLAwoFRXZlbnQSLQoHc3RhcnRlZBgBIAEoCzIaLmNvYmJsZXdhcmUuZXZlbnRzLlN0YXJ0ZWRIABItCgdyZXN1bWVkGAIgASgLMhouY29iYmxld2FyZS5ldmVudHMuUmVzdW1lZEgAEjYKDGNoYXRfbWVzc2FnZRgDIAEoCzIeLmNvYmJsZXdhcmUuZXZlbnRzLkNoYXRNZXNzYWdlSAASQQoSYmxvY2tfc3RhdGVfY2hhbmdlGAQgASgLMiMuY29iYmxld2FyZS5ldmVudHMuQmxvY2tTdGF0ZUNoYW5nZUgAEk0KGHdpcmVsZXNzX29ic2VydmVyX3BhaXJlZBgFIAEoCzIpLmNvYmJsZXdhcmUuZXZlbnRzLldpcmVsZXNzT2JzZXJ2ZXJQYWlyZWRIABJRChp3aXJlbGVzc19vYnNlcnZlcl91bnBhaXJlZBgGIAEoCzIrLmNvYmJsZXdhcmUuZXZlbnRzLldpcmVsZXNzT2JzZXJ2ZXJVbnBhaXJlZEgAQgcKBWV2ZW50YghlZGl0aW9uc3DpBw", [file_common]);
 
 /**
  * The Program has started executing.
@@ -108,6 +108,11 @@ export type BlockStateChange = Message<"cobbleware.events.BlockStateChange"> & {
   observerColor: DyeColor;
 
   /**
+   * @generated from field: cobbleware.common.Uuid observer_id = 7;
+   */
+  observerId?: Uuid | undefined;
+
+  /**
    * @generated from field: cobbleware.common.Direction observer_dir = 2;
    */
   observerDir: Direction;
@@ -139,6 +144,70 @@ export type BlockStateChange = Message<"cobbleware.events.BlockStateChange"> & {
  */
 export const BlockStateChangeSchema: GenMessage<BlockStateChange> = /*@__PURE__*/
   messageDesc(file_events, 4);
+
+/**
+ * @generated from message cobbleware.events.WirelessObserverPaired
+ */
+export type WirelessObserverPaired = Message<"cobbleware.events.WirelessObserverPaired"> & {
+  /**
+   * @generated from field: cobbleware.common.DyeColor observer_color = 1;
+   */
+  observerColor: DyeColor;
+
+  /**
+   * @generated from field: cobbleware.common.Uuid observer_id = 2;
+   */
+  observerId?: Uuid | undefined;
+
+  /**
+   * @generated from field: cobbleware.common.Direction observer_dir = 3;
+   */
+  observerDir: Direction;
+
+  /**
+   * @generated from field: cobbleware.common.GlobalPos observer_pos = 4;
+   */
+  observerPos?: GlobalPos | undefined;
+};
+
+/**
+ * Describes the message cobbleware.events.WirelessObserverPaired.
+ * Use `create(WirelessObserverPairedSchema)` to create a new message.
+ */
+export const WirelessObserverPairedSchema: GenMessage<WirelessObserverPaired> = /*@__PURE__*/
+  messageDesc(file_events, 5);
+
+/**
+ * @generated from message cobbleware.events.WirelessObserverUnpaired
+ */
+export type WirelessObserverUnpaired = Message<"cobbleware.events.WirelessObserverUnpaired"> & {
+  /**
+   * @generated from field: cobbleware.common.DyeColor observer_color = 1;
+   */
+  observerColor: DyeColor;
+
+  /**
+   * @generated from field: cobbleware.common.Uuid observer_id = 2;
+   */
+  observerId?: Uuid | undefined;
+
+  /**
+   * @generated from field: cobbleware.common.Direction observer_dir = 3;
+   */
+  observerDir: Direction;
+
+  /**
+   * @generated from field: cobbleware.common.GlobalPos observer_pos = 4;
+   */
+  observerPos?: GlobalPos | undefined;
+};
+
+/**
+ * Describes the message cobbleware.events.WirelessObserverUnpaired.
+ * Use `create(WirelessObserverUnpairedSchema)` to create a new message.
+ */
+export const WirelessObserverUnpairedSchema: GenMessage<WirelessObserverUnpaired> = /*@__PURE__*/
+  messageDesc(file_events, 6);
 
 /**
  * A single event supplied to a program step.
@@ -173,6 +242,18 @@ export type Event = Message<"cobbleware.events.Event"> & {
      */
     value: BlockStateChange;
     case: "blockStateChange";
+  } | {
+    /**
+     * @generated from field: cobbleware.events.WirelessObserverPaired wireless_observer_paired = 5;
+     */
+    value: WirelessObserverPaired;
+    case: "wirelessObserverPaired";
+  } | {
+    /**
+     * @generated from field: cobbleware.events.WirelessObserverUnpaired wireless_observer_unpaired = 6;
+     */
+    value: WirelessObserverUnpaired;
+    case: "wirelessObserverUnpaired";
   } | { case: undefined; value?: undefined };
 };
 
@@ -181,5 +262,5 @@ export type Event = Message<"cobbleware.events.Event"> & {
  * Use `create(EventSchema)` to create a new message.
  */
 export const EventSchema: GenMessage<Event> = /*@__PURE__*/
-  messageDesc(file_events, 5);
+  messageDesc(file_events, 7);
 

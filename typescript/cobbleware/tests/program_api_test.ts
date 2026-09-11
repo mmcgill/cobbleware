@@ -77,6 +77,7 @@ Deno.test('Program API delivers a BlockStateChange to the event handler', async 
         case: 'blockStateChange',
         value: create(Events.BlockStateChangeSchema, {
           observerColor: Common.DyeColor.RED,
+          observerId: observerId(),
           observerDir: Common.Direction.EAST,
           observerPos: globalPos(1, 64, 1),
           blockPos: globalPos(2, 64, 1),
@@ -94,7 +95,61 @@ Deno.test('Program API delivers a BlockStateChange to the event handler', async 
   assertEquals(response.status, 200, 'block-state step should succeed');
   if (received === undefined) throw new Error('handler did not receive the BlockStateChange');
   assertEquals(received.observerColor, Common.DyeColor.RED, 'observer color should reach handler');
+  assertEquals(received.observerId?.high, 10n, 'observer id should reach handler');
   assertEquals(received.newState?.properties.lit, 'true', 'new state should reach handler');
+});
+
+Deno.test('Program API delivers Wireless Observer pairing lifecycle events', async () => {
+  const received: Events.Event[] = [];
+  const lifecycleHandler = createProgramApiHandler({
+    startStates: {},
+    program: (state, event) => {
+      received.push(event);
+      return create(Program.StepResponseSchema, { state, effects: [] });
+    },
+  });
+  const paired = create(Events.EventSchema, {
+    event: {
+      case: 'wirelessObserverPaired',
+      value: create(Events.WirelessObserverPairedSchema, {
+        observerColor: Common.DyeColor.BLUE,
+        observerId: observerId(),
+        observerDir: Common.Direction.NORTH,
+        observerPos: globalPos(4, 65, -2),
+      }),
+    },
+  });
+  const unpaired = create(Events.EventSchema, {
+    event: {
+      case: 'wirelessObserverUnpaired',
+      value: create(Events.WirelessObserverUnpairedSchema, {
+        observerColor: Common.DyeColor.BLUE,
+        observerId: observerId(),
+        observerDir: Common.Direction.NORTH,
+        observerPos: globalPos(4, 65, -2),
+      }),
+    },
+  });
+
+  for (const event of [paired, unpaired]) {
+    const request = create(Program.StepRequestSchema, { state: new Uint8Array(), event });
+    const response = await lifecycleHandler(
+      binaryRequest('/nextState', toBinary(Program.StepRequestSchema, request)),
+    );
+    assertEquals(response.status, 200, 'lifecycle step should succeed');
+  }
+
+  assertEquals(received[0]?.event.case, 'wirelessObserverPaired', 'paired event should reach handler');
+  if (received[0]?.event.case !== 'wirelessObserverPaired') {
+    throw new Error('paired lifecycle payload missing');
+  }
+  assertEquals(received[0].event.value.observerId?.low, 20n, 'paired event id should reach handler');
+  assertEquals(received[0].event.value.observerPos?.position?.z, -2, 'paired position should reach handler');
+  assertEquals(received[1]?.event.case, 'wirelessObserverUnpaired', 'unpaired event should reach handler');
+  if (received[1]?.event.case !== 'wirelessObserverUnpaired') {
+    throw new Error('unpaired lifecycle payload missing');
+  }
+  assertEquals(received[1].event.value.observerPos?.position?.z, -2, 'unpaired position should reach handler');
 });
 
 Deno.test('Program API returns a binary ErrorResponse for invalid and failing steps', async () => {
@@ -169,6 +224,10 @@ function globalPos(x: number, y: number, z: number): Common.GlobalPos {
     dimension: create(Common.IdentifierSchema, { ns: 'minecraft', path: 'overworld' }),
     position: create(Common.Vec3iSchema, { x, y, z }),
   });
+}
+
+function observerId(): Common.Uuid {
+  return create(Common.UuidSchema, { high: 10n, low: 20n });
 }
 
 function blockInfo(path: string, properties: Record<string, string>): Events.BlockInfo {

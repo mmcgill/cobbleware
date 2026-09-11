@@ -8,6 +8,8 @@ import cobbleware.events.ChatMessage;
 import cobbleware.events.Event;
 import cobbleware.events.Resumed;
 import cobbleware.events.Started;
+import cobbleware.events.WirelessObserverPaired;
+import cobbleware.events.WirelessObserverUnpaired;
 import cobbleware.internal.ExecutionResult;
 import cobbleware.internal.ExecutionState;
 import cobbleware.internal.ExecutionStatus;
@@ -60,6 +62,8 @@ public final class ExecutionDriver {
     private final Map<CobbleputerBlockEntity, ActiveExecution> activeExecutions = new IdentityHashMap<>();
     private final Set<WirelessObserverBlockEntity> pendingObserverInitializations =
             Collections.newSetFromMap(new IdentityHashMap<>());
+    private final Set<WirelessObserverBlockEntity> pendingObserverIdMigrations =
+            Collections.newSetFromMap(new IdentityHashMap<>());
     private final Set<WirelessObserverBlockEntity> pendingObserverChanges =
             Collections.newSetFromMap(new IdentityHashMap<>());
 
@@ -102,10 +106,44 @@ public final class ExecutionDriver {
         }
     }
 
+    /** Schedules post-load persistence of an observer UUID generated for legacy data. */
+    public void registerObserverIdMigration(WirelessObserverBlockEntity observer) {
+        if (observer != null) {
+            pendingObserverIdMigrations.add(observer);
+        }
+    }
+
     /** Removes an unloaded or broken observer from the ephemeral pending-change set. */
     public void deactivate(WirelessObserverBlockEntity observer) {
         pendingObserverInitializations.remove(observer);
+        pendingObserverIdMigrations.remove(observer);
         pendingObserverChanges.remove(observer);
+    }
+
+    /** Delivers lifecycle events after an observer's durable pairing has been replaced. */
+    public void observerPaired(
+            WirelessObserverBlockEntity observer,
+            net.minecraft.core.GlobalPos previousTarget,
+            net.minecraft.core.GlobalPos newTarget) {
+        if (observer == null || newTarget == null || observer.isRemoved()
+                || !(observer.getLevel() instanceof ServerLevel observerLevel)) {
+            return;
+        }
+        MinecraftServer server = observerLevel.getServer();
+        if (previousTarget != null && !previousTarget.equals(newTarget)) {
+            deliverObserverUnpaired(server, observer, observerLevel, previousTarget);
+        }
+        deliverObserverPaired(server, observer, observerLevel, newTarget);
+    }
+
+    /** Delivers the unpair lifecycle event before a paired observer block is discarded. */
+    public void observerRemoved(WirelessObserverBlockEntity observer) {
+        if (observer == null || observer.isRemoved()
+                || !(observer.getLevel() instanceof ServerLevel observerLevel)) {
+            return;
+        }
+        observer.pairedCobbleputer().ifPresent(target ->
+                deliverObserverUnpaired(observerLevel.getServer(), observer, observerLevel, target));
     }
 
     /** Starts a fresh execution and queues its first lifecycle event. */
@@ -220,6 +258,7 @@ public final class ExecutionDriver {
             flight = null;
         }
 
+        drainObserverIdMigrations();
         drainObserverInitializations();
         drainObserverChanges(server);
         Flight nextFlight = buildFlight();
@@ -268,6 +307,19 @@ public final class ExecutionDriver {
         }
     }
 
+    private void drainObserverIdMigrations() {
+        if (pendingObserverIdMigrations.isEmpty()) {
+            return;
+        }
+        List<WirelessObserverBlockEntity> observers = List.copyOf(pendingObserverIdMigrations);
+        pendingObserverIdMigrations.clear();
+        for (WirelessObserverBlockEntity observer : observers) {
+            if (!observer.isRemoved() && observer.getLevel() instanceof ServerLevel) {
+                observer.persistMigratedObserverId();
+            }
+        }
+    }
+
     private void deliverBlockStateChange(
             MinecraftServer server,
             WirelessObserverBlockEntity observer,
@@ -278,9 +330,8 @@ public final class ExecutionDriver {
             return;
         }
         net.minecraft.core.GlobalPos target = pairedTarget.orElseThrow();
-        ServerLevel targetLevel = server.getLevel(target.dimension());
-        if (targetLevel == null || !targetLevel.isLoaded(target.pos())
-                || !(targetLevel.getBlockEntity(target.pos()) instanceof CobbleputerBlockEntity cobbleputer)) {
+        Optional<CobbleputerBlockEntity> targetCobbleputer = resolveCobbleputer(server, target);
+        if (targetCobbleputer.isEmpty()) {
             return;
         }
         BlockState observerState = observer.getBlockState();
@@ -289,13 +340,63 @@ public final class ExecutionDriver {
         }
         BlockStateChange event = BlockStateChange.newBuilder()
                 .setObserverColor(protoDyeColor(wirelessObserver.color()))
+                .setObserverId(protoUuid(observer.observerId()))
                 .setObserverDir(protoDirection(observerState.getValue(DirectionalBlock.FACING)))
                 .setObserverPos(protoGlobalPos(observerLevel, observer.getBlockPos()))
                 .setBlockPos(protoGlobalPos(observerLevel, change.pos()))
                 .setOldState(protoBlockInfo(change.oldState()))
                 .setNewState(protoBlockInfo(change.newState()))
                 .build();
-        enqueueEvent(cobbleputer, Event.newBuilder().setBlockStateChange(event).build());
+        enqueueEvent(targetCobbleputer.orElseThrow(), Event.newBuilder().setBlockStateChange(event).build());
+    }
+
+    private void deliverObserverPaired(
+            MinecraftServer server,
+            WirelessObserverBlockEntity observer,
+            ServerLevel observerLevel,
+            net.minecraft.core.GlobalPos target) {
+        Optional<CobbleputerBlockEntity> targetCobbleputer = resolveCobbleputer(server, target);
+        if (targetCobbleputer.isEmpty()
+                || !(observer.getBlockState().getBlock() instanceof WirelessObserverBlock wirelessObserver)) {
+            return;
+        }
+        WirelessObserverPaired event = WirelessObserverPaired.newBuilder()
+                .setObserverColor(protoDyeColor(wirelessObserver.color()))
+                .setObserverId(protoUuid(observer.observerId()))
+                .setObserverDir(protoDirection(observer.getBlockState().getValue(DirectionalBlock.FACING)))
+                .setObserverPos(protoGlobalPos(observerLevel, observer.getBlockPos()))
+                .build();
+        enqueueEvent(targetCobbleputer.orElseThrow(), Event.newBuilder().setWirelessObserverPaired(event).build());
+    }
+
+    private void deliverObserverUnpaired(
+            MinecraftServer server,
+            WirelessObserverBlockEntity observer,
+            ServerLevel observerLevel,
+            net.minecraft.core.GlobalPos target) {
+        Optional<CobbleputerBlockEntity> targetCobbleputer = resolveCobbleputer(server, target);
+        BlockState observerState = observer.getBlockState();
+        if (targetCobbleputer.isEmpty()
+                || !(observerState.getBlock() instanceof WirelessObserverBlock wirelessObserver)) {
+            return;
+        }
+        WirelessObserverUnpaired event = WirelessObserverUnpaired.newBuilder()
+                .setObserverColor(protoDyeColor(wirelessObserver.color()))
+                .setObserverId(protoUuid(observer.observerId()))
+                .setObserverDir(protoDirection(observerState.getValue(DirectionalBlock.FACING)))
+                .setObserverPos(protoGlobalPos(observerLevel, observer.getBlockPos()))
+                .build();
+        enqueueEvent(targetCobbleputer.orElseThrow(), Event.newBuilder().setWirelessObserverUnpaired(event).build());
+    }
+
+    private static Optional<CobbleputerBlockEntity> resolveCobbleputer(
+            MinecraftServer server, net.minecraft.core.GlobalPos target) {
+        ServerLevel targetLevel = server.getLevel(target.dimension());
+        if (targetLevel == null || !targetLevel.isLoaded(target.pos())
+                || !(targetLevel.getBlockEntity(target.pos()) instanceof CobbleputerBlockEntity cobbleputer)) {
+            return Optional.empty();
+        }
+        return Optional.of(cobbleputer);
     }
 
     private Flight buildFlight() {

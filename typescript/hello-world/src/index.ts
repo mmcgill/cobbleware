@@ -49,6 +49,17 @@ export const echoHandler: EventProgram = function handle(state, event) {
         }),
       },
     })];
+  } else if (event.event.case === 'wirelessObserverPaired' || event.event.case == 'wirelessObserverUnpaired') {
+    const ev = event.event.value;
+    const msg = `${event.event.case}: ${ev.observerId} ${ev.observerColor} ${JSON.stringify(ev.observerPos)}`;
+    effects = [create(Effects.EffectSchema, {
+      effect: {
+        case: 'sendChat',
+        value: create(Effects.SendChatSchema, {
+          msg,
+        }),
+      },
+    })];
   }
   return create(Program.StepResponseSchema, { state: state.slice(), effects });
 };

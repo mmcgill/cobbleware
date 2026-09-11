@@ -1,6 +1,8 @@
 package io.github.mmcgill.cobbleware.item;
 
 import eu.pb4.polymer.core.api.item.SimplePolymerItem;
+import io.github.mmcgill.cobbleware.CobblewareMod;
+import io.github.mmcgill.cobbleware.execution.ExecutionDriver;
 import io.github.mmcgill.cobbleware.registry.CobblewareBlocks;
 import io.github.mmcgill.cobbleware.block.WirelessObserverBlockEntity;
 import java.util.Optional;
@@ -34,7 +36,13 @@ public final class CobblemeterItem extends SimplePolymerItem {
                     return InteractionResult.SUCCESS;
                 }
                 if (level.getBlockEntity(context.getClickedPos()) instanceof WirelessObserverBlockEntity observer) {
-                    observer.setPairedCobbleputer(target.orElseThrow());
+                    GlobalPos newTarget = target.orElseThrow();
+                    Optional<GlobalPos> previousTarget = observer.setPairedCobbleputer(newTarget);
+                    ExecutionDriver executionDriver = CobblewareMod.executionDriverOrNull();
+                    if (executionDriver != null) {
+                        executionDriver.observerPaired(
+                                observer, previousTarget.orElse(null), newTarget);
+                    }
                     if (context.getPlayer() != null) {
                         context.getPlayer().sendSystemMessage(Component.translatable(
                                 "item.cobbleware.cobblemeter.observer_paired",
