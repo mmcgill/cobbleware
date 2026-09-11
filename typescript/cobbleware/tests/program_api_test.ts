@@ -60,6 +60,50 @@ Deno.test('Program API decodes a step and encodes its result', async () => {
   assertEquals(decoded.effects[0]?.effect.case, 'emitBeep', 'handler effects should round-trip');
 });
 
+Deno.test('Program API round-trips SetRedstonePower effects', async () => {
+  const powerHandler = createProgramApiHandler({
+    startStates: {},
+    program: (state) => create(Program.StepResponseSchema, {
+      state,
+      effects: [
+        create(Effects.EffectSchema, {
+          effect: {
+            case: 'setRedstonePower',
+            value: create(Effects.SetRedstonePowerSchema, {
+              observerId: observerId(),
+              powerLevel: 15,
+            }),
+          },
+        }),
+      ],
+    }),
+  });
+  const request = create(Program.StepRequestSchema, {
+    state: new Uint8Array([3]),
+    event: create(Events.EventSchema, {
+      event: {
+        case: 'resumed',
+        value: create(Events.ResumedSchema, { stopTick: 3n, resumeTick: 4n }),
+      },
+    }),
+  });
+
+  const response = await powerHandler(
+    binaryRequest('/nextState', toBinary(Program.StepRequestSchema, request)),
+  );
+  const decoded = fromBinary(
+    Program.StepResponseSchema,
+    new Uint8Array(await response.arrayBuffer()),
+  );
+
+  assertEquals(decoded.effects[0]?.effect.case, 'setRedstonePower', 'power effect should round-trip');
+  if (decoded.effects[0]?.effect.case !== 'setRedstonePower') {
+    throw new Error('SetRedstonePower payload missing');
+  }
+  assertEquals(decoded.effects[0].effect.value.observerId?.high, 10n, 'observer id should round-trip');
+  assertEquals(decoded.effects[0].effect.value.powerLevel, 15, 'power level should round-trip');
+});
+
 Deno.test('Program API delivers a BlockStateChange to the event handler', async () => {
   let received: Events.BlockStateChange | undefined;
   const blockStateHandler = createProgramApiHandler({

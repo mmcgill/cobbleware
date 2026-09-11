@@ -2,6 +2,8 @@ edition = "2024";
 
 package cobbleware.effects;
 
+import "common.proto";
+
 message SendChat {
   // Required by the application contract.
   string msg = 1;
@@ -12,10 +14,17 @@ message EmitBeep {
   uint32 millis = 1;
 }
 
+message SetRedstonePower {
+  cobbleware.common.Uuid observer_id = 1;
+  // Clamped to 15
+  uint32 power_level = 2;
+}
+
 // A single effect produced by a program step.
 message Effect {
   oneof effect {
     SendChat send_chat = 1;
     EmitBeep emit_beep = 2;
+    SetRedstonePower set_redstone_power = 3;
   }
 }

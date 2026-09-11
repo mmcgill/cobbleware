@@ -16,6 +16,8 @@ Here's a rough sketch of the current plan to getting something working end-to-en
   * [x] Pairing
   * [x] Color
   * [x] Cobblemeter path visualization
-  * Block state change
-  * Emit Redstone pulse
-  * Set Redstone level
+  * [x] Block state change
+  * [x] Set Redstone level
+* [ ] Drop events for Players not online (configurable)
+* [ ] Cobbleputer art assets
+* [ ] Wireless Observer art assets

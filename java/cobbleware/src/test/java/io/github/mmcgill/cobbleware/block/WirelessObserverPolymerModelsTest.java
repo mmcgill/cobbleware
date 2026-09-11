@@ -12,7 +12,10 @@ class WirelessObserverPolymerModelsTest {
         for (DyeColor color : DyeColor.values()) {
             assertEquals(
                     Identifier.fromNamespaceAndPath("cobbleware", "block/" + color.getName() + "_wireless_observer"),
-                    WirelessObserverPolymerModels.modelIdFor(color));
+                    WirelessObserverPolymerModels.modelIdFor(color, false));
+            assertEquals(
+                    Identifier.fromNamespaceAndPath("cobbleware", "block/wireless_observer_powered"),
+                    WirelessObserverPolymerModels.modelIdFor(color, true));
         }
     }
 }

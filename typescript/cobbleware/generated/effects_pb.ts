@@ -4,13 +4,15 @@
 
 import type { GenFile, GenMessage } from "@bufbuild/protobuf/codegenv2";
 import { fileDesc, messageDesc } from "@bufbuild/protobuf/codegenv2";
+import type { Uuid } from "./common_pb.ts";
+import { file_common } from "./common_pb.ts";
 import type { Message } from "@bufbuild/protobuf";
 
 /**
  * Describes the file effects.proto.
  */
 export const file_effects: GenFile = /*@__PURE__*/
-  fileDesc("Cg1lZmZlY3RzLnByb3RvEhJjb2JibGV3YXJlLmVmZmVjdHMiFwoIU2VuZENoYXQSCwoDbXNnGAEgASgJIhoKCEVtaXRCZWVwEg4KBm1pbGxpcxgBIAEoDSJ4CgZFZmZlY3QSMQoJc2VuZF9jaGF0GAEgASgLMhwuY29iYmxld2FyZS5lZmZlY3RzLlNlbmRDaGF0SAASMQoJZW1pdF9iZWVwGAIgASgLMhwuY29iYmxld2FyZS5lZmZlY3RzLkVtaXRCZWVwSABCCAoGZWZmZWN0YghlZGl0aW9uc3DpBw");
+  fileDesc("Cg1lZmZlY3RzLnByb3RvEhJjb2JibGV3YXJlLmVmZmVjdHMiFwoIU2VuZENoYXQSCwoDbXNnGAEgASgJIhoKCEVtaXRCZWVwEg4KBm1pbGxpcxgBIAEoDSJVChBTZXRSZWRzdG9uZVBvd2VyEiwKC29ic2VydmVyX2lkGAEgASgLMhcuY29iYmxld2FyZS5jb21tb24uVXVpZBITCgtwb3dlcl9sZXZlbBgCIAEoDSK8AQoGRWZmZWN0EjEKCXNlbmRfY2hhdBgBIAEoCzIcLmNvYmJsZXdhcmUuZWZmZWN0cy5TZW5kQ2hhdEgAEjEKCWVtaXRfYmVlcBgCIAEoCzIcLmNvYmJsZXdhcmUuZWZmZWN0cy5FbWl0QmVlcEgAEkIKEnNldF9yZWRzdG9uZV9wb3dlchgDIAEoCzIkLmNvYmJsZXdhcmUuZWZmZWN0cy5TZXRSZWRzdG9uZVBvd2VySABCCAoGZWZmZWN0YghlZGl0aW9uc3DpBw", [file_common]);
 
 /**
  * @generated from message cobbleware.effects.SendChat
@@ -51,6 +53,30 @@ export const EmitBeepSchema: GenMessage<EmitBeep> = /*@__PURE__*/
   messageDesc(file_effects, 1);
 
 /**
+ * @generated from message cobbleware.effects.SetRedstonePower
+ */
+export type SetRedstonePower = Message<"cobbleware.effects.SetRedstonePower"> & {
+  /**
+   * @generated from field: cobbleware.common.Uuid observer_id = 1;
+   */
+  observerId?: Uuid | undefined;
+
+  /**
+   * Clamped to 15
+   *
+   * @generated from field: uint32 power_level = 2;
+   */
+  powerLevel: number;
+};
+
+/**
+ * Describes the message cobbleware.effects.SetRedstonePower.
+ * Use `create(SetRedstonePowerSchema)` to create a new message.
+ */
+export const SetRedstonePowerSchema: GenMessage<SetRedstonePower> = /*@__PURE__*/
+  messageDesc(file_effects, 2);
+
+/**
  * A single effect produced by a program step.
  *
  * @generated from message cobbleware.effects.Effect
@@ -71,6 +97,12 @@ export type Effect = Message<"cobbleware.effects.Effect"> & {
      */
     value: EmitBeep;
     case: "emitBeep";
+  } | {
+    /**
+     * @generated from field: cobbleware.effects.SetRedstonePower set_redstone_power = 3;
+     */
+    value: SetRedstonePower;
+    case: "setRedstonePower";
   } | { case: undefined; value?: undefined };
 };
 
@@ -79,5 +111,5 @@ export type Effect = Message<"cobbleware.effects.Effect"> & {
  * Use `create(EffectSchema)` to create a new message.
  */
 export const EffectSchema: GenMessage<Effect> = /*@__PURE__*/
-  messageDesc(file_effects, 2);
+  messageDesc(file_effects, 3);
 

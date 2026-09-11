@@ -100,6 +100,13 @@ unloaded, not running, or has a full event queue, and are not replayed later. Ob
 continue tracking their facing block while unpaired so pairing does not produce stale
 changes.
 
+Paired Wireless Observers are also controllable redstone emitters. In their initially
+placed state they emit no redstone signal. Once paired, a Cobbleputer can emit
+a `SetRedstonePower` effect targetted at a specific Wireless Observer to set its
+redstone signal power level to any level from 0 (off, the default) to 15.
+Pairing a Wireless Observer to a different Cobbleputer resets its power level to 0.
+Wireless Observers emit redstone signal in the direction they're facing.
+
 ## Cobblemeter
 
 A Cobblemeter is an item that can be used by the player to pair Wireless Observers

@@ -16,6 +16,7 @@ import cobbleware.internal.ExecutionStatus;
 import cobbleware.internal.ExecutionsRequest;
 import cobbleware.internal.ExecutionsResponse;
 import io.github.mmcgill.cobbleware.api.MainWorkerClient;
+import io.github.mmcgill.cobbleware.CobblewareMod;
 import io.github.mmcgill.cobbleware.block.CobbleputerBlock;
 import io.github.mmcgill.cobbleware.block.CobbleputerBlockEntity;
 import io.github.mmcgill.cobbleware.block.CobbleputerState;
@@ -520,6 +521,10 @@ public final class ExecutionDriver {
 
     private void applyEffect(CobbleputerBlockEntity blockEntity, Effect effect) {
         String message = switch (effect.getEffectCase()) {
+            case SET_REDSTONE_POWER -> {
+                applyRedstonePower(blockEntity, effect.getSetRedstonePower());
+                yield null;
+            }
             case EMIT_BEEP -> {
                 if (Integer.compareUnsigned(effect.getEmitBeep().getMillis(), 65535) > 0) {
                     logger.warn("Ignoring EmitBeep with an invalid millis value at {}",
@@ -531,6 +536,9 @@ public final class ExecutionDriver {
             case SEND_CHAT -> effect.getSendChat().getMsg();
             case EFFECT_NOT_SET -> null;
         };
+        if (effect.getEffectCase() == Effect.EffectCase.SET_REDSTONE_POWER) {
+            return;
+        }
         if (message == null) {
             logger.warn("Ignoring unsupported or unset Cobbleputer effect at {}",
                     blockEntity.getBlockPos().toShortString());
@@ -546,6 +554,22 @@ public final class ExecutionDriver {
                 player.sendSystemMessage(Component.literal(message));
             }
         }
+    }
+
+    private static void applyRedstonePower(
+            CobbleputerBlockEntity blockEntity, cobbleware.effects.SetRedstonePower effect) {
+        if (!(blockEntity.getLevel() instanceof ServerLevel level)) {
+            return;
+        }
+        io.github.mmcgill.cobbleware.block.WirelessObserverNetwork network =
+                CobblewareMod.wirelessObserverNetworkOrNull();
+        if (network == null) {
+            return;
+        }
+        network.setRedstonePower(
+                net.minecraft.core.GlobalPos.of(level.dimension(), blockEntity.getBlockPos()),
+                new UUID(effect.getObserverId().getHigh(), effect.getObserverId().getLow()),
+                effect.getPowerLevel());
     }
 
     private static ExecutionStatus executionStatus(BlockState blockState) {

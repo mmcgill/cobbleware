@@ -131,6 +131,10 @@ public final class WirelessObserverBlockEntity extends BlockEntity {
         }
         GlobalPos previous = pairedCobbleputer;
         pairedCobbleputer = target;
+        if (previous != null && !previous.equals(target) && level != null && !level.isClientSide()
+                && getBlockState().getBlock() instanceof WirelessObserverBlock) {
+            WirelessObserverBlock.setPower(level, worldPosition, getBlockState(), 0);
+        }
         setChanged();
         if (level != null && !level.isClientSide()) {
             WirelessObserverNetwork network = CobblewareMod.wirelessObserverNetworkOrNull();

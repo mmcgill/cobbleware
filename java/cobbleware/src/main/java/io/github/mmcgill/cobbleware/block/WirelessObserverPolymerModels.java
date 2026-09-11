@@ -5,6 +5,7 @@ import eu.pb4.polymer.blocks.api.PolymerBlockModel;
 import eu.pb4.polymer.blocks.api.PolymerBlockResourceUtils;
 import io.github.mmcgill.cobbleware.CobblewareMod;
 import java.util.EnumMap;
+import java.util.HashMap;
 import java.util.Map;
 import net.minecraft.core.Direction;
 import net.minecraft.resources.Identifier;
@@ -13,7 +14,7 @@ import net.minecraft.world.level.block.state.BlockState;
 
 /** Allocates the vanilla client states used to render every observer color and orientation. */
 public final class WirelessObserverPolymerModels {
-    private static volatile Map<DyeColor, Map<Direction, BlockState>> states;
+    private static volatile Map<DyeColor, Map<Direction, Map<Boolean, BlockState>>> states;
 
     private WirelessObserverPolymerModels() {
     }
@@ -23,37 +24,43 @@ public final class WirelessObserverPolymerModels {
             return;
         }
 
-        Map<DyeColor, Map<Direction, BlockState>> allocatedColors = new EnumMap<>(DyeColor.class);
+        Map<DyeColor, Map<Direction, Map<Boolean, BlockState>>> allocatedColors = new EnumMap<>(DyeColor.class);
         for (DyeColor color : DyeColor.values()) {
-            Map<Direction, BlockState> allocatedFacings = new EnumMap<>(Direction.class);
+            Map<Direction, Map<Boolean, BlockState>> allocatedFacings = new EnumMap<>(Direction.class);
             for (Direction facing : Direction.values()) {
-                Rotation rotation = Rotation.forFacing(facing);
-                BlockState allocatedState = PolymerBlockResourceUtils.requestBlock(
-                        BlockModelType.FULL_BLOCK,
-                        PolymerBlockModel.of(modelIdFor(color), rotation.x(), rotation.y(), true));
-                if (allocatedState == null) {
-                    throw new IllegalStateException(
-                            "Polymer could not allocate a FULL_BLOCK model for Wireless Observer "
-                                    + color.getName() + " facing " + facing.getSerializedName());
+                Map<Boolean, BlockState> allocatedPowerStates = new HashMap<>();
+                for (boolean powered : new boolean[] {false, true}) {
+                    Rotation rotation = Rotation.forFacing(facing);
+                    BlockState allocatedState = PolymerBlockResourceUtils.requestBlock(
+                            BlockModelType.FULL_BLOCK,
+                            PolymerBlockModel.of(modelIdFor(color, powered), rotation.x(), rotation.y(), true));
+                    if (allocatedState == null) {
+                        throw new IllegalStateException(
+                                "Polymer could not allocate a FULL_BLOCK model for Wireless Observer "
+                                        + color.getName() + " facing " + facing.getSerializedName()
+                                        + " powered=" + powered);
+                    }
+                    allocatedPowerStates.put(powered, allocatedState);
                 }
-                allocatedFacings.put(facing, allocatedState);
+                allocatedFacings.put(facing, Map.copyOf(allocatedPowerStates));
             }
             allocatedColors.put(color, Map.copyOf(allocatedFacings));
         }
         states = Map.copyOf(allocatedColors);
     }
 
-    public static BlockState stateFor(DyeColor color, Direction facing) {
-        Map<DyeColor, Map<Direction, BlockState>> initializedStates = states;
+    public static BlockState stateFor(DyeColor color, Direction facing, boolean powered) {
+        Map<DyeColor, Map<Direction, Map<Boolean, BlockState>>> initializedStates = states;
         if (initializedStates == null) {
             throw new IllegalStateException("Wireless Observer Polymer models have not been initialized");
         }
-        return initializedStates.get(color).get(facing);
+        return initializedStates.get(color).get(facing).get(powered);
     }
 
-    static Identifier modelIdFor(DyeColor color) {
+    static Identifier modelIdFor(DyeColor color, boolean powered) {
         return Identifier.fromNamespaceAndPath(
-                CobblewareMod.MOD_ID, "block/" + color.getName() + "_wireless_observer");
+                CobblewareMod.MOD_ID,
+                "block/" + (powered ? "wireless_observer_powered" : color.getName() + "_wireless_observer"));
     }
 
     private record Rotation(int x, int y) {

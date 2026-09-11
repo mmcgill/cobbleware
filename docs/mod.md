@@ -104,13 +104,15 @@ At most once per tick (via `ServerTickEvents.END_SERVER_TICK`), the `ExecutionDr
 * Construct and send a new `/modapi/v1/executions` request.
   * Include up to `MAX_OFFERED_EVENTS_PER_EXECUTION` events for each active Cobbleputer.
 
-### Wireless Observers and Block State Changes
+### Wireless Observers
 
 A placed Wireless Observer stores a randomly generated UUID in its block entity. The UUID is
 durable across chunk unloads, reloads, and server restarts, but a replacement observer block gets
 a fresh UUID. Observers created before this field existed receive an in-memory UUID while loading;
 the Mod marks that migration dirty during normal server-tick work after chunk attachment, never in
 the block entity loading callback.
+
+### Pairing and Unpairing
 
 A successful use of a paired Cobblemeter on an observer emits a `WirelessObserverPaired` event to
 the meter's target Cobbleputer. Re-pairing an observer from one target to another emits a
@@ -125,6 +127,8 @@ when the target is unloaded, unavailable, not running, or has a full event queue
 direction, and global position. `BlockStateChange` likewise contains the observer UUID, in
 addition to its existing color, direction, positions, and old/new block states.
 
+### Block State Changes
+
 A Wireless Observer produces a BlockStateChange event whenever the block type or block state of
 the block it faces is changed. After a Wireless Observer block is attached to a loaded chunk, the next server tick
 caches the block type and state of the block it faces in its block entity data. The Wireless Observer block
@@ -136,3 +140,10 @@ blocks. For each one, it compares the cached and current values, emits at most o
 paired Cobbleputer, and updates the cached block type/state values. Repeated changes before that processing are
 coalesced into the same event. The cache is updated even when the observer is unpaired or delivery is not possible,
 so changes are best-effort and are not replayed after a later pairing, resume, or chunk load.
+
+### Redstone Power Level
+
+A Wireless Observer has a redstone power level from 0 to 15, stored in block state.
+The Polymer-managed client state only differentiates between powered (level > 0) and unpowered (level == 0).
+A powered Wireless Observer only emits signal in the direction it's facing, and only weakly
+(i.e. via `getWeakRedstonePower`).

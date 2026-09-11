@@ -60,6 +60,18 @@ export const echoHandler: EventProgram = function handle(state, event) {
         }),
       },
     })];
+    if (event.event.case === 'wirelessObserverPaired' && ev.observerColor === DyeColor.BLACK) {
+      const { observerId } = event.event.value;
+      effects.push(create(Effects.EffectSchema, {
+        effect: {
+          case: 'setRedstonePower',
+          value: create(Effects.SetRedstonePowerSchema, {
+            observerId,
+            powerLevel: 15,
+          })
+        }
+      }));
+    }
   }
   return create(Program.StepResponseSchema, { state: state.slice(), effects });
 };

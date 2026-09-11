@@ -9,6 +9,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
+import java.util.UUID;
 import net.fabricmc.fabric.api.event.lifecycle.v1.ServerTickEvents;
 import net.minecraft.core.GlobalPos;
 import net.minecraft.core.particles.DustParticleOptions;
@@ -52,6 +53,26 @@ public final class WirelessObserverNetwork {
                     .computeIfAbsent(target, ignored -> Collections.newSetFromMap(new IdentityHashMap<>()))
                     .add(observer);
         });
+    }
+
+    /** Applies a power level only to a loaded observer still paired to the emitting Cobbleputer. */
+    public boolean setRedstonePower(GlobalPos target, UUID observerId, int powerLevel) {
+        Set<WirelessObserverBlockEntity> indexedObservers = observersByTarget.get(target);
+        if (indexedObservers == null) {
+            return false;
+        }
+        for (WirelessObserverBlockEntity observer : List.copyOf(indexedObservers)) {
+            if (observer.isRemoved()
+                    || !observerId.equals(observer.observerId())
+                    || !observer.pairedCobbleputer().filter(target::equals).isPresent()
+                    || !(observer.getLevel() instanceof ServerLevel level)
+                    || !(observer.getBlockState().getBlock() instanceof WirelessObserverBlock wirelessObserver)) {
+                continue;
+            }
+            return WirelessObserverBlock.setPower(
+                    level, observer.getBlockPos(), observer.getBlockState(), powerLevel);
+        }
+        return false;
     }
 
     private void removeFromTarget(GlobalPos target, WirelessObserverBlockEntity observer) {
