@@ -1,4 +1,4 @@
-import { create, Effects, Program, start, Common } from '@cobbleware/core';
+import { Common, create, Effects, Program, start } from '@cobbleware/core';
 
 const { DyeColor } = Common;
 
@@ -38,7 +38,7 @@ export const echoHandler: Program = function handle(state, event) {
             observerColor: DyeColor.BLACK,
             powerLevel: 0,
           }),
-        }
+        },
       })];
     } else if (event.event.value.message == 'on') {
       effects = [create(Effects.EffectSchema, {
@@ -48,7 +48,7 @@ export const echoHandler: Program = function handle(state, event) {
             observerColor: DyeColor.BLACK,
             powerLevel: 15,
           }),
-        }
+        },
       })];
     } else {
       effects = [create(Effects.EffectSchema, {
@@ -63,7 +63,8 @@ export const echoHandler: Program = function handle(state, event) {
   } else if (event.event.case === 'blockStateChange') {
     const v = event.event.value;
     const props = JSON.stringify(v.newState?.properties);
-    const msg = `Observer colored ${v.observerColor} saw block change: ${v.newState?.blockType?.path} ${props}`;
+    const msg =
+      `Observer colored ${v.observerColor} saw block change: ${v.newState?.blockType?.path} ${props}`;
     effects = [create(Effects.EffectSchema, {
       effect: {
         case: 'sendChat',
@@ -72,9 +73,13 @@ export const echoHandler: Program = function handle(state, event) {
         }),
       },
     })];
-  } else if (event.event.case === 'wirelessObserverPaired' || event.event.case == 'wirelessObserverUnpaired') {
+  } else if (
+    event.event.case === 'wirelessObserverPaired' || event.event.case == 'wirelessObserverUnpaired'
+  ) {
     const ev = event.event.value;
-    const msg = `${event.event.case}: ${ev.observerId} ${ev.observerColor} ${JSON.stringify(ev.observerPos)}`;
+    const msg = `${event.event.case}: ${ev.observerId} ${ev.observerColor} ${
+      JSON.stringify(ev.observerPos)
+    }`;
     effects = [create(Effects.EffectSchema, {
       effect: {
         case: 'sendChat',
@@ -91,8 +96,8 @@ export const echoHandler: Program = function handle(state, event) {
           value: create(Effects.SetRedstonePowerSchema, {
             observerId,
             powerLevel: 15,
-          })
-        }
+          }),
+        },
       }));
     }
   }

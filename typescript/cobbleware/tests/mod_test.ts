@@ -39,8 +39,10 @@ Deno.test('BlockStateChange bindings round-trip through Event', () => {
   if (decoded.event.value.observerPos?.position?.x !== 12) {
     throw new Error('observer position did not round-trip');
   }
-  if (decoded.event.value.oldState?.properties.open !== 'false'
-      || decoded.event.value.newState?.properties.open !== 'true') {
+  if (
+    decoded.event.value.oldState?.properties.open !== 'false' ||
+    decoded.event.value.newState?.properties.open !== 'true'
+  ) {
     throw new Error('block-state properties did not round-trip');
   }
 });

@@ -224,17 +224,37 @@ Deno.test('Program API delivers Wireless Observer pairing lifecycle events', asy
     assertEquals(response.status, 200, 'lifecycle step should succeed');
   }
 
-  assertEquals(received[0]?.event.case, 'wirelessObserverPaired', 'paired event should reach handler');
+  assertEquals(
+    received[0]?.event.case,
+    'wirelessObserverPaired',
+    'paired event should reach handler',
+  );
   if (received[0]?.event.case !== 'wirelessObserverPaired') {
     throw new Error('paired lifecycle payload missing');
   }
-  assertEquals(received[0].event.value.observerId?.low, 20n, 'paired event id should reach handler');
-  assertEquals(received[0].event.value.observerPos?.position?.z, -2, 'paired position should reach handler');
-  assertEquals(received[1]?.event.case, 'wirelessObserverUnpaired', 'unpaired event should reach handler');
+  assertEquals(
+    received[0].event.value.observerId?.low,
+    20n,
+    'paired event id should reach handler',
+  );
+  assertEquals(
+    received[0].event.value.observerPos?.position?.z,
+    -2,
+    'paired position should reach handler',
+  );
+  assertEquals(
+    received[1]?.event.case,
+    'wirelessObserverUnpaired',
+    'unpaired event should reach handler',
+  );
   if (received[1]?.event.case !== 'wirelessObserverUnpaired') {
     throw new Error('unpaired lifecycle payload missing');
   }
-  assertEquals(received[1].event.value.observerPos?.position?.z, -2, 'unpaired position should reach handler');
+  assertEquals(
+    received[1].event.value.observerPos?.position?.z,
+    -2,
+    'unpaired position should reach handler',
+  );
 });
 
 Deno.test('Program API returns a binary ErrorResponse for invalid and failing steps', async () => {
