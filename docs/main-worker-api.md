@@ -110,8 +110,8 @@ exists. The request body is a
 The caller supplies the dropped file as the `program` part and its filename as the multipart filename.
 
 If `name` is omitted, the Runtime uses the multipart filename as the program name. Any directory components
-are removed, and the filename extension is retained. For example, a file named `hello-world.eszip` gets the
-program name `hello-world.eszip`. If no name is supplied, the `program` part must have a non-empty filename.
+are removed, and the filename extension is retained. For example, a file named `examples.eszip` gets the
+program name `examples.eszip`. If no name is supplied, the `program` part must have a non-empty filename.
 An explicitly supplied name takes precedence over the filename.
 
 Program names are display metadata and are not used as storage paths. A name must be non-empty after trimming,
@@ -145,7 +145,7 @@ Content-Type: application/json; charset=utf-8
 ```json
 {
     "id": "abc123",
-    "name": "hello-world.eszip",
+    "name": "examples.eszip",
     "uploadedAt": "2026-08-30T14:25:00Z",
     "sizeBytes": 12345
 }
@@ -174,7 +174,7 @@ on the server. The `programs` array contains zero or one item. The response incl
     "programs": [
         {
             "id": "abc123",
-            "name": "hello-world.eszip",
+            "name": "examples.eszip",
             "uploadedAt": "2026-08-30T14:25:00Z",
             "sizeBytes": 12345
         }
@@ -327,7 +327,7 @@ shape:
 ```json
 {
     "id": "abc123",
-    "name": "hello-world.eszip",
+    "name": "examples.eszip",
     "uploadedAt": "2026-08-30T14:25:00Z",
     "sizeBytes": 12345,
     "startStates": {

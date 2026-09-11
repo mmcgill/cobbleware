@@ -1,10 +1,10 @@
-const archive = await Deno.readFile('hello-world.eszip');
+const archive = await Deno.readFile('examples.eszip');
 const port = 8000;
 
 const server = Deno.serve({ hostname: '127.0.0.1', port }, (request) => {
   const { pathname } = new URL(request.url);
 
-  if (pathname !== '/' && pathname !== '/hello-world.eszip') {
+  if (pathname !== '/' && pathname !== '/examples.eszip') {
     return new Response(null, { status: 404 });
   }
 
@@ -16,4 +16,4 @@ const server = Deno.serve({ hostname: '127.0.0.1', port }, (request) => {
   });
 });
 
-console.log(`Serving hello-world.eszip at http://127.0.0.1:${server.addr.port}/hello-world.eszip`);
+console.log(`Serving examples.eszip at http://127.0.0.1:${server.addr.port}/examples.eszip`);

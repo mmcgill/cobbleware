@@ -1,11 +1,12 @@
-import { create, Effects, Program, type Program as EventProgram, start } from '@cobbleware/core';
-import { DyeColor, DyeColorSchema } from '../../cobbleware/generated/common_pb.ts';
+import { create, Effects, Program, start, Common } from '@cobbleware/core';
+
+const { DyeColor } = Common;
 
 const HELLO = 1;
 const ECHO = 2;
 const HANG = 3;
 
-export const helloHandler: EventProgram = function handle(state, event) {
+export const helloHandler: Program = function handle(state, event) {
   let effects: Effects.Effect[] = [];
   if (event.event.case === 'started') {
     effects = [create(Effects.EffectSchema, {
@@ -25,7 +26,7 @@ export const helloHandler: EventProgram = function handle(state, event) {
   return create(Program.StepResponseSchema, { state: state.slice(), effects });
 };
 
-export const echoHandler: EventProgram = function handle(state, event) {
+export const echoHandler: Program = function handle(state, event) {
   let effects: Effects.Effect[] = [];
   if (event.event.case === 'chatMessage') {
     state[1]++;
@@ -98,7 +99,7 @@ export const echoHandler: EventProgram = function handle(state, event) {
   return create(Program.StepResponseSchema, { state: state.slice(), effects });
 };
 
-export const hangHandler: EventProgram = function handle(state, event) {
+export const hangHandler: Program = function handle(state, event) {
   if (event.event.case === 'started') {
     while (true) {
       // Intentionally never completes; used to test Main Worker robustness.
@@ -107,7 +108,7 @@ export const hangHandler: EventProgram = function handle(state, event) {
   return create(Program.StepResponseSchema, { state: state.slice(), effects: [] });
 };
 
-export const handle: EventProgram = function handle(state, event) {
+export const handle: Program = function handle(state, event) {
   switch (state[0]) {
     case HELLO:
       return helloHandler(state, event);

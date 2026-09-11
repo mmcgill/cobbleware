@@ -9,7 +9,7 @@ const temporaryDirectory = await Deno.makeTempDir({
   prefix: '.cobbleware-eszip-',
 });
 const bundledProgramPath = `${temporaryDirectory}/program.js`;
-const outputPath = 'hello-world.eszip';
+const outputPath = 'examples.eszip';
 
 try {
   const esbuild = new Deno.Command(Deno.execPath(), {

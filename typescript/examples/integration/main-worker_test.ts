@@ -6,7 +6,7 @@ const MOD_API_KEY = 'secret';
 const PLAYER_UUID = '00000000-0000-0000-0000-000000000001';
 const PLAYER_PROFILE_NAME = 'HelloWorldIntegration';
 const AUTH_CODE = 'TEST0001';
-const PROGRAM_ARCHIVE_PATH = new URL('../hello-world.eszip', import.meta.url);
+const PROGRAM_ARCHIVE_PATH = new URL('../examples.eszip', import.meta.url);
 const PLAYER_ID = uuid(0n, 1n);
 const FIRST_EXECUTION_ID = uuid(11n, 101n);
 const SECOND_EXECUTION_ID = uuid(22n, 202n);
@@ -15,7 +15,7 @@ type ProgramMetadata = {
   id: string;
 };
 
-Deno.test('Hello World runs through the Main Worker API', async () => {
+Deno.test('Examples run through the Main Worker API', async () => {
   const cookie = await authenticatePlayer();
   const program = await uploadProgram(cookie);
 
@@ -149,7 +149,7 @@ async function uploadProgram(cookie: string): Promise<ProgramMetadata> {
   const form = new FormData();
   form.append(
     'program',
-    new File([archive], 'hello-world.eszip', { type: 'application/octet-stream' }),
+    new File([archive], 'examples.eszip', { type: 'application/octet-stream' }),
   );
 
   const response = await fetch(`${BASE_URL}/playerapi/v1/programs`, {

@@ -85,7 +85,7 @@ class MainWorkerClientTest {
         AtomicReference<String> authorization = new AtomicReference<>();
         AtomicReference<String> method = new AtomicReference<>();
         startServer("/worker/modapi/v1/players/123e4567-e89b-12d3-a456-426614174000/program", 200, """
-                {"id":"AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA","name":"hello-world.eszip","uploadedAt":"2026-09-03T00:00:00.000Z","sizeBytes":42,"startStates":{"idle":[1],"running":[2]}}
+                {"id":"AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA","name":"examples.eszip","uploadedAt":"2026-09-03T00:00:00.000Z","sizeBytes":42,"startStates":{"idle":[1],"running":[2]}}
                 """, exchange -> {
             authorization.set(exchange.getRequestHeaders().getFirst("Authorization"));
             method.set(exchange.getRequestMethod());
@@ -95,7 +95,7 @@ class MainWorkerClientTest {
                 UUID.fromString("123e4567-e89b-12d3-a456-426614174000")).get();
 
         assertEquals(MainWorkerClient.ProgramStatus.SUCCESS, result.status());
-        assertEquals("hello-world.eszip", result.program().name());
+        assertEquals("examples.eszip", result.program().name());
         assertEquals(42, result.program().sizeBytes());
         assertEquals(List.of("idle", "running"), result.program().startStateNames());
         assertArrayEquals(new byte[] {1}, result.program().startState("idle").orElseThrow());
@@ -107,7 +107,7 @@ class MainWorkerClientTest {
     @Test
     void rejectsMalformedStartStateBytes() throws Exception {
         startServer("/worker/modapi/v1/players/123e4567-e89b-12d3-a456-426614174000/program", 200, """
-                {"id":"AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA","name":"hello-world.eszip","uploadedAt":"2026-09-03T00:00:00.000Z","sizeBytes":42,"startStates":{"invalid":[256]}}
+                {"id":"AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA","name":"examples.eszip","uploadedAt":"2026-09-03T00:00:00.000Z","sizeBytes":42,"startStates":{"invalid":[256]}}
                 """, exchange -> { });
 
         MainWorkerClient.ProgramResult result = client("secret").getProgram(

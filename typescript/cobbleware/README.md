@@ -19,7 +19,7 @@ start({
 });
 ```
 
-See [`../hello-world/src/index.ts`](../hello-world/src/index.ts) for a complete program. When
+See [`../examples/src/index.ts`](../examples/src/index.ts) for complete programs. When
 testing an entry point that calls `start`, wrap that call in `if (import.meta.main)`.
 
 ## Development
