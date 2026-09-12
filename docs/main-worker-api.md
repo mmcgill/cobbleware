@@ -420,7 +420,8 @@ without wrapping. `ExecutionState.event_seq_num` is the next event sequence numb
 `events` list is empty. Its events occupy the contiguous range beginning at that number.
 `ExecutionState.effect_seq_num` acknowledges every effect through that number; it is zero before
 the first effect is applied. `EXECUTION_STATUS_UNSPECIFIED` is invalid. `RUNNING` permits dispatch,
-`STOPPED` preserves work without dispatching it, and `CRASHED` is terminal for the execution id.
+`STOPPED` preserves already-queued work without dispatching it; the Mod does not enqueue new
+events for stopped executions. `CRASHED` is terminal for the execution id.
 Every `ExecutionState` must include its required scalar/message values; each event must select an
 `Event.event` oneof. `event_seq_num` must be at least one. Empty states and empty event lists are valid.
 

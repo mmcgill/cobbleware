@@ -60,6 +60,8 @@ the 'puter crashes and the returned state value is discarded.
 Each 'puter has an associated in-memory event queue with a current maximum length of 10.
 If events are produced faster than the 'puter can process them, the queue will eventually fill.
 When the event queue is full, new events are dropped.
+Events produced while a 'puter is `STOPPED` are not enqueued and are not replayed when it resumes;
+events already in its queue remain there until the 'puter resumes.
 
 ### State Durability
 
@@ -68,7 +70,8 @@ server restarts and chunk reloads while the Cobbleputer has not crashed or been 
 Pending events and received effects are held only by the Mod while the Cobbleputer is active;
 they are best-effort and can be lost on server restart or chunk unload. A queued event can be
 dropped when the in-memory queue is full (currently 10 events) or when the Cobbleputer becomes
-inactive. Similarly, an effect is considered processed once the Mod attempts to apply it, but
+inactive. An event produced while a Cobbleputer is stopped is not enqueued, rather than being
+dropped. Similarly, an effect is considered processed once the Mod attempts to apply it, but
 an attempt can be missed or repeated around failures. When a 'puter is reset or a new Program
 is loaded, its in-memory event queue is cleared.
 
@@ -96,7 +99,8 @@ When the block in front of a Wireless Observer changes type or block state, the 
 Cobbleputer receives a `BlockStateChange` event. Changes occurring during one server tick
 are combined into one event containing the state before the first change and the final
 state. Delivery is best-effort: changes can be dropped while the paired Cobbleputer is
-unloaded, not running, or has a full event queue, and are not replayed later. Observers
+unloaded or has a full event queue; changes produced while it is stopped are not enqueued.
+Neither case is replayed later. Observers
 continue tracking their facing block while unpaired so pairing does not produce stale
 changes.
 

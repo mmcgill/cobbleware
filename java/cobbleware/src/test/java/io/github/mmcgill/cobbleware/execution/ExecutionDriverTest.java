@@ -9,6 +9,7 @@ import net.minecraft.server.Bootstrap;
 import net.minecraft.world.item.DyeColor;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.state.BlockState;
+import io.github.mmcgill.cobbleware.block.CobbleputerState;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
@@ -60,5 +61,13 @@ class ExecutionDriverTest {
                 Optional.empty(),
                 ExecutionDriver.minecraftDyeColor(cobbleware.common.DyeColor.DYE_COLOR_UNSPECIFIED));
         assertEquals(Optional.empty(), ExecutionDriver.minecraftDyeColor(cobbleware.common.DyeColor.UNRECOGNIZED));
+    }
+
+    @Test
+    void rejectedEventsForStoppedCobbleputersAreNotCountedAsDropped() {
+        assertEquals(false, ExecutionDriver.countsRejectedEventAsDropped(CobbleputerState.STOPPED));
+        assertEquals(true, ExecutionDriver.countsRejectedEventAsDropped(CobbleputerState.UNINITIALIZED));
+        assertEquals(true, ExecutionDriver.countsRejectedEventAsDropped(CobbleputerState.RUNNING));
+        assertEquals(true, ExecutionDriver.countsRejectedEventAsDropped(CobbleputerState.CRASHED));
     }
 }

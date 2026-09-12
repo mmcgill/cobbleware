@@ -95,8 +95,8 @@ has audio or durable delivery semantics yet.
 The heart of the Mod is the `ExecutionDriver` singleton. It is owned by the main server thread.
 
 It presents an API for enqueueing events by cobbleputer block entity, assigning each event a sequence id
-and incrementing the block entity's sequence id in the process. Events are dropped whenever the
-cobbleputer is not in a `RUNNING` state.
+and incrementing the block entity's sequence id in the process. Events produced while a Cobbleputer
+is `STOPPED` are not enqueued; its existing pending events remain queued for when it resumes.
 
 It presents an API for activating/deactivating Cobbleputer block entities. That API is used both by
 handlers for placing/breaking of Cobbleputer blocks and by handlers for chunk loading/unloading,
@@ -132,7 +132,8 @@ new target. Re-pairing to the same target emits only `WirelessObserverPaired`. B
 otherwise replacing a paired observer emits `WirelessObserverUnpaired` to its target before its
 block entity is removed; chunk unloading does not emit that event. These lifecycle events are
 best-effort just like block-state changes: the pairing remains durable, while delivery is dropped
-when the target is unloaded, unavailable, not running, or has a full event queue.
+when the target is unloaded, unavailable, or has a full event queue. Events produced while the
+target is stopped are not enqueued and are not replayed when it resumes.
 
 `WirelessObserverPaired` and `WirelessObserverUnpaired` contain the observer color, UUID, facing
 direction, and global position. `BlockStateChange` likewise contains the observer UUID, in
@@ -182,8 +183,9 @@ The recorded measurements are:
   player, physical Cobbleputer, and effect type; and
 * the current count of loaded running and stopped Cobbleputers, per player.
 
-An event is accepted when it enters the Cobbleputer's pending queue; every
-other admission attempt is recorded as dropped. An effect is attempted whenever
+An event is accepted when it enters the Cobbleputer's pending queue. A failed admission is
+recorded as dropped, except that an event produced while the Cobbleputer is `STOPPED` is not
+an admission and is recorded as neither accepted nor dropped. An effect is attempted whenever
 the Mod calls its existing effect-application path and is failed only when that
 path throws. Metrics do not alter the existing best-effort event/effect
 semantics.

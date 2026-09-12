@@ -205,7 +205,7 @@ public final class ExecutionDriver {
         }
     }
 
-    /** Queues an event for a running active Cobbleputer, or drops it when it cannot be accepted. */
+    /** Queues an event for a running active Cobbleputer when it can be accepted. */
     public void enqueueEvent(CobbleputerBlockEntity blockEntity, Event event) {
         if (blockEntity == null || event == null) {
             throw new IllegalArgumentException("Cobbleputer event arguments must not be null");
@@ -214,7 +214,7 @@ public final class ExecutionDriver {
         if (active != null) {
             enqueueActiveEvent(blockEntity, active, event);
         } else {
-            recordEvent(blockEntity, event, false);
+            recordRejectedEvent(blockEntity, event);
         }
     }
 
@@ -235,15 +235,18 @@ public final class ExecutionDriver {
     }
 
     private void enqueueActiveEvent(CobbleputerBlockEntity blockEntity, ActiveExecution active, Event event) {
-        if (active == null || !blockEntity.hasExecution()
-                || blockEntity.getBlockState().getValue(CobbleputerBlock.STATE) != CobbleputerState.RUNNING) {
-            recordEvent(blockEntity, event, false);
+        if (active == null || !blockEntity.hasExecution()) {
+            recordRejectedEvent(blockEntity, event);
+            return;
+        }
+        if (blockEntity.getBlockState().getValue(CobbleputerBlock.STATE) != CobbleputerState.RUNNING) {
+            recordRejectedEvent(blockEntity, event);
             return;
         }
         if (active.events.size() >= MAX_PENDING_EVENTS_PER_EXECUTION) {
             logger.debug("Dropping Cobbleputer event at {} because its pending queue is full",
                     blockEntity.getBlockPos().toShortString());
-            recordEvent(blockEntity, event, false);
+            recordRejectedEvent(blockEntity, event);
             return;
         }
         try {
@@ -252,7 +255,7 @@ public final class ExecutionDriver {
         } catch (RuntimeException exception) {
             logger.error("Could not enqueue Cobbleputer event at {}: {}",
                     blockEntity.getBlockPos().toShortString(), exception.toString());
-            recordEvent(blockEntity, event, false);
+            recordRejectedEvent(blockEntity, event);
         }
     }
 
@@ -758,6 +761,21 @@ public final class ExecutionDriver {
     private void recordEvent(CobbleputerBlockEntity blockEntity, Event event, boolean accepted) {
         instrumentationKey(blockEntity).ifPresent(target ->
                 instrumentation.recordEvent(target, event.getEventCase(), accepted));
+    }
+
+    /**
+     * Records a rejected event unless it was ignored because the Cobbleputer is stopped.
+     * Stopped executions retain their existing queue, but do not admit new events or count them as dropped.
+     */
+    private void recordRejectedEvent(CobbleputerBlockEntity blockEntity, Event event) {
+        CobbleputerState lifecycleState = blockEntity.getBlockState().getValue(CobbleputerBlock.STATE);
+        if (countsRejectedEventAsDropped(lifecycleState)) {
+            recordEvent(blockEntity, event, false);
+        }
+    }
+
+    static boolean countsRejectedEventAsDropped(CobbleputerState lifecycleState) {
+        return lifecycleState != CobbleputerState.STOPPED;
     }
 
     private void recordEffect(CobbleputerBlockEntity blockEntity, Effect effect, long elapsedNanos, boolean failed) {
