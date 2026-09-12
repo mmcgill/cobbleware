@@ -22,6 +22,10 @@ as references to the Main Worker running in the Runtime, unless specifically not
 
 All communication between the Mod and the Runtime is initiated by the Mod, which makes requests
 to a API served by the Runtime. The Runtime never initiates connections in the opposite direction.
+Execution instrumentation follows that direction too: the Mod periodically pushes one snapshot that
+bundles every represented player's aggregate stats to the Main Worker. The Main Worker retains the
+latest per-player view in memory and may fan it out over a Player-initiated Browser UI WebSocket; it
+never polls or connects to the Mod.
 
 The Main Worker is written in Typescript; its code is located in [typescript/main-worker](../typescript/main-worker/).
 

@@ -41,3 +41,15 @@ validation is deferred until the program is loaded for execution. The server mak
 the player's `programs.json` manifest, then deletes the previous program (if there was one). The manifest is the source
 of truth for the active program, and a later upload cleans up program files not referenced by the manifest after a
 failed replacement. The uploaded payload must fit within the player's program size quota.
+
+## Execution Statistics
+
+### Live viewing
+
+**ES01**: As a Player, I want to view my Cobbleputer execution statistics live in the Browser UI so that I can tell
+how my program is behaving.
+
+The view shows only the Player's own aggregate sliding-window instrumentation: offered events per execution sync,
+accepted and dropped events, effect attempts, failures and timing, and the current number of loaded running and
+stopped Cobbleputers. It identifies the sampling time and instrumentation-window coverage, and indicates when no
+report is available or the displayed report is stale. It must not expose another Player's statistics.

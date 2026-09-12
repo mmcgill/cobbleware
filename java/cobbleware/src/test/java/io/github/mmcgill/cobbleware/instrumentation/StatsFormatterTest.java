@@ -28,6 +28,7 @@ class StatsFormatterTest {
         instrumentation.recordSyncCompletion(2_000_000, Instrumentation.SyncOutcome.SUCCESS);
         instrumentation.recordEvent(target, Event.EventCase.CHAT_MESSAGE, true);
         instrumentation.recordEvent(target, Event.EventCase.CHAT_MESSAGE, false);
+        instrumentation.recordEventsPerSync(target, 4);
         instrumentation.recordEffect(target, Effect.EffectCase.SEND_CHAT, 500_000, true);
         instrumentation.recordCobbleputerStates(Map.of(target, Instrumentation.LifecycleState.RUNNING));
         snapshot = instrumentation.snapshot();
@@ -42,6 +43,8 @@ class StatsFormatterTest {
         assertTrue(text.contains("Sync          count      1          avg        2.0ms      max        2.0ms"));
         assertTrue(text.stream().anyMatch(line -> line.startsWith("Events") && line.contains("accepted")
                 && line.contains("dropped")));
+        assertTrue(text.stream().anyMatch(line -> line.startsWith("Events/sync") && line.contains("avg")
+                && line.contains("4.0") && line.contains("max")));
         assertTrue(text.stream().anyMatch(line -> line.startsWith("Effects") && line.contains("attempted")
                 && line.contains("0.5ms")));
         assertTrue(text.stream().anyMatch(line -> line.startsWith("Cobbleputers") && line.contains("count")));
@@ -56,6 +59,7 @@ class StatsFormatterTest {
         List<String> player = texts(StatsFormatter.player(snapshot, "aLiCe").orElseThrow());
         assertTrue(player.getFirst().contains("player aLiCe"));
         assertFalse(player.stream().anyMatch(line -> line.startsWith("Sync:")));
+        assertTrue(player.stream().anyMatch(line -> line.startsWith("Events/sync:") || line.startsWith("Events/sync  ")));
 
         List<String> event = texts(StatsFormatter.event(snapshot, "chat-message").orElseThrow());
         assertTrue(event.stream().anyMatch(line -> line.startsWith("Event total") && line.contains("accepted")
@@ -67,6 +71,7 @@ class StatsFormatterTest {
                 && line.contains("minecraft:overworld 12,64,-5")));
         assertTrue(cobbleputer.stream().anyMatch(line -> line.startsWith("player") && line.contains("Alice")
                 && line.contains("running") && line.contains("count")));
+        assertTrue(cobbleputer.stream().anyMatch(line -> line.startsWith("Events/sync:") || line.startsWith("Events/sync  ")));
         assertFalse(StatsFormatter.cobbleputer(snapshot, UUID.randomUUID()).isPresent());
     }
 

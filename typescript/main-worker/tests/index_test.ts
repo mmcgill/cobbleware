@@ -47,6 +47,8 @@ Deno.test('/index.html contains the programs UI', async () => {
       'Log out',
       '/playerapi/v1/whoami',
       '/playerapi/v1/logout',
+      'execution-stats-stream-already-open',
+      'statsConnectionError(error.error, false)',
     ]
   ) {
     if (!body.includes(landmark)) {

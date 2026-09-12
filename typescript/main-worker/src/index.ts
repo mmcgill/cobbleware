@@ -22,6 +22,11 @@ import { type ProgramRunner, RuntimeProgramRunner } from './programs/start-state
 import { normalizePlayerUUID } from './auth/validation.ts';
 import { handleExecutions } from './executions/handlers.ts';
 import { type ExecutionCoordinator, ExecutionManager } from './executions/manager.ts';
+import {
+  ExecutionStatsHub,
+  handleExecutionStatsReport,
+  handlePlayerExecutionStats,
+} from './stats/handlers.ts';
 
 const HELLO_BODY = JSON.stringify({ message: 'hello' });
 
@@ -31,6 +36,7 @@ export type AppOptions = {
   programStore?: ProgramStore;
   programRunner?: ProgramRunner;
   executionCoordinator?: ExecutionCoordinator;
+  executionStatsHub?: ExecutionStatsHub;
 };
 
 export async function createHandler(
@@ -44,6 +50,7 @@ export async function createHandler(
     programStore,
     programRunner,
   );
+  const executionStatsHub = options.executionStatsHub ?? new ExecutionStatsHub();
 
   return async (request) => {
     try {
@@ -54,6 +61,7 @@ export async function createHandler(
         programStore,
         programRunner,
         executionCoordinator,
+        executionStatsHub,
       );
     } catch {
       return jsonError('internal server error', 500);
@@ -68,6 +76,7 @@ async function routeRequest(
   programStore: ProgramStore,
   programRunner: ProgramRunner,
   executionCoordinator: ExecutionCoordinator,
+  executionStatsHub: ExecutionStatsHub,
 ): Promise<Response> {
   const { pathname } = new URL(request.url);
 
@@ -102,7 +111,17 @@ async function routeRequest(
   if (pathname === '/playerapi/v1/logout') {
     const context: RequestContext = {};
     const authError = await requirePlayerAuth(request, config, store, context, 'api');
-    return authError ?? handlePlayerLogout(request, config, store, context.sessionToken!);
+    if (authError !== null) return authError;
+    const response = await handlePlayerLogout(request, config, store, context.sessionToken!);
+    if (response.status === 204) executionStatsHub.closePlayer(context.player!.playerUUID);
+    return response;
+  }
+
+  if (pathname === '/playerapi/v1/execution-stats') {
+    const context: RequestContext = {};
+    const authError = await requirePlayerAuth(request, config, store, context, 'api');
+    return authError ??
+      handlePlayerExecutionStats(request, context.player!.playerUUID, executionStatsHub);
   }
 
   if (pathname === '/playerapi/v1/programs') {
@@ -171,6 +190,9 @@ async function routeRequest(
     }
     if (pathname === '/modapi/v1/executions') {
       return await handleExecutions(request, config, executionCoordinator);
+    }
+    if (pathname === '/modapi/v1/execution-stats') {
+      return await handleExecutionStatsReport(request, config, executionStatsHub);
     }
     const programMatch = /^\/modapi\/v1\/players\/([^/]+)\/program$/.exec(pathname);
     if (programMatch !== null) {

@@ -29,6 +29,10 @@ The bundle task tree-shakes the Main Worker with Deno's esbuild-powered bundler
 before creating `main-worker.eszip`; it intentionally does not minify the
 resulting JavaScript.
 
+`deno task integrate` is separate from the unit-test task. It bundles the Main
+Worker, starts the local Edge Runtime, and verifies the execution-statistics
+path from the Mod API to an authenticated Player WebSocket.
+
 ## Future Work / TODO
 
 [ ] Ship Cobbleware/protobuf libraries with Edge Runtime so programs don't have to bundle them.

@@ -66,6 +66,43 @@
           </div>
         </div>
       </section>
+
+      <section id="execution-stats-section" class="card" aria-labelledby="execution-stats-heading">
+        <div class="table-header">
+          <h2 id="execution-stats-heading">Execution statistics</h2>
+          <button id="stats-retry-button" class="secondary" type="button" hidden>Retry</button>
+        </div>
+        <p id="stats-status" class="muted" role="status"
+          aria-live="polite">Connecting to statistics...</p>
+        <div id="stats-details" class="stats-details" hidden>
+          <dl>
+            <div>
+              <dt>Captured</dt>
+              <dd id="stats-sampled-at"></dd>
+            </div>
+            <div>
+              <dt>Window coverage</dt>
+              <dd id="stats-window"></dd>
+            </div>
+            <div>
+              <dt>Events per sync</dt>
+              <dd id="stats-events-per-sync"></dd>
+            </div>
+            <div>
+              <dt>Event admissions</dt>
+              <dd id="stats-events"></dd>
+            </div>
+            <div>
+              <dt>Effects</dt>
+              <dd id="stats-effects"></dd>
+            </div>
+            <div>
+              <dt>Loaded Cobbleputers</dt>
+              <dd id="stats-cobbleputers"></dd>
+            </div>
+          </dl>
+        </div>
+      </section>
     </main>
 
     <script>
@@ -89,6 +126,15 @@
         startStatesLoading: document.querySelector('#start-states-loading'),
         startStatesEmpty: document.querySelector('#start-states-empty'),
         startStatesList: document.querySelector('#start-states-list'),
+        statsStatus: document.querySelector('#stats-status'),
+        statsDetails: document.querySelector('#stats-details'),
+        statsRetryButton: document.querySelector('#stats-retry-button'),
+        statsSampledAt: document.querySelector('#stats-sampled-at'),
+        statsWindow: document.querySelector('#stats-window'),
+        statsEventsPerSync: document.querySelector('#stats-events-per-sync'),
+        statsEvents: document.querySelector('#stats-events'),
+        statsEffects: document.querySelector('#stats-effects'),
+        statsCobbleputers: document.querySelector('#stats-cobbleputers'),
       };
 
       const byteFormatter = new Intl.NumberFormat(undefined, { maximumFractionDigits: 1 });
@@ -101,6 +147,10 @@
       let startStates = null;
       let selectedFile = null;
       let operation = 'idle';
+      let statsSocket = null;
+      let statsSnapshot = null;
+      let statsLastReceivedAt = 0;
+      let statsClosingForLogout = false;
 
       function formatBytes(bytes) {
         if (bytes === 0) {
@@ -306,6 +356,239 @@
         renderSelectedFile();
       }
 
+      function setStatsStatus(message, kind = '') {
+        elements.statsStatus.textContent = message;
+        elements.statsStatus.className = `muted${kind ? ` ${kind}` : ''}`;
+      }
+
+      function formatBigInt(value) {
+        return value.toLocaleString();
+      }
+
+      function formatAverage(total, count, suffix = '') {
+        if (count === 0n) {
+          return `0${suffix}`;
+        }
+        const tenths = (total * 10n + count / 2n) / count;
+        return `${tenths / 10n}${tenths % 10n === 0n ? '' : `.${tenths % 10n}`}${suffix}`;
+      }
+
+      function formatNanos(value) {
+        if (value < 1000n) return `${formatBigInt(value)} ns`;
+        if (value < 1000000n) return formatAverage(value, 1000n, ' μs');
+        if (value < 1000000000n) return formatAverage(value, 1000000n, ' ms');
+        return formatAverage(value, 1000000000n, ' s');
+      }
+
+      function renderStats() {
+        if (statsSnapshot === null) {
+          elements.statsDetails.hidden = true;
+          return;
+        }
+        const { sampledAt, windowTicks, retainedTicks, player } = statsSnapshot;
+        const sampledAtNumber = Number(sampledAt);
+        const captured = new Date(sampledAtNumber);
+        elements.statsSampledAt.textContent =
+          Number.isSafeInteger(sampledAtNumber) && !Number.isNaN(captured.getTime())
+            ? dateFormatter.format(captured)
+            : 'Invalid sample time';
+        elements.statsWindow.textContent =
+          `${retainedTicks.toLocaleString()} of ${windowTicks.toLocaleString()} ticks`;
+        elements.statsEventsPerSync.textContent = `${
+          formatBigInt(player.eventsPerSyncCount)
+        } records; average ${
+          formatAverage(player.eventsPerSyncTotal, player.eventsPerSyncCount)
+        }; maximum ${formatBigInt(player.eventsPerSyncMax)}`;
+        elements.statsEvents.textContent = `${formatBigInt(player.eventsAccepted)} accepted; ${
+          formatBigInt(player.eventsDropped)
+        } dropped`;
+        elements.statsEffects.textContent = `${formatBigInt(player.effectsAttempted)} attempted; ${
+          formatBigInt(player.effectsFailed)
+        } failed; average ${
+          formatNanos(
+            player.effectsAttempted === 0n ? 0n : player.effectsTotalNanos / player.effectsAttempted,
+          )
+        }; maximum ${formatNanos(player.effectsMaxNanos)}`;
+        elements.statsCobbleputers.textContent =
+          `${player.runningCobbleputers.toLocaleString()} running; ${player.stoppedCobbleputers.toLocaleString()} stopped`;
+        elements.statsDetails.hidden = false;
+      }
+
+      function updateStatsStaleness() {
+        if (statsSnapshot === null || statsLastReceivedAt === 0 || statsSocket === null) return;
+        if (Date.now() - statsLastReceivedAt > 3000) {
+          setStatsStatus('Statistics may be stale; no update has arrived recently.', 'error');
+        } else {
+          setStatsStatus('Live execution statistics.');
+        }
+      }
+
+      function statsConnectionError(message, canRetry = true) {
+        statsSocket = null;
+        setStatsStatus(message, 'error');
+        elements.statsRetryButton.hidden = !canRetry;
+      }
+
+      function connectStats() {
+        if (statsSocket !== null) return;
+        statsClosingForLogout = false;
+        elements.statsRetryButton.hidden = true;
+        setStatsStatus('Connecting to statistics...');
+        let socket;
+        try {
+          socket = new WebSocket('/playerapi/v1/execution-stats');
+        } catch {
+          statsConnectionError('Could not open the statistics connection.');
+          return;
+        }
+        statsSocket = socket;
+        let rejectedByServer = false;
+        socket.binaryType = 'arraybuffer';
+        socket.onopen = () => {
+          if (statsSnapshot === null) setStatsStatus('No statistics are available yet.');
+        };
+        socket.onmessage = (event) => {
+          try {
+            if (typeof event.data === 'string') {
+              const error = decodeStatsStreamError(event.data);
+              rejectedByServer = true;
+              statsConnectionError(error.error, false);
+              return;
+            }
+            statsSnapshot = decodeExecutionStats(new Uint8Array(event.data));
+            statsLastReceivedAt = Date.now();
+            renderStats();
+            updateStatsStaleness();
+          } catch {
+            statsConnectionError('The server sent invalid execution statistics.');
+            socket.close();
+          }
+        };
+        socket.onerror = () => {
+          // The close handler supplies the actionable state after the browser finishes the socket.
+        };
+        socket.onclose = () => {
+          if (!statsClosingForLogout && !rejectedByServer) {
+            statsConnectionError('The statistics connection closed. Retry to reconnect.');
+          }
+        };
+      }
+
+      function decodeStatsStreamError(message) {
+        const error = JSON.parse(message);
+        if (
+          !error ||
+          error.code !== 'execution-stats-stream-already-open' ||
+          typeof error.error !== 'string'
+        ) {
+          throw new Error('invalid execution-stats stream error');
+        }
+        return error;
+      }
+
+      function decodeExecutionStats(bytes) {
+        const fields = readProtoFields(bytes);
+        const playerBytes = fields.get(4) || [];
+        if (playerBytes.length !== 1) throw new Error('expected exactly one player stats record');
+        const sampledAt = protoVarint(fields, 1);
+        const windowTicks = protoNumber(fields, 2);
+        const retainedTicks = protoNumber(fields, 3);
+        if (sampledAt === 0n || windowTicks === 0 || retainedTicks > windowTicks) {
+          throw new Error('invalid stats snapshot');
+        }
+        const playerFields = readProtoFields(playerBytes[0]);
+        if ((playerFields.get(1) || []).length !== 1) throw new Error('missing player identifier');
+        const player = {
+          eventsPerSyncCount: protoVarint(playerFields, 2),
+          eventsPerSyncTotal: protoVarint(playerFields, 3),
+          eventsPerSyncMax: protoVarint(playerFields, 4),
+          eventsAccepted: protoVarint(playerFields, 5),
+          eventsDropped: protoVarint(playerFields, 6),
+          effectsAttempted: protoVarint(playerFields, 7),
+          effectsFailed: protoVarint(playerFields, 8),
+          effectsTotalNanos: protoVarint(playerFields, 9),
+          effectsMaxNanos: protoVarint(playerFields, 10),
+          runningCobbleputers: protoNumber(playerFields, 11),
+          stoppedCobbleputers: protoNumber(playerFields, 12),
+        };
+        if (
+          player.effectsFailed > player.effectsAttempted ||
+          (player.eventsPerSyncCount === 0n &&
+            (player.eventsPerSyncTotal !== 0n || player.eventsPerSyncMax !== 0n)) ||
+          player.eventsPerSyncMax > player.eventsPerSyncTotal ||
+          (player.eventsPerSyncCount !== 0n &&
+            player.eventsPerSyncTotal > player.eventsPerSyncCount * player.eventsPerSyncMax)
+        ) {
+          throw new Error('inconsistent stats snapshot');
+        }
+        return { sampledAt, windowTicks, retainedTicks, player };
+      }
+
+      function readProtoFields(bytes) {
+        const fields = new Map();
+        let offset = 0;
+        while (offset < bytes.length) {
+          const key = readVarint(bytes, offset);
+          offset = key.next;
+          const field = Number(key.value >> 3n);
+          const wireType = Number(key.value & 7n);
+          if (field === 0) throw new Error('invalid protobuf field');
+          let value;
+          if (wireType === 0) {
+            const decoded = readVarint(bytes, offset);
+            offset = decoded.next;
+            value = decoded.value;
+          } else if (wireType === 2) {
+            const length = readVarint(bytes, offset);
+            offset = length.next;
+            if (length.value > BigInt(bytes.length - offset)) {
+              throw new Error('invalid protobuf length');
+            }
+            value = bytes.slice(offset, offset + Number(length.value));
+            offset += Number(length.value);
+          } else if (wireType === 1) {
+            if (offset + 8 > bytes.length) throw new Error('truncated protobuf');
+            value = bytes.slice(offset, offset + 8);
+            offset += 8;
+          } else if (wireType === 5) {
+            if (offset + 4 > bytes.length) throw new Error('truncated protobuf');
+            value = bytes.slice(offset, offset + 4);
+            offset += 4;
+          } else {
+            throw new Error('unsupported protobuf field type');
+          }
+          const values = fields.get(field) || [];
+          values.push(value);
+          fields.set(field, values);
+        }
+        return fields;
+      }
+
+      function readVarint(bytes, offset) {
+        let value = 0n;
+        for (let shift = 0n; shift < 70n; shift += 7n) {
+          if (offset >= bytes.length) throw new Error('truncated protobuf');
+          const byte = bytes[offset++];
+          value |= BigInt(byte & 0x7f) << shift;
+          if ((byte & 0x80) === 0) return { value, next: offset };
+        }
+        throw new Error('invalid protobuf varint');
+      }
+
+      function protoVarint(fields, field) {
+        const values = fields.get(field) || [];
+        if (values.length > 1 || (values.length === 1 && typeof values[0] !== 'bigint')) {
+          throw new Error('invalid protobuf number');
+        }
+        return values.length === 0 ? 0n : values[0];
+      }
+
+      function protoNumber(fields, field) {
+        const value = protoVarint(fields, field);
+        if (value > BigInt(Number.MAX_SAFE_INTEGER)) throw new Error('invalid protobuf number');
+        return Number(value);
+      }
+
       function displayError(error) {
         if (error.redirected) {
           return;
@@ -444,6 +727,8 @@
           if (response.status !== 204) {
             throw await errorFromResponse(response);
           }
+          statsClosingForLogout = true;
+          statsSocket?.close();
           window.location.assign('/auth.html');
         } catch (error) {
           displayError(error);
@@ -473,13 +758,16 @@
       });
       elements.refreshButton.addEventListener('click', () => loadPrograms());
       elements.logoutButton.addEventListener('click', () => logout());
+      elements.statsRetryButton.addEventListener('click', () => connectStats());
 
       render();
       loadPlayerIdentity().then((identityLoaded) => {
         if (identityLoaded) {
           loadPrograms();
+          connectStats();
         }
       });
+      setInterval(updateStatsStaleness, 1000);
     })();
     </script>
   </body>

@@ -8,11 +8,12 @@
     ".": "./src/index.ts"
   },
   "tasks": {
-    "test": "deno test --no-prompt --allow-env --allow-read --allow-write",
+    "test": "deno test --no-prompt --allow-env --allow-read --allow-write tests",
     "check": "deno check src/index.ts tests/**/*.ts",
     "fmt": "deno fmt",
     "bundle": "deno run --allow-env --allow-read --allow-run --allow-write scripts/bundle.ts",
-    "start": "deno task bundle && COBBLEWARE_API_KEY=secret deno run --allow-env --allow-run scripts/start.ts"
+    "start": "deno task bundle && COBBLEWARE_API_KEY=secret deno run --allow-env --allow-run scripts/start.ts",
+    "integrate": "deno task bundle && deno test --no-prompt --allow-env=COBBLEWARE_API_KEY,COBBLEWARE_GAME_DIR,EDGE_RUNTIME_BIN --allow-net=127.0.0.1 --allow-read --allow-run --allow-write integration"
   },
   "fmt": {
     "useTabs": false,

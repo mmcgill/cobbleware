@@ -5,6 +5,7 @@ import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 
 import cobbleware.common.Uuid;
 import cobbleware.internal.ExecutionStatus;
+import cobbleware.internal.ExecutionStats;
 import cobbleware.internal.ExecutionsRequest;
 import cobbleware.internal.ExecutionsResponse;
 import com.sun.net.httpserver.HttpServer;
@@ -173,6 +174,22 @@ class MainWorkerClientTest {
         assertEquals("Bearer secret", authorization.get());
         assertEquals("application/octet-stream", contentType.get());
         assertArrayEquals(request.toByteArray(), requestBody.get());
+    }
+
+    @Test
+    void postsExecutionStatsWithoutExpectingAResponseBody() throws Exception {
+        AtomicReference<String> authorization = new AtomicReference<>();
+        AtomicReference<byte[]> requestBody = new AtomicReference<>();
+        startBinaryServer("/worker/modapi/v1/execution-stats", 204, new byte[0], exchange -> {
+            authorization.set(exchange.getRequestHeaders().getFirst("Authorization"));
+            requestBody.set(exchange.getRequestBody().readAllBytes());
+        });
+        ExecutionStats report = ExecutionStats.newBuilder().setSampledAtUnixMillis(1).setWindowTicks(20).build();
+
+        client("secret").reportExecutionStats(report).get();
+
+        assertEquals("Bearer secret", authorization.get());
+        assertArrayEquals(report.toByteArray(), requestBody.get());
     }
 
     private void startServer(int status, String responseBody, RequestInspector inspector) throws Exception {

@@ -178,6 +178,7 @@ The recorded measurements are:
 
 * full wall-clock duration and outcome of each execution-sync request, measured
   from dispatch until its `CompletableFuture` completes;
+* events included per execution-sync request, per player and physical Cobbleputer;
 * accepted and dropped events, per player, physical Cobbleputer, and event type;
 * attempted and failed effect applications, plus processing duration, per
   player, physical Cobbleputer, and effect type; and
@@ -188,7 +189,18 @@ recorded as dropped, except that an event produced while the Cobbleputer is `STO
 an admission and is recorded as neither accepted nor dropped. An effect is attempted whenever
 the Mod calls its existing effect-application path and is failed only when that
 path throws. Metrics do not alter the existing best-effort event/effect
-semantics.
+semantics. The events-per-sync measurement is recorded when the Mod dispatches an
+execution-sync request, including zero-event execution records.
+
+Once per second, the Mod takes one snapshot and sends one fire-and-forget `ExecutionStats`
+protobuf report. Its `players` list contains an aggregate for every player represented by a current
+state gauge or by any measurement retained in the instrumentation window. Each entry aggregates
+that player's events-per-sync, accepted/dropped-event, effect-attempt/failure/duration, and loaded
+running/stopped-Cobbleputer values. The enclosing report includes the configured and currently
+retained window lengths, so consumers can distinguish a newly started collector from a full window.
+The Mod does not send the server-wide execution-sync duration/outcome metric because it cannot be
+attributed to an individual player. Reporting neither waits for a response nor changes execution,
+event, effect, or instrumentation behavior; an unavailable Main Worker simply loses that snapshot.
 
 ```
 /cobbleware stats
@@ -202,8 +214,8 @@ over the instrumentation window, either in general or for a specific player/even
 Player names, event names (for example `chat-message`), and Cobbleputer UUIDs
 are disjoint qualifier forms. The unqualified view includes all metric
 families; a player view contains that player's metrics, an event view contains
-that event's counters, and a Cobbleputer view contains its event/effect metrics
-and reports its dimension and block position. The command offers known
+that event's counters, and a Cobbleputer view contains its event, effect, and
+events-per-sync metrics and reports its dimension and block position. The command offers known
 qualifiers as tab completions. The unqualified view contains only total summary
 counts; qualified views contain their relevant breakdowns. Metric rows use
 Minecraft's built-in uniform font and ordinary-space padding for readable column

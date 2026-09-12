@@ -4,6 +4,7 @@ import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
 import cobbleware.internal.ErrorResponse;
+import cobbleware.internal.ExecutionStats;
 import cobbleware.internal.ExecutionsRequest;
 import cobbleware.internal.ExecutionsResponse;
 import io.github.mmcgill.cobbleware.config.CobblewareConfig;
@@ -122,6 +123,34 @@ public final class MainWorkerClient {
                         return ExecutionSyncResult.unavailable("Main Worker request failed");
                     }
                     return executionSyncResponseResult(response);
+                });
+    }
+
+    /** Sends a complete instrumentation report without blocking or retrying the server tick. */
+    public CompletableFuture<Void> reportExecutionStats(ExecutionStats stats) {
+        if (stats == null) {
+            throw new IllegalArgumentException("execution stats must not be null");
+        }
+        if (!config.isEnabled()) {
+            return CompletableFuture.completedFuture(null);
+        }
+
+        URI endpoint = config.mainWorkerBaseUri().resolve("modapi/v1/execution-stats");
+        HttpRequest request = HttpRequest.newBuilder(endpoint)
+                .timeout(REQUEST_TIMEOUT)
+                .header("Authorization", "Bearer " + config.mainWorkerApiKey())
+                .header("Content-Type", "application/octet-stream")
+                .POST(HttpRequest.BodyPublishers.ofByteArray(stats.toByteArray()))
+                .build();
+
+        return httpClient.sendAsync(request, HttpResponse.BodyHandlers.discarding())
+                .handle((response, failure) -> {
+                    if (failure != null) {
+                        logger.debug("Main Worker execution-stats report failed: {}", unwrap(failure).toString());
+                    } else if (response.statusCode() != 204) {
+                        logger.debug("Main Worker execution-stats report returned HTTP {}", response.statusCode());
+                    }
+                    return null;
                 });
     }
 

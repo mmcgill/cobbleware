@@ -16,7 +16,7 @@ import type { Message } from "@bufbuild/protobuf";
  * Describes the file internal.proto.
  */
 export const file_internal: GenFile = /*@__PURE__*/
-  fileDesc("Cg5pbnRlcm5hbC5wcm90bxITY29iYmxld2FyZS5pbnRlcm5hbCKQAgoORXhlY3V0aW9uU3RhdGUSLQoMZXhlY3V0aW9uX2lkGAEgASgLMhcuY29iYmxld2FyZS5jb21tb24uVXVpZBIVCg1pbml0aWFsX3N0YXRlGAIgASgMEigKBmV2ZW50cxgDIAMoCzIYLmNvYmJsZXdhcmUuZXZlbnRzLkV2ZW50EhUKDWV2ZW50X3NlcV9udW0YBCABKAQSFgoOZWZmZWN0X3NlcV9udW0YBSABKAQSKgoJcGxheWVyX2lkGAYgASgLMhcuY29iYmxld2FyZS5jb21tb24uVXVpZBIzCgVzdGF0ZRgHIAEoDjIkLmNvYmJsZXdhcmUuaW50ZXJuYWwuRXhlY3V0aW9uU3RhdHVzIuYBCg9FeGVjdXRpb25SZXN1bHQSLQoMZXhlY3V0aW9uX2lkGAEgASgLMhcuY29iYmxld2FyZS5jb21tb24uVXVpZBITCgtmaW5hbF9zdGF0ZRgCIAEoDBIrCgdlZmZlY3RzGAMgAygLMhouY29iYmxld2FyZS5lZmZlY3RzLkVmZmVjdBIVCg1ldmVudF9zZXFfbnVtGAQgASgEEhYKDmVmZmVjdF9zZXFfbnVtGAUgASgEEjMKBXN0YXRlGAYgASgOMiQuY29iYmxld2FyZS5pbnRlcm5hbC5FeGVjdXRpb25TdGF0dXMiTAoRRXhlY3V0aW9uc1JlcXVlc3QSNwoKZXhlY3V0aW9ucxgBIAMoCzIjLmNvYmJsZXdhcmUuaW50ZXJuYWwuRXhlY3V0aW9uU3RhdGUiSwoSRXhlY3V0aW9uc1Jlc3BvbnNlEjUKB3Jlc3VsdHMYASADKAsyJC5jb2JibGV3YXJlLmludGVybmFsLkV4ZWN1dGlvblJlc3VsdCIeCg1FcnJvclJlc3BvbnNlEg0KBWVycm9yGAEgASgJKo0BCg9FeGVjdXRpb25TdGF0dXMSIAocRVhFQ1VUSU9OX1NUQVRVU19VTlNQRUNJRklFRBAAEhwKGEVYRUNVVElPTl9TVEFUVVNfUlVOTklORxABEhwKGEVYRUNVVElPTl9TVEFUVVNfU1RPUFBFRBACEhwKGEVYRUNVVElPTl9TVEFUVVNfQ1JBU0hFRBADYghlZGl0aW9uc3DpBw", [file_common, file_effects, file_events]);
+  fileDesc("Cg5pbnRlcm5hbC5wcm90bxITY29iYmxld2FyZS5pbnRlcm5hbCKQAgoORXhlY3V0aW9uU3RhdGUSLQoMZXhlY3V0aW9uX2lkGAEgASgLMhcuY29iYmxld2FyZS5jb21tb24uVXVpZBIVCg1pbml0aWFsX3N0YXRlGAIgASgMEigKBmV2ZW50cxgDIAMoCzIYLmNvYmJsZXdhcmUuZXZlbnRzLkV2ZW50EhUKDWV2ZW50X3NlcV9udW0YBCABKAQSFgoOZWZmZWN0X3NlcV9udW0YBSABKAQSKgoJcGxheWVyX2lkGAYgASgLMhcuY29iYmxld2FyZS5jb21tb24uVXVpZBIzCgVzdGF0ZRgHIAEoDjIkLmNvYmJsZXdhcmUuaW50ZXJuYWwuRXhlY3V0aW9uU3RhdHVzIuYBCg9FeGVjdXRpb25SZXN1bHQSLQoMZXhlY3V0aW9uX2lkGAEgASgLMhcuY29iYmxld2FyZS5jb21tb24uVXVpZBITCgtmaW5hbF9zdGF0ZRgCIAEoDBIrCgdlZmZlY3RzGAMgAygLMhouY29iYmxld2FyZS5lZmZlY3RzLkVmZmVjdBIVCg1ldmVudF9zZXFfbnVtGAQgASgEEhYKDmVmZmVjdF9zZXFfbnVtGAUgASgEEjMKBXN0YXRlGAYgASgOMiQuY29iYmxld2FyZS5pbnRlcm5hbC5FeGVjdXRpb25TdGF0dXMiTAoRRXhlY3V0aW9uc1JlcXVlc3QSNwoKZXhlY3V0aW9ucxgBIAMoCzIjLmNvYmJsZXdhcmUuaW50ZXJuYWwuRXhlY3V0aW9uU3RhdGUiSwoSRXhlY3V0aW9uc1Jlc3BvbnNlEjUKB3Jlc3VsdHMYASADKAsyJC5jb2JibGV3YXJlLmludGVybmFsLkV4ZWN1dGlvblJlc3VsdCKUBAoORXhlY3V0aW9uU3RhdHMSHgoWc2FtcGxlZF9hdF91bml4X21pbGxpcxgBIAEoBBIUCgx3aW5kb3dfdGlja3MYAiABKA0SGwoTcmV0YWluZWRfdGlja19jb3VudBgDIAEoDRJACgdwbGF5ZXJzGAQgAygLMi8uY29iYmxld2FyZS5pbnRlcm5hbC5FeGVjdXRpb25TdGF0cy5QbGF5ZXJTdGF0cxrsAgoLUGxheWVyU3RhdHMSKgoJcGxheWVyX2lkGAEgASgLMhcuY29iYmxld2FyZS5jb21tb24uVXVpZBIdChVldmVudHNfcGVyX3N5bmNfY291bnQYAiABKAQSHQoVZXZlbnRzX3Blcl9zeW5jX3RvdGFsGAMgASgEEhsKE2V2ZW50c19wZXJfc3luY19tYXgYBCABKAQSFwoPZXZlbnRzX2FjY2VwdGVkGAUgASgEEhYKDmV2ZW50c19kcm9wcGVkGAYgASgEEhkKEWVmZmVjdHNfYXR0ZW1wdGVkGAcgASgEEhYKDmVmZmVjdHNfZmFpbGVkGAggASgEEhsKE2VmZmVjdHNfdG90YWxfbmFub3MYCSABKAQSGQoRZWZmZWN0c19tYXhfbmFub3MYCiABKAQSHAoUcnVubmluZ19jb2JibGVwdXRlcnMYCyABKA0SHAoUc3RvcHBlZF9jb2JibGVwdXRlcnMYDCABKA0iHgoNRXJyb3JSZXNwb25zZRINCgVlcnJvchgBIAEoCSqNAQoPRXhlY3V0aW9uU3RhdHVzEiAKHEVYRUNVVElPTl9TVEFUVVNfVU5TUEVDSUZJRUQQABIcChhFWEVDVVRJT05fU1RBVFVTX1JVTk5JTkcQARIcChhFWEVDVVRJT05fU1RBVFVTX1NUT1BQRUQQAhIcChhFWEVDVVRJT05fU1RBVFVTX0NSQVNIRUQQA2IIZWRpdGlvbnNw6Qc", [file_common, file_effects, file_events]);
 
 /**
  * @generated from message cobbleware.internal.ExecutionState
@@ -180,6 +180,148 @@ export const ExecutionsResponseSchema: GenMessage<ExecutionsResponse> = /*@__PUR
   messageDesc(file_internal, 3);
 
 /**
+ * A complete, sliding-window execution-instrumentation snapshot for all represented players.
+ * It is sent by the Mod to the Main Worker and is not persisted.
+ *
+ * @generated from message cobbleware.internal.ExecutionStats
+ */
+export type ExecutionStats = Message<"cobbleware.internal.ExecutionStats"> & {
+  /**
+   * Wall-clock time at which the Mod captured this snapshot, as milliseconds since the Unix epoch.
+   * Required by the application contract.
+   *
+   * @generated from field: uint64 sampled_at_unix_millis = 1;
+   */
+  sampledAtUnixMillis: bigint;
+
+  /**
+   * The configured number of server ticks in the instrumentation sliding window. Required by the application contract.
+   *
+   * @generated from field: uint32 window_ticks = 2;
+   */
+  windowTicks: number;
+
+  /**
+   * The number of ticks currently represented in this snapshot. Required by the application contract.
+   *
+   * @generated from field: uint32 retained_tick_count = 3;
+   */
+  retainedTickCount: number;
+
+  /**
+   * Required by the application contract. A snapshot contains at most one entry for each player.
+   *
+   * @generated from field: repeated cobbleware.internal.ExecutionStats.PlayerStats players = 4;
+   */
+  players: ExecutionStats_PlayerStats[];
+};
+
+/**
+ * Describes the message cobbleware.internal.ExecutionStats.
+ * Use `create(ExecutionStatsSchema)` to create a new message.
+ */
+export const ExecutionStatsSchema: GenMessage<ExecutionStats> = /*@__PURE__*/
+  messageDesc(file_internal, 4);
+
+/**
+ * A player's aggregate execution instrumentation within the containing snapshot's window.
+ *
+ * @generated from message cobbleware.internal.ExecutionStats.PlayerStats
+ */
+export type ExecutionStats_PlayerStats = Message<"cobbleware.internal.ExecutionStats.PlayerStats"> & {
+  /**
+   * Identifies the player whose execution metrics are represented. Required by the application contract.
+   *
+   * @generated from field: cobbleware.common.Uuid player_id = 1;
+   */
+  playerId?: Uuid | undefined;
+
+  /**
+   * Number of per-Cobbleputer execution-sync records included in the window. Zero-event records are included.
+   *
+   * @generated from field: uint64 events_per_sync_count = 2;
+   */
+  eventsPerSyncCount: bigint;
+
+  /**
+   * Sum of events included in those execution-sync records.
+   *
+   * @generated from field: uint64 events_per_sync_total = 3;
+   */
+  eventsPerSyncTotal: bigint;
+
+  /**
+   * Largest number of events included in one execution-sync record.
+   *
+   * @generated from field: uint64 events_per_sync_max = 4;
+   */
+  eventsPerSyncMax: bigint;
+
+  /**
+   * Number of event admissions accepted by the Mod in the window, across all event types and Cobbleputers.
+   *
+   * @generated from field: uint64 events_accepted = 5;
+   */
+  eventsAccepted: bigint;
+
+  /**
+   * Number of event admissions dropped by the Mod in the window, across all event types and Cobbleputers.
+   *
+   * @generated from field: uint64 events_dropped = 6;
+   */
+  eventsDropped: bigint;
+
+  /**
+   * Number of effect-application attempts in the window, across all effect types and Cobbleputers.
+   *
+   * @generated from field: uint64 effects_attempted = 7;
+   */
+  effectsAttempted: bigint;
+
+  /**
+   * Number of effect-application attempts that threw in the window.
+   *
+   * @generated from field: uint64 effects_failed = 8;
+   */
+  effectsFailed: bigint;
+
+  /**
+   * Sum of the effect-application durations in nanoseconds.
+   *
+   * @generated from field: uint64 effects_total_nanos = 9;
+   */
+  effectsTotalNanos: bigint;
+
+  /**
+   * Longest effect-application duration in nanoseconds.
+   *
+   * @generated from field: uint64 effects_max_nanos = 10;
+   */
+  effectsMaxNanos: bigint;
+
+  /**
+   * Current number of loaded running Cobbleputers owned by the player.
+   *
+   * @generated from field: uint32 running_cobbleputers = 11;
+   */
+  runningCobbleputers: number;
+
+  /**
+   * Current number of loaded stopped Cobbleputers owned by the player.
+   *
+   * @generated from field: uint32 stopped_cobbleputers = 12;
+   */
+  stoppedCobbleputers: number;
+};
+
+/**
+ * Describes the message cobbleware.internal.ExecutionStats.PlayerStats.
+ * Use `create(ExecutionStats_PlayerStatsSchema)` to create a new message.
+ */
+export const ExecutionStats_PlayerStatsSchema: GenMessage<ExecutionStats_PlayerStats> = /*@__PURE__*/
+  messageDesc(file_internal, 4, 0);
+
+/**
  * An error returned by an internal Mod API endpoint.
  *
  * @generated from message cobbleware.internal.ErrorResponse
@@ -196,7 +338,7 @@ export type ErrorResponse = Message<"cobbleware.internal.ErrorResponse"> & {
  * Use `create(ErrorResponseSchema)` to create a new message.
  */
 export const ErrorResponseSchema: GenMessage<ErrorResponse> = /*@__PURE__*/
-  messageDesc(file_internal, 4);
+  messageDesc(file_internal, 5);
 
 /**
  * The lifecycle state of an execution.

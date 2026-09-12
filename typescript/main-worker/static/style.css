@@ -199,6 +199,10 @@ input:focus-visible {
   color: var(--danger);
 }
 
+.muted.error {
+  color: var(--danger);
+}
+
 .status.success {
   color: var(--accent-strong);
 }
@@ -265,6 +269,32 @@ td code {
   color: var(--muted);
 }
 
+.stats-details dl {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 1rem;
+  margin: 1rem 0 0;
+}
+
+.stats-details dl > div {
+  padding: 0.75rem;
+  border: 1px solid var(--border);
+  border-radius: 0.35rem;
+  background: var(--surface-subtle);
+}
+
+.stats-details dt {
+  color: var(--muted);
+  font-size: 0.85rem;
+  font-weight: 650;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+}
+
+.stats-details dd {
+  margin: 0.35rem 0 0;
+}
+
 .visually-hidden {
   position: absolute;
   width: 1px;
@@ -290,5 +320,9 @@ td code {
   th,
   td {
     padding: 0.6rem 0.45rem;
+  }
+
+  .stats-details dl {
+    grid-template-columns: 1fr;
   }
 }

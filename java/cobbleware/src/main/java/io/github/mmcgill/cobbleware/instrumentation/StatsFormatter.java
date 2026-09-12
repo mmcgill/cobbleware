@@ -26,9 +26,11 @@ public final class StatsFormatter {
     public static List<Line> all(Instrumentation.Snapshot snapshot) {
         List<Line> lines = header("Cobbleware stats", snapshot);
         Instrumentation.EventCounts events = totalEvents(snapshot.events().values());
+        Instrumentation.EventSyncSummary eventsPerSync = totalEventsPerSync(snapshot.eventsPerSync().values());
         Instrumentation.EffectCounts effects = totalEffects(snapshot.effects().values());
         lines.add(metricWithTiming(snapshot.syncDurations(), "Sync"));
         lines.add(metric("Events", "accepted", Long.toString(events.accepted()), "dropped", Long.toString(events.dropped())));
+        lines.add(metricWithEventCount(eventsPerSync, "Events/sync"));
         lines.add(metricWithTiming(effects.durations(), "Effects", "attempted", Long.toString(effects.attempted()), "failed",
                 Long.toString(effects.failed())));
         lines.add(metric("Cobbleputers", "count", Integer.toString(snapshot.cobbleputerStates().size())));
@@ -38,6 +40,7 @@ public final class StatsFormatter {
     /** Formats metrics for one player name, matching active-execution names case-insensitively. */
     public static Optional<List<Line>> player(Instrumentation.Snapshot snapshot, String playerName) {
         boolean known = snapshot.events().keySet().stream().anyMatch(key -> sameName(key.target().playerName(), playerName))
+                || snapshot.eventsPerSync().keySet().stream().anyMatch(key -> sameName(key.playerName(), playerName))
                 || snapshot.effects().keySet().stream().anyMatch(key -> sameName(key.target().playerName(), playerName))
                 || snapshot.cobbleputerStates().keySet().stream()
                         .anyMatch(key -> sameName(key.playerName(), playerName));
@@ -47,6 +50,8 @@ public final class StatsFormatter {
         List<Line> lines = header("Cobbleware stats for player " + playerName, snapshot);
         appendEvents(lines, snapshot.events().entrySet().stream()
                 .filter(entry -> sameName(entry.getKey().target().playerName(), playerName)).toList());
+        appendEventsPerSync(lines, snapshot.eventsPerSync().entrySet().stream()
+                .filter(entry -> sameName(entry.getKey().playerName(), playerName)).toList());
         appendEffects(lines, snapshot.effects().entrySet().stream()
                 .filter(entry -> sameName(entry.getKey().target().playerName(), playerName)).toList());
         appendStates(lines, snapshot.cobbleputerStates().entrySet().stream()
@@ -77,20 +82,26 @@ public final class StatsFormatter {
                 .filter(entry -> entry.getKey().target().cobbleputer().id().equals(cobbleputerId)).toList();
         List<Map.Entry<Instrumentation.EffectMetricKey, Instrumentation.EffectCounts>> effects = snapshot.effects().entrySet().stream()
                 .filter(entry -> entry.getKey().target().cobbleputer().id().equals(cobbleputerId)).toList();
+        List<Map.Entry<Instrumentation.PlayerCobbleputerKey, Instrumentation.EventSyncSummary>> eventsPerSync =
+                snapshot.eventsPerSync().entrySet().stream()
+                        .filter(entry -> entry.getKey().cobbleputer().id().equals(cobbleputerId)).toList();
         List<Map.Entry<Instrumentation.PlayerCobbleputerKey, Instrumentation.LifecycleState>> states =
                 snapshot.cobbleputerStates().entrySet().stream()
                         .filter(entry -> entry.getKey().cobbleputer().id().equals(cobbleputerId)).toList();
-        if (events.isEmpty() && effects.isEmpty() && states.isEmpty()) {
+        if (events.isEmpty() && eventsPerSync.isEmpty() && effects.isEmpty() && states.isEmpty()) {
             return Optional.empty();
         }
         Instrumentation.CobbleputerKey key = !events.isEmpty()
                 ? events.getFirst().getKey().target().cobbleputer()
+                : !eventsPerSync.isEmpty()
+                        ? eventsPerSync.getFirst().getKey().cobbleputer()
                 : !effects.isEmpty()
                         ? effects.getFirst().getKey().target().cobbleputer()
                         : states.getFirst().getKey().cobbleputer();
         List<Line> lines = header("Cobbleware stats for Cobbleputer " + cobbleputerId, snapshot);
         lines.add(metric("Location", location(key)));
         appendEvents(lines, events);
+        appendEventsPerSync(lines, eventsPerSync);
         appendEffects(lines, effects);
         appendStates(lines, states);
         return Optional.of(List.copyOf(lines));
@@ -101,7 +112,10 @@ public final class StatsFormatter {
         return java.util.stream.Stream.concat(
                         java.util.stream.Stream.concat(
                                 snapshot.events().keySet().stream().map(key -> key.target().playerName()),
-                                snapshot.effects().keySet().stream().map(key -> key.target().playerName())),
+                                java.util.stream.Stream.concat(
+                                        snapshot.eventsPerSync().keySet().stream()
+                                                .map(Instrumentation.PlayerCobbleputerKey::playerName),
+                                        snapshot.effects().keySet().stream().map(key -> key.target().playerName()))),
                         java.util.stream.Stream.concat(
                                 snapshot.cobbleputerStates().keySet().stream().map(Instrumentation.PlayerCobbleputerKey::playerName),
                                 java.util.stream.Stream.concat(
@@ -112,10 +126,13 @@ public final class StatsFormatter {
                                                 snapshot.events().keySet().stream()
                                                         .map(key -> key.target().cobbleputer().id().toString()),
                                                 java.util.stream.Stream.concat(
+                                                        snapshot.eventsPerSync().keySet().stream()
+                                                                .map(key -> key.cobbleputer().id().toString()),
+                                                        java.util.stream.Stream.concat(
                                                         snapshot.effects().keySet().stream()
                                                                 .map(key -> key.target().cobbleputer().id().toString()),
                                                         snapshot.cobbleputerStates().keySet().stream()
-                                                                .map(key -> key.cobbleputer().id().toString()))))))
+                                                                .map(key -> key.cobbleputer().id().toString())))))))
                 .distinct()
                 .sorted(String.CASE_INSENSITIVE_ORDER)
                 .toList();
@@ -155,6 +172,22 @@ public final class StatsFormatter {
     private static void appendEffects(
             List<Line> lines, Map<Instrumentation.EffectMetricKey, Instrumentation.EffectCounts> effects) {
         appendEffects(lines, effects.entrySet());
+    }
+
+    private static void appendEventsPerSync(
+            List<Line> lines,
+            java.util.Collection<Map.Entry<Instrumentation.PlayerCobbleputerKey, Instrumentation.EventSyncSummary>> summaries) {
+        if (summaries.isEmpty()) {
+            lines.add(heading("Events/sync: none"));
+            return;
+        }
+        lines.add(heading("Events/sync:"));
+        summaries.stream().sorted(Comparator
+                        .comparing((Map.Entry<Instrumentation.PlayerCobbleputerKey, Instrumentation.EventSyncSummary> entry) ->
+                                entry.getKey().playerName(), String.CASE_INSENSITIVE_ORDER)
+                        .thenComparing(entry -> entry.getKey().cobbleputer().id()))
+                .forEach(entry -> lines.add(metricWithEventCount(entry.getValue(), "Events/sync", "player",
+                        entry.getKey().playerName(), "cobbleputer", entry.getKey().cobbleputer().id().toString())));
     }
 
     private static void appendEffects(
@@ -257,6 +290,15 @@ public final class StatsFormatter {
                                 Math.max(left.durations().maxNanos(), right.durations().maxNanos()))));
     }
 
+    private static Instrumentation.EventSyncSummary totalEventsPerSync(
+            java.util.Collection<Instrumentation.EventSyncSummary> summaries) {
+        return summaries.stream().reduce(new Instrumentation.EventSyncSummary(0, 0, 0),
+                (left, right) -> new Instrumentation.EventSyncSummary(
+                        Math.addExact(left.count(), right.count()),
+                        Math.addExact(left.totalEvents(), right.totalEvents()),
+                        Math.max(left.maxEvents(), right.maxEvents())));
+    }
+
     private static Line heading(String text) {
         return new Line(text, false);
     }
@@ -270,6 +312,22 @@ public final class StatsFormatter {
         String[] allColumns = java.util.Arrays.copyOf(columns, columns.length + timingColumns.length);
         System.arraycopy(timingColumns, 0, allColumns, columns.length, timingColumns.length);
         return metric(allColumns);
+    }
+
+    private static Line metricWithEventCount(Instrumentation.EventSyncSummary summary, String... columns) {
+        String[] summaryColumns = eventCountColumns(summary);
+        String[] allColumns = java.util.Arrays.copyOf(columns, columns.length + summaryColumns.length);
+        System.arraycopy(summaryColumns, 0, allColumns, columns.length, summaryColumns.length);
+        return metric(allColumns);
+    }
+
+    private static String[] eventCountColumns(Instrumentation.EventSyncSummary summary) {
+        if (summary.count() == 0) {
+            return new String[] {"count", "0"};
+        }
+        return new String[] {"count", Long.toString(summary.count()), "avg",
+                String.format(Locale.ROOT, "%.1f", (double) summary.totalEvents() / summary.count()), "max",
+                Long.toString(summary.maxEvents())};
     }
 
     private static String row(String... columns) {

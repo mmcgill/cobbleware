@@ -56,6 +56,16 @@ public final class Instrumentation {
         bucket.events.put(key, accepted ? current.incrementAccepted() : current.incrementDropped());
     }
 
+    /** Records the number of events included for one Cobbleputer in one dispatched execution-sync request. */
+    public synchronized void recordEventsPerSync(PlayerCobbleputerKey target, int eventCount) {
+        if (target == null || eventCount < 0) {
+            throw new IllegalArgumentException("event-sync measurement must have a target and non-negative event count");
+        }
+        TickBucket bucket = currentBucket();
+        EventSyncSummary current = bucket.eventsPerSync.getOrDefault(target, EventSyncSummary.EMPTY);
+        bucket.eventsPerSync.put(target, current.add(eventCount));
+    }
+
     /** Records one effect application attempt and its duration. */
     public synchronized void recordEffect(
             PlayerCobbleputerKey target, Effect.EffectCase type, long elapsedNanos, boolean failed) {
@@ -82,6 +92,7 @@ public final class Instrumentation {
         TimingSummary syncDurations = TimingSummary.EMPTY;
         Map<SyncOutcome, Long> syncOutcomes = new HashMap<>();
         Map<EventMetricKey, EventCounts> events = new HashMap<>();
+        Map<PlayerCobbleputerKey, EventSyncSummary> eventsPerSync = new HashMap<>();
         Map<EffectMetricKey, EffectCounts> effects = new HashMap<>();
         long firstTick = Long.MAX_VALUE;
         int retainedTickCount = 0;
@@ -96,6 +107,7 @@ public final class Instrumentation {
             syncDurations = syncDurations.add(bucket.syncDurations);
             mergeLongCounts(syncOutcomes, bucket.syncOutcomes);
             mergeEventCounts(events, bucket.events);
+            mergeEventSyncSummaries(eventsPerSync, bucket.eventsPerSync);
             mergeEffectCounts(effects, bucket.effects);
         }
 
@@ -108,6 +120,7 @@ public final class Instrumentation {
                 syncDurations,
                 Map.copyOf(syncOutcomes),
                 Map.copyOf(events),
+                Map.copyOf(eventsPerSync),
                 Map.copyOf(effects),
                 latest.tick == currentTick ? latest.states : Map.of());
     }
@@ -127,6 +140,11 @@ public final class Instrumentation {
 
     private static void mergeEventCounts(Map<EventMetricKey, EventCounts> target, Map<EventMetricKey, EventCounts> source) {
         source.forEach((key, value) -> target.merge(key, value, EventCounts::add));
+    }
+
+    private static void mergeEventSyncSummaries(
+            Map<PlayerCobbleputerKey, EventSyncSummary> target, Map<PlayerCobbleputerKey, EventSyncSummary> source) {
+        source.forEach((key, value) -> target.merge(key, value, EventSyncSummary::add));
     }
 
     private static void mergeEffectCounts(
@@ -232,6 +250,29 @@ public final class Instrumentation {
         }
     }
 
+    /** Summary of event counts supplied for one Cobbleputer across execution-sync requests. */
+    public record EventSyncSummary(long count, long totalEvents, long maxEvents) {
+        private static final EventSyncSummary EMPTY = new EventSyncSummary(0, 0, 0);
+
+        public EventSyncSummary {
+            if (count < 0 || totalEvents < 0 || maxEvents < 0) {
+                throw new IllegalArgumentException("event-sync summary values must be non-negative");
+            }
+        }
+
+        private EventSyncSummary add(int eventCount) {
+            return new EventSyncSummary(
+                    saturatingAdd(count, 1), saturatingAdd(totalEvents, eventCount), Math.max(maxEvents, eventCount));
+        }
+
+        private EventSyncSummary add(EventSyncSummary other) {
+            return new EventSyncSummary(
+                    saturatingAdd(count, other.count),
+                    saturatingAdd(totalEvents, other.totalEvents),
+                    Math.max(maxEvents, other.maxEvents));
+        }
+    }
+
     public record EffectCounts(long attempted, long failed, TimingSummary durations) {
         private static final EffectCounts EMPTY = new EffectCounts(0, 0, TimingSummary.EMPTY);
 
@@ -260,11 +301,13 @@ public final class Instrumentation {
             TimingSummary syncDurations,
             Map<SyncOutcome, Long> syncOutcomes,
             Map<EventMetricKey, EventCounts> events,
+            Map<PlayerCobbleputerKey, EventSyncSummary> eventsPerSync,
             Map<EffectMetricKey, EffectCounts> effects,
             Map<PlayerCobbleputerKey, LifecycleState> cobbleputerStates) {
         public Snapshot {
             syncOutcomes = Map.copyOf(syncOutcomes);
             events = Map.copyOf(events);
+            eventsPerSync = Map.copyOf(eventsPerSync);
             effects = Map.copyOf(effects);
             cobbleputerStates = Map.copyOf(cobbleputerStates);
         }
@@ -279,6 +322,7 @@ public final class Instrumentation {
         private TimingSummary syncDurations = TimingSummary.EMPTY;
         private final Map<SyncOutcome, Long> syncOutcomes = new HashMap<>();
         private final Map<EventMetricKey, EventCounts> events = new HashMap<>();
+        private final Map<PlayerCobbleputerKey, EventSyncSummary> eventsPerSync = new HashMap<>();
         private final Map<EffectMetricKey, EffectCounts> effects = new HashMap<>();
         private Map<PlayerCobbleputerKey, LifecycleState> states = Map.of();
 
@@ -287,6 +331,7 @@ public final class Instrumentation {
             syncDurations = TimingSummary.EMPTY;
             syncOutcomes.clear();
             events.clear();
+            eventsPerSync.clear();
             effects.clear();
             states = Map.of();
         }

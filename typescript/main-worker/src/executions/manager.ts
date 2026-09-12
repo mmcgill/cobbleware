@@ -427,8 +427,8 @@ function uuidKey(uuid: Common.Uuid): string {
 }
 
 function uuidString(uuid: Common.Uuid): string {
-  const value = BigInt.asUintN(64, uuid.high).toString(16).padStart(16, '0') +
-    BigInt.asUintN(64, uuid.low).toString(16).padStart(16, '0');
+  const value = uuid.high.toString(16).padStart(16, '0') +
+    uuid.low.toString(16).padStart(16, '0');
   return `${value.slice(0, 8)}-${value.slice(8, 12)}-${value.slice(12, 16)}-${
     value.slice(16, 20)
   }-${value.slice(20)}`;

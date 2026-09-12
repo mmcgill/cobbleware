@@ -23,6 +23,7 @@ import io.github.mmcgill.cobbleware.block.CobbleputerState;
 import io.github.mmcgill.cobbleware.block.WirelessObserverBlock;
 import io.github.mmcgill.cobbleware.block.WirelessObserverBlockEntity;
 import io.github.mmcgill.cobbleware.instrumentation.Instrumentation;
+import io.github.mmcgill.cobbleware.instrumentation.ExecutionStatsReporter;
 import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.Collections;
@@ -264,7 +265,7 @@ public final class ExecutionDriver {
         instrumentation.advanceTick(instrumentationTick);
         if (inFlight != null) {
             if (!inFlight.isDone()) {
-                recordCobbleputerStateGauge();
+                recordCobbleputerStateGaugeAndReport();
                 return;
             }
             MainWorkerClient.ExecutionSyncResult result;
@@ -292,7 +293,7 @@ public final class ExecutionDriver {
         drainObserverChanges(server);
         Flight nextFlight = buildFlight();
         if (!nextFlight.hadExecutions() && !runtimeMayHaveExecutions) {
-            recordCobbleputerStateGauge();
+            recordCobbleputerStateGaugeAndReport();
             return;
         }
         if (nextFlight.hadExecutions()) {
@@ -301,10 +302,11 @@ public final class ExecutionDriver {
         long dispatchedAt = System.nanoTime();
         Flight dispatchedFlight = nextFlight.withDispatchNanos(dispatchedAt);
         flight = dispatchedFlight;
+        recordEventsPerSync(dispatchedFlight);
         inFlight = mainWorkerClient.syncExecutions(nextFlight.request);
         inFlight.whenComplete((result, failure) -> instrumentation.recordSyncCompletion(
                 System.nanoTime() - dispatchedFlight.dispatchNanos(), syncOutcome(result, failure)));
-        recordCobbleputerStateGauge();
+        recordCobbleputerStateGaugeAndReport();
     }
 
     private void drainObserverChanges(MinecraftServer server) {
@@ -763,6 +765,13 @@ public final class ExecutionDriver {
                 instrumentation.recordEvent(target, event.getEventCase(), accepted));
     }
 
+    private void recordEventsPerSync(Flight dispatchedFlight) {
+        for (OfferedExecution offered : dispatchedFlight.offered.values()) {
+            instrumentationKey(offered.blockEntity).ifPresent(target ->
+                    instrumentation.recordEventsPerSync(target, offered.offeredEventCount));
+        }
+    }
+
     /**
      * Records a rejected event unless it was ignored because the Cobbleputer is stopped.
      * Stopped executions retain their existing queue, but do not admit new events or count them as dropped.
@@ -812,6 +821,14 @@ public final class ExecutionDriver {
             instrumentationKey(blockEntity).ifPresent(key -> states.put(key, lifecycle));
         }
         instrumentation.recordCobbleputerStates(states);
+    }
+
+    private void recordCobbleputerStateGaugeAndReport() {
+        recordCobbleputerStateGauge();
+        if (instrumentationTick % 20 == 0) {
+            mainWorkerClient.reportExecutionStats(ExecutionStatsReporter.report(
+                    instrumentation.snapshot(), System.currentTimeMillis()));
+        }
     }
 
     private static String ownerName(CobbleputerBlockEntity blockEntity, UUID ownerId) {

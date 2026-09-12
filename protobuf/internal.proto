@@ -64,6 +64,48 @@ message ExecutionsResponse {
   repeated ExecutionResult results = 1;
 }
 
+// A complete, sliding-window execution-instrumentation snapshot for all represented players.
+// It is sent by the Mod to the Main Worker and is not persisted.
+message ExecutionStats {
+  // Wall-clock time at which the Mod captured this snapshot, as milliseconds since the Unix epoch.
+  // Required by the application contract.
+  uint64 sampled_at_unix_millis = 1;
+  // The configured number of server ticks in the instrumentation sliding window. Required by the application contract.
+  uint32 window_ticks = 2;
+  // The number of ticks currently represented in this snapshot. Required by the application contract.
+  uint32 retained_tick_count = 3;
+  // Required by the application contract. A snapshot contains at most one entry for each player.
+  repeated PlayerStats players = 4;
+
+  // A player's aggregate execution instrumentation within the containing snapshot's window.
+  message PlayerStats {
+    // Identifies the player whose execution metrics are represented. Required by the application contract.
+    cobbleware.common.Uuid player_id = 1;
+    // Number of per-Cobbleputer execution-sync records included in the window. Zero-event records are included.
+    uint64 events_per_sync_count = 2;
+    // Sum of events included in those execution-sync records.
+    uint64 events_per_sync_total = 3;
+    // Largest number of events included in one execution-sync record.
+    uint64 events_per_sync_max = 4;
+    // Number of event admissions accepted by the Mod in the window, across all event types and Cobbleputers.
+    uint64 events_accepted = 5;
+    // Number of event admissions dropped by the Mod in the window, across all event types and Cobbleputers.
+    uint64 events_dropped = 6;
+    // Number of effect-application attempts in the window, across all effect types and Cobbleputers.
+    uint64 effects_attempted = 7;
+    // Number of effect-application attempts that threw in the window.
+    uint64 effects_failed = 8;
+    // Sum of the effect-application durations in nanoseconds.
+    uint64 effects_total_nanos = 9;
+    // Longest effect-application duration in nanoseconds.
+    uint64 effects_max_nanos = 10;
+    // Current number of loaded running Cobbleputers owned by the player.
+    uint32 running_cobbleputers = 11;
+    // Current number of loaded stopped Cobbleputers owned by the player.
+    uint32 stopped_cobbleputers = 12;
+  }
+}
+
 // An error returned by an internal Mod API endpoint.
 message ErrorResponse {
   string error = 1;

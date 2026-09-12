@@ -94,6 +94,49 @@ authentication. Calls without a valid session cookie receive `401` with the Play
 Requests without the required same-origin `Origin` header, or with a different origin, receive `403` with a JSON
 error body. Other methods receive `405` with `Allow: POST`.
 
+### Execution stats stream
+
+The authenticated `GET /playerapi/v1/execution-stats` operation upgrades to a WebSocket that streams the
+authenticated Player's current execution instrumentation. The browser supplies its session cookie during the
+handshake. Because WebSockets are not protected by normal fetch cross-origin rules, the request must also contain a
+same-origin `Origin` header; a missing or different origin receives `403` with a JSON error body. An invalid or
+missing session receives the normal Player API `401` response before upgrade.
+
+After a successful `101 Switching Protocols` handshake for an accepted stream, every server-to-client message is one
+binary WebSocket frame containing the binary protobuf wire representation of `cobbleware.internal.ExecutionStats`.
+Each message is a complete player-scoped snapshot rather than a delta: its `players` list contains exactly one entry,
+for the authenticated Player. The Main Worker sends its cached latest player-scoped snapshot immediately after
+connecting, when one exists, then sends an updated player-scoped snapshot whenever the Mod's next bundle contains an
+entry for that Player. The Mod normally supplies one bundle per second; the Main Worker has no independent sampling
+timer. The connection is read-only: clients do not send application messages, and the endpoint defines no WebSocket
+subprotocol.
+
+There may be only one open execution-stats WebSocket for a Player, regardless of browser session. A second upgrade
+attempt succeeds at the WebSocket handshake, then receives exactly one text WebSocket frame before the Main Worker
+closes it with close code `1008` (`Policy Violation`). The text frame is UTF-8 JSON:
+
+```json
+{
+  "code": "execution-stats-stream-already-open",
+  "error": "Execution statistics are already open in another browser window."
+}
+```
+
+The existing stream remains open. Clients that receive this signal must not automatically reconnect; they should
+present the error to the Player. An ordinary non-upgrade `GET` receives `426` with `Upgrade: websocket`; other
+methods receive `405` with `Allow: GET`. Closing an accepted socket releases the Player's stream slot. If the session
+that opened a stream is logged out or otherwise invalidated, the Main Worker closes that stream and stops sending it
+data.
+
+`ExecutionStats` represents the Mod's in-memory sliding window and is not durable. The Mod POSTs one complete bundle
+whose `players` list contains every represented Player; the Main Worker filters that bundle before sending it over a
+Player stream. Its `sampled_at_unix_millis` value lets the UI identify stale data, while `window_ticks` and
+`retained_tick_count` describe the effective window. Each `PlayerStats` entry's event and effect fields are totals
+across that Player's Cobbleputers and event/effect types. `events_per_sync_*` summarizes the per-Cobbleputer execution
+records offered to execution-sync calls, including zero-event records. `running_cobbleputers` and
+`stopped_cobbleputers` are an instantaneous gauge for loaded Cobbleputers, rather than window totals. Server-wide
+execution-sync request duration and outcome are deliberately absent because they cannot be assigned to one Player.
+
 ### Programs
 
 All program operations require player authentication via session cookie.
@@ -316,6 +359,32 @@ If the code is new, or is retried for the same player UUID, the endpoint returns
 If the code is already pending for another player UUID, it returns `400` with a JSON response body
 containing an `"error"` property. The Runtime trusts `playerProfileName` as supplied by the Mod and does
 not validate its contents.
+
+### Execution Stats
+
+The authenticated `POST /modapi/v1/execution-stats` endpoint accepts one
+`cobbleware.internal.ExecutionStats` message. The body uses the binary protobuf wire format with an
+`application/octet-stream` media type (parameters are permitted), and the request uses the same Bearer
+authentication as the other Mod API endpoints. The Mod sends one complete bundle, normally once per second, and does
+not wait for or retry the response.
+
+The Main Worker validates the application contract for required fields and internally consistent aggregates: the
+sample time and window length must be nonzero; retained ticks cannot exceed the window; every `players` entry must
+have a player id; player ids must be unique within the bundle; failed effects cannot exceed attempted effects; and each
+events-per-sync total and maximum must be consistent with its count. A valid bundle is the complete current report:
+the Main Worker replaces its in-memory per-player cache, discarding entries absent from the new bundle, and forwards a
+one-entry player-scoped snapshot to each connected Player represented in it. The report is not written to disk and
+does not affect program execution. Bundles lost while the Main Worker is unavailable, or when the Mod does not wait
+for their response, are intentionally not recovered.
+
+On acceptance, the endpoint returns `204` with no body. Errors generated by this endpoint use
+`application/octet-stream` and contain a `cobbleware.internal.ErrorResponse` protobuf message:
+
+* `400` for an unreadable protobuf payload or an invalid stats aggregate
+* `401` with `WWW-Authenticate: Bearer` when Mod authentication fails
+* `405` with `Allow: POST` for other methods
+* `415` for a request whose media type is not `application/octet-stream`
+* `500` when server authentication is not configured or an unexpected Main Worker failure occurs
 
 ### Program Query
 
