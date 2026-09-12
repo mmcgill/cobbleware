@@ -65,6 +65,8 @@ public final class ExecutionDriver {
     private final Map<CobbleputerBlockEntity, ActiveExecution> activeExecutions = new IdentityHashMap<>();
     private final Set<WirelessObserverBlockEntity> pendingObserverInitializations =
             Collections.newSetFromMap(new IdentityHashMap<>());
+    private final Set<CobbleputerBlockEntity> pendingCobbleputerIdMigrations =
+            Collections.newSetFromMap(new IdentityHashMap<>());
     private final Set<WirelessObserverBlockEntity> pendingObserverIdMigrations =
             Collections.newSetFromMap(new IdentityHashMap<>());
     private final Set<WirelessObserverBlockEntity> pendingObserverChanges =
@@ -90,11 +92,15 @@ public final class ExecutionDriver {
     /** Adds a loaded Cobbleputer to the driver's active set. */
     public void activate(CobbleputerBlockEntity blockEntity) {
         activeExecutions.putIfAbsent(blockEntity, new ActiveExecution());
+        if (blockEntity.cobbleputerIdNeedsPersistence()) {
+            pendingCobbleputerIdMigrations.add(blockEntity);
+        }
     }
 
     /** Removes a Cobbleputer and intentionally drops its ephemeral pending events. */
     public void deactivate(CobbleputerBlockEntity blockEntity) {
         activeExecutions.remove(blockEntity);
+        pendingCobbleputerIdMigrations.remove(blockEntity);
     }
 
     /** Records a changed observer for coalesced processing on the next available server tick. */
@@ -163,9 +169,10 @@ public final class ExecutionDriver {
             BlockState state,
             CobbleputerBlockEntity blockEntity,
             UUID owner,
+            String ownerName,
             byte[] initialState) {
         activate(blockEntity);
-        blockEntity.startExecution(owner, initialState);
+        blockEntity.startExecution(owner, ownerName, initialState);
         if (CobbleputerBlock.setLifecycleState(level, pos, state, CobbleputerState.RUNNING)) {
             enqueueEvent(blockEntity, Event.newBuilder()
                     .setStarted(Started.newBuilder().setTick(level.getGameTime()))
@@ -235,7 +242,7 @@ public final class ExecutionDriver {
             return;
         }
         if (active.events.size() >= MAX_PENDING_EVENTS_PER_EXECUTION) {
-            logger.warn("Dropping Cobbleputer event at {} because its pending queue is full",
+            logger.debug("Dropping Cobbleputer event at {} because its pending queue is full",
                     blockEntity.getBlockPos().toShortString());
             recordEvent(blockEntity, event, false);
             return;
@@ -277,6 +284,7 @@ public final class ExecutionDriver {
             flight = null;
         }
 
+        drainCobbleputerIdMigrations();
         drainObserverIdMigrations();
         drainObserverInitializations();
         drainObserverChanges(server);
@@ -341,6 +349,19 @@ public final class ExecutionDriver {
         for (WirelessObserverBlockEntity observer : observers) {
             if (!observer.isRemoved() && observer.getLevel() instanceof ServerLevel) {
                 observer.persistMigratedObserverId();
+            }
+        }
+    }
+
+    private void drainCobbleputerIdMigrations() {
+        if (pendingCobbleputerIdMigrations.isEmpty()) {
+            return;
+        }
+        List<CobbleputerBlockEntity> cobbleputers = List.copyOf(pendingCobbleputerIdMigrations);
+        pendingCobbleputerIdMigrations.clear();
+        for (CobbleputerBlockEntity cobbleputer : cobbleputers) {
+            if (!cobbleputer.isRemoved() && cobbleputer.getLevel() instanceof ServerLevel) {
+                cobbleputer.persistMigratedCobbleputerId();
             }
         }
     }
@@ -755,24 +776,29 @@ public final class ExecutionDriver {
         BlockPos pos = blockEntity.getBlockPos();
         return Optional.of(new Instrumentation.PlayerCobbleputerKey(
                 owner.orElseThrow(),
-                new Instrumentation.CobbleputerKey(dimension.toString(), pos.getX(), pos.getY(), pos.getZ())));
+                ownerName(blockEntity, owner.orElseThrow()),
+                new Instrumentation.CobbleputerKey(
+                        blockEntity.cobbleputerId(), dimension.toString(), pos.getX(), pos.getY(), pos.getZ())));
     }
 
     private void recordCobbleputerStateGauge() {
-        Map<Instrumentation.PlayerStateKey, Integer> states = new HashMap<>();
+        Map<Instrumentation.PlayerCobbleputerKey, Instrumentation.LifecycleState> states = new HashMap<>();
         for (CobbleputerBlockEntity blockEntity : activeExecutions.keySet()) {
-            Optional<UUID> owner = blockEntity.ownerPlayerId();
             Instrumentation.LifecycleState lifecycle = switch (blockEntity.getBlockState().getValue(CobbleputerBlock.STATE)) {
                 case RUNNING -> Instrumentation.LifecycleState.RUNNING;
                 case STOPPED -> Instrumentation.LifecycleState.STOPPED;
                 case UNINITIALIZED, CRASHED -> null;
             };
-            if (owner.isEmpty() || lifecycle == null) {
+            if (lifecycle == null) {
                 continue;
             }
-            states.merge(new Instrumentation.PlayerStateKey(owner.orElseThrow(), lifecycle), 1, Integer::sum);
+            instrumentationKey(blockEntity).ifPresent(key -> states.put(key, lifecycle));
         }
         instrumentation.recordCobbleputerStates(states);
+    }
+
+    private static String ownerName(CobbleputerBlockEntity blockEntity, UUID ownerId) {
+        return blockEntity.ownerPlayerName().filter(name -> !name.isEmpty()).orElse(ownerId.toString());
     }
 
     private static Instrumentation.SyncOutcome syncOutcome(

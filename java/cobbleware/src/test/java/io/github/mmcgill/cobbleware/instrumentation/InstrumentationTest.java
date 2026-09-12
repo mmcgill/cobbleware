@@ -12,11 +12,9 @@ import org.junit.jupiter.api.Test;
 class InstrumentationTest {
     private static final Instrumentation.PlayerCobbleputerKey TARGET = new Instrumentation.PlayerCobbleputerKey(
             UUID.fromString("123e4567-e89b-12d3-a456-426614174000"),
-            new Instrumentation.CobbleputerKey("minecraft:overworld", 1, 64, 2));
-    private static final Instrumentation.PlayerStateKey RUNNING = new Instrumentation.PlayerStateKey(
-            TARGET.playerId(), Instrumentation.LifecycleState.RUNNING);
-    private static final Instrumentation.PlayerStateKey STOPPED = new Instrumentation.PlayerStateKey(
-            TARGET.playerId(), Instrumentation.LifecycleState.STOPPED);
+            "Alice",
+            new Instrumentation.CobbleputerKey(
+                    UUID.fromString("123e4567-e89b-12d3-a456-426614174001"), "minecraft:overworld", 1, 64, 2));
 
     @Test
     void aggregatesRetainedTicksAndEvictsTheOldestBucket() {
@@ -26,13 +24,13 @@ class InstrumentationTest {
         instrumentation.recordSyncCompletion(3, Instrumentation.SyncOutcome.SUCCESS);
         instrumentation.recordEvent(TARGET, Event.EventCase.CHAT_MESSAGE, true);
         instrumentation.recordEffect(TARGET, Effect.EffectCase.SEND_CHAT, 4, false);
-        instrumentation.recordCobbleputerStates(Map.of(RUNNING, 1));
+        instrumentation.recordCobbleputerStates(Map.of(TARGET, Instrumentation.LifecycleState.RUNNING));
 
         instrumentation.advanceTick(2);
         instrumentation.recordSyncCompletion(7, Instrumentation.SyncOutcome.UNAVAILABLE);
         instrumentation.recordEvent(TARGET, Event.EventCase.CHAT_MESSAGE, false);
         instrumentation.recordEffect(TARGET, Effect.EffectCase.SEND_CHAT, 5, true);
-        instrumentation.recordCobbleputerStates(Map.of(STOPPED, 2));
+        instrumentation.recordCobbleputerStates(Map.of(TARGET, Instrumentation.LifecycleState.STOPPED));
 
         Instrumentation.Snapshot fullWindow = instrumentation.snapshot();
         Instrumentation.EventMetricKey eventKey = new Instrumentation.EventMetricKey(TARGET, Event.EventCase.CHAT_MESSAGE);
@@ -49,12 +47,12 @@ class InstrumentationTest {
         assertEquals(new Instrumentation.EventCounts(1, 1), fullWindow.events().get(eventKey));
         assertEquals(new Instrumentation.EffectCounts(2, 1, new Instrumentation.TimingSummary(2, 9, 5)),
                 fullWindow.effects().get(effectKey));
-        assertEquals(Map.of(STOPPED, 2), fullWindow.cobbleputerStates());
+        assertEquals(Map.of(TARGET, Instrumentation.LifecycleState.STOPPED), fullWindow.cobbleputerStates());
         assertThrows(UnsupportedOperationException.class,
                 () -> fullWindow.events().put(eventKey, new Instrumentation.EventCounts(0, 0)));
 
         instrumentation.advanceTick(3);
-        instrumentation.recordCobbleputerStates(Map.of(RUNNING, 3));
+        instrumentation.recordCobbleputerStates(Map.of(TARGET, Instrumentation.LifecycleState.RUNNING));
 
         Instrumentation.Snapshot evicted = instrumentation.snapshot();
         assertEquals(2, evicted.firstTick());
@@ -64,7 +62,7 @@ class InstrumentationTest {
         assertEquals(new Instrumentation.EventCounts(0, 1), evicted.events().get(eventKey));
         assertEquals(new Instrumentation.EffectCounts(1, 1, new Instrumentation.TimingSummary(1, 5, 5)),
                 evicted.effects().get(effectKey));
-        assertEquals(Map.of(RUNNING, 3), evicted.cobbleputerStates());
+        assertEquals(Map.of(TARGET, Instrumentation.LifecycleState.RUNNING), evicted.cobbleputerStates());
     }
 
     @Test

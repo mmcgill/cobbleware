@@ -57,17 +57,28 @@ Right-clicking a Cobbleputer does not change its lifecycle state.
 
 A placed Cobbleputer block has an associated block entity that stores:
 
+* Cobbleputer ID: a UUID generated when the block entity is created and durable
+  until that block is broken. It identifies the physical Cobbleputer for
+  instrumentation and administrative commands, independently of executions.
 * execution ID: `null` when the block state is `UNINITIALIZED` or `CRASHED`, and reset to a fresh UUID
   whenever a program is started on the Cobbleputer from a start state; not reset when a `STOPPED`
   Cobbleputer is resumed.
 * owner player ID: `null` when execution ID is null; otherwise the ID of the Player whose active program
   owns the execution.
+* owner player name: `null` when execution ID is null; otherwise the name
+  captured when the execution starts, which permits offline execution owners to
+  be selected by the instrumentation command.
 * event sequence num: a `long` holding the next event sequence number. It starts at 1 and increments
   after each event is enqueued.
 * effect sequence num: a `long` that starts at 0 and advances for each effect processed.
 * state: `null` when execution ID is null, otherwise a byte array holding the current execution state
 * stopped-at tick: `null` unless the Cobbleputer is `STOPPED`; when present, the game tick at
   which it was stopped, used to populate the next `Resumed` event.
+
+Cobbleputers created before the durable Cobbleputer ID field receive an
+in-memory UUID while loading. The Mod marks that migration dirty during normal
+server-tick work after chunk attachment, never from a block-entity loading or
+attachment callback.
 
 Breaking the Cobbleputer block destroys the block entity; effectively terminating the execution.
 
@@ -177,3 +188,21 @@ the Mod calls its existing effect-application path and is failed only when that
 path throws. Metrics do not alter the existing best-effort event/effect
 semantics.
 
+```
+/cobbleware stats
+/cobbleware stats <playername>
+/cobbleware stats <event>
+/cobbleware stats <cobbleputer id>
+```
+
+The `stats` command (which requires permission level 2 or higher) shows statistics aggregated
+over the instrumentation window, either in general or for a specific player/event/Cobbleputer.
+Player names, event names (for example `chat-message`), and Cobbleputer UUIDs
+are disjoint qualifier forms. The unqualified view includes all metric
+families; a player view contains that player's metrics, an event view contains
+that event's counters, and a Cobbleputer view contains its event/effect metrics
+and reports its dimension and block position. The command offers known
+qualifiers as tab completions. The unqualified view contains only total summary
+counts; qualified views contain their relevant breakdowns. Metric rows use
+Minecraft's built-in uniform font and ordinary-space padding for readable column
+alignment in the command output.

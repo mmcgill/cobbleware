@@ -68,11 +68,11 @@ public final class Instrumentation {
         bucket.effects.put(key, current.add(elapsedNanos, failed));
     }
 
-    /** Replaces the current tick's player/lifecycle-state Cobbleputer gauge. */
-    public synchronized void recordCobbleputerStates(Map<PlayerStateKey, Integer> states) {
+    /** Replaces the current tick's per-Cobbleputer lifecycle-state gauge. */
+    public synchronized void recordCobbleputerStates(Map<PlayerCobbleputerKey, LifecycleState> states) {
         if (states == null || states.entrySet().stream().anyMatch(entry -> entry.getKey() == null
-                || entry.getValue() == null || entry.getValue() < 0)) {
-            throw new IllegalArgumentException("Cobbleputer state gauge must contain non-negative keyed values");
+                || entry.getValue() == null)) {
+            throw new IllegalArgumentException("Cobbleputer state gauge must contain keyed lifecycle states");
         }
         currentBucket().states = Map.copyOf(states);
     }
@@ -148,26 +148,26 @@ public final class Instrumentation {
     }
 
     /** Identifies a physical Cobbleputer without retaining a world or block-entity object. */
-    public record CobbleputerKey(String dimension, int x, int y, int z) {
+    public record CobbleputerKey(UUID id, String dimension, int x, int y, int z) {
         public CobbleputerKey {
-            if (dimension == null || dimension.isEmpty()) {
-                throw new IllegalArgumentException("Cobbleputer dimension must not be empty");
+            if (id == null || dimension == null || dimension.isEmpty()) {
+                throw new IllegalArgumentException("Cobbleputer ID and dimension must not be empty");
             }
         }
     }
 
-    public record PlayerCobbleputerKey(UUID playerId, CobbleputerKey cobbleputer) {
+    public record PlayerCobbleputerKey(UUID playerId, String playerName, CobbleputerKey cobbleputer) {
         public PlayerCobbleputerKey {
-            if (playerId == null || cobbleputer == null) {
-                throw new IllegalArgumentException("player and Cobbleputer must not be null");
+            if (playerId == null || playerName == null || playerName.isEmpty() || cobbleputer == null) {
+                throw new IllegalArgumentException("player identity and Cobbleputer must not be null or empty");
             }
         }
     }
 
-    public record PlayerStateKey(UUID playerId, LifecycleState state) {
+    public record PlayerStateKey(UUID playerId, String playerName, LifecycleState state) {
         public PlayerStateKey {
-            if (playerId == null || state == null) {
-                throw new IllegalArgumentException("player and lifecycle state must not be null");
+            if (playerId == null || playerName == null || playerName.isEmpty() || state == null) {
+                throw new IllegalArgumentException("player identity and lifecycle state must not be null or empty");
             }
         }
     }
@@ -261,7 +261,7 @@ public final class Instrumentation {
             Map<SyncOutcome, Long> syncOutcomes,
             Map<EventMetricKey, EventCounts> events,
             Map<EffectMetricKey, EffectCounts> effects,
-            Map<PlayerStateKey, Integer> cobbleputerStates) {
+            Map<PlayerCobbleputerKey, LifecycleState> cobbleputerStates) {
         public Snapshot {
             syncOutcomes = Map.copyOf(syncOutcomes);
             events = Map.copyOf(events);
@@ -280,7 +280,7 @@ public final class Instrumentation {
         private final Map<SyncOutcome, Long> syncOutcomes = new HashMap<>();
         private final Map<EventMetricKey, EventCounts> events = new HashMap<>();
         private final Map<EffectMetricKey, EffectCounts> effects = new HashMap<>();
-        private Map<PlayerStateKey, Integer> states = Map.of();
+        private Map<PlayerCobbleputerKey, LifecycleState> states = Map.of();
 
         private void reset(long nextTick) {
             tick = nextTick;

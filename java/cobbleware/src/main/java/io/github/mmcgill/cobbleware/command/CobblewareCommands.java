@@ -10,8 +10,10 @@ import io.github.mmcgill.cobbleware.block.CobbleputerBlock;
 import io.github.mmcgill.cobbleware.block.CobbleputerBlockEntity;
 import io.github.mmcgill.cobbleware.block.CobbleputerState;
 import io.github.mmcgill.cobbleware.execution.ExecutionDriver;
+import io.github.mmcgill.cobbleware.instrumentation.StatsFormatter;
 import io.github.mmcgill.cobbleware.registry.CobblewareBlocks;
 import java.util.Optional;
+import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 import java.util.stream.Collectors;
 import net.fabricmc.fabric.api.command.v2.CommandRegistrationCallback;
@@ -20,8 +22,12 @@ import net.minecraft.commands.CommandSourceStack;
 import net.minecraft.commands.Commands;
 import net.minecraft.core.BlockPos;
 import net.minecraft.network.chat.Component;
+import net.minecraft.network.chat.FontDescription;
+import net.minecraft.network.chat.MutableComponent;
+import net.minecraft.resources.Identifier;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.server.level.ServerLevel;
+import net.minecraft.server.permissions.Permissions;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.phys.Vec3;
@@ -29,6 +35,7 @@ import net.minecraft.world.phys.Vec3;
 /** Registers commands supplied by Cobbleware. */
 public final class CobblewareCommands {
     private static final double EXECUTION_RANGE = 3.0;
+    private static final FontDescription UNIFORM_FONT = new FontDescription.Resource(Identifier.withDefaultNamespace("uniform"));
 
     private CobblewareCommands() {
     }
@@ -49,7 +56,66 @@ public final class CobblewareCommands {
                                 .executes(context -> pause(context, executionDriver)))
                         .then(Commands.literal("resume")
                                 .executes(context -> resume(context, executionDriver)))
+                        .then(Commands.literal("stats")
+                                .requires(source -> source.permissions().hasPermission(Permissions.COMMANDS_GAMEMASTER))
+                                .executes(context -> stats(context, executionDriver))
+                                .then(Commands.argument("qualifier", StringArgumentType.word())
+                                        .suggests((context, builder) -> SharedSuggestionProvider.suggest(
+                                                StatsFormatter.qualifiers(executionDriver.instrumentation().snapshot()),
+                                                builder))
+                                        .executes(context -> stats(context, executionDriver))))
         ));
+    }
+
+    private static int stats(CommandContext<CommandSourceStack> context, ExecutionDriver executionDriver) {
+        String qualifier;
+        try {
+            qualifier = StringArgumentType.getString(context, "qualifier");
+        } catch (IllegalArgumentException ignored) {
+            sendStats(context.getSource(), StatsFormatter.all(executionDriver.instrumentation().snapshot()));
+            return 1;
+        }
+
+        io.github.mmcgill.cobbleware.instrumentation.Instrumentation.Snapshot snapshot =
+                executionDriver.instrumentation().snapshot();
+        try {
+            UUID cobbleputerId = UUID.fromString(qualifier);
+            Optional<java.util.List<StatsFormatter.Line>> stats = StatsFormatter.cobbleputer(snapshot, cobbleputerId);
+            if (stats.isEmpty()) {
+                context.getSource().sendFailure(Component.literal(
+                        "No instrumentation data exists for Cobbleputer " + cobbleputerId + "."));
+                return 0;
+            }
+            sendStats(context.getSource(), stats.orElseThrow());
+            return 1;
+        } catch (IllegalArgumentException ignored) {
+            // The qualifier may be an event or player name.
+        }
+
+        Optional<java.util.List<StatsFormatter.Line>> eventStats = StatsFormatter.event(snapshot, qualifier);
+        if (eventStats.isPresent()) {
+            sendStats(context.getSource(), eventStats.orElseThrow());
+            return 1;
+        }
+        Optional<java.util.List<StatsFormatter.Line>> playerStats = StatsFormatter.player(snapshot, qualifier);
+        if (playerStats.isPresent()) {
+            sendStats(context.getSource(), playerStats.orElseThrow());
+            return 1;
+        }
+        context.getSource().sendFailure(Component.literal(
+                "Unknown Cobbleware stats qualifier '" + qualifier + "'."));
+        return 0;
+    }
+
+    private static void sendStats(CommandSourceStack source, java.util.List<StatsFormatter.Line> lines) {
+        for (StatsFormatter.Line line : lines) {
+            MutableComponent message = Component.literal(line.text());
+            if (line.usesUniformFont()) {
+                message = message.withStyle(style -> style.withFont(UNIFORM_FONT));
+            }
+            Component renderedMessage = message;
+            source.sendSuccess(() -> renderedMessage, false);
+        }
     }
 
     private static int authenticate(CommandContext<CommandSourceStack> context, MainWorkerClient mainWorkerClient) {
@@ -201,6 +267,7 @@ public final class CobblewareCommands {
                 resolvedTarget.state(),
                 resolvedTarget.blockEntity(),
                 player.getUUID(),
+                player.getGameProfile().name(),
                 startState.orElseThrow());
         player.sendSystemMessage(Component.literal(
                 "Started your Cobbleware program at start state '" + startStateName + "'."));

@@ -18,15 +18,20 @@ import net.minecraft.world.level.storage.ValueOutput;
 
 /** Durable execution record for a placed Cobbleputer. */
 public final class CobbleputerBlockEntity extends BlockEntity {
+    private static final String COBBLEPUTER_ID_TAG = "cobbleputer_id";
     private static final String EXECUTION_ID_TAG = "execution_id";
     private static final String OWNER_PLAYER_ID_TAG = "owner_player_id";
+    private static final String OWNER_PLAYER_NAME_TAG = "owner_player_name";
     private static final String NEXT_EVENT_SEQUENCE_NUM_TAG = "next_event_sequence_num";
     private static final String EFFECT_SEQUENCE_NUM_TAG = "effect_sequence_num";
     private static final String EXECUTION_STATE_TAG = "execution_state";
     private static final String STOPPED_AT_TICK_TAG = "stopped_at_tick";
 
+    private UUID cobbleputerId = UUID.randomUUID();
+    private boolean cobbleputerIdNeedsPersistence = true;
     private UUID executionId;
     private UUID ownerPlayerId;
+    private String ownerPlayerName;
     private long nextEventSequenceNum = 1;
     private long effectSequenceNum;
     private byte[] executionState;
@@ -55,13 +60,14 @@ public final class CobbleputerBlockEntity extends BlockEntity {
     }
 
     /** Starts a fresh execution owned by {@code owner}, replacing any previous execution record. */
-    public void startExecution(UUID owner, byte[] initialState) {
-        if (owner == null || initialState == null) {
-            throw new IllegalArgumentException("execution owner and initial state must not be null");
+    public void startExecution(UUID owner, String ownerName, byte[] initialState) {
+        if (owner == null || ownerName == null || ownerName.isEmpty() || initialState == null) {
+            throw new IllegalArgumentException("execution owner, owner name, and initial state must not be null or empty");
         }
 
         executionId = UUID.randomUUID();
         ownerPlayerId = owner;
+        ownerPlayerName = ownerName;
         nextEventSequenceNum = 1;
         effectSequenceNum = 0;
         executionState = Arrays.copyOf(initialState, initialState.length);
@@ -78,8 +84,23 @@ public final class CobbleputerBlockEntity extends BlockEntity {
         return Optional.ofNullable(executionId);
     }
 
+    /** Returns the durable identity of this placed Cobbleputer. */
+    public UUID cobbleputerId() {
+        return cobbleputerId;
+    }
+
+    /** Returns whether this generated ID still needs a normal-tick persistence pass. */
+    public boolean cobbleputerIdNeedsPersistence() {
+        return cobbleputerIdNeedsPersistence;
+    }
+
     public Optional<UUID> ownerPlayerId() {
         return Optional.ofNullable(ownerPlayerId);
+    }
+
+    /** Returns the owner name recorded when the current execution was started. */
+    public Optional<String> ownerPlayerName() {
+        return Optional.ofNullable(ownerPlayerName);
     }
 
     public long nextEventSequenceNum() {
@@ -158,8 +179,13 @@ public final class CobbleputerBlockEntity extends BlockEntity {
     @Override
     protected void saveAdditional(ValueOutput output) {
         super.saveAdditional(output);
+        output.store(COBBLEPUTER_ID_TAG, UUIDUtil.CODEC, cobbleputerId);
+        cobbleputerIdNeedsPersistence = false;
         output.storeNullable(EXECUTION_ID_TAG, UUIDUtil.CODEC, executionId);
         output.storeNullable(OWNER_PLAYER_ID_TAG, UUIDUtil.CODEC, ownerPlayerId);
+        if (ownerPlayerName != null) {
+            output.putString(OWNER_PLAYER_NAME_TAG, ownerPlayerName);
+        }
         output.putLong(NEXT_EVENT_SEQUENCE_NUM_TAG, nextEventSequenceNum);
         output.putLong(EFFECT_SEQUENCE_NUM_TAG, effectSequenceNum);
         if (executionState != null) {
@@ -174,8 +200,12 @@ public final class CobbleputerBlockEntity extends BlockEntity {
     protected void loadAdditional(ValueInput input) {
         super.loadAdditional(input);
 
+        Optional<UUID> loadedCobbleputerId = input.read(COBBLEPUTER_ID_TAG, UUIDUtil.CODEC);
+        cobbleputerId = loadedCobbleputerId.orElseGet(UUID::randomUUID);
+        cobbleputerIdNeedsPersistence = loadedCobbleputerId.isEmpty();
         executionId = input.read(EXECUTION_ID_TAG, UUIDUtil.CODEC).orElse(null);
         ownerPlayerId = input.read(OWNER_PLAYER_ID_TAG, UUIDUtil.CODEC).orElse(null);
+        ownerPlayerName = input.getStringOr(OWNER_PLAYER_NAME_TAG, "");
         nextEventSequenceNum = input.getLongOr(NEXT_EVENT_SEQUENCE_NUM_TAG, 1);
         effectSequenceNum = input.getLongOr(EFFECT_SEQUENCE_NUM_TAG, 0);
         executionState = input.read(EXECUTION_STATE_TAG, Codec.BYTE_BUFFER)
@@ -193,10 +223,20 @@ public final class CobbleputerBlockEntity extends BlockEntity {
     private void clearExecution() {
         executionId = null;
         ownerPlayerId = null;
+        ownerPlayerName = null;
         nextEventSequenceNum = 1;
         effectSequenceNum = 0;
         executionState = null;
         stoppedAtTick = null;
+    }
+
+    /** Persists a Cobbleputer ID generated for new or legacy block-entity data after chunk attachment. */
+    public void persistMigratedCobbleputerId() {
+        if (!cobbleputerIdNeedsPersistence) {
+            return;
+        }
+        cobbleputerIdNeedsPersistence = false;
+        setChanged();
     }
 
     private static byte[] copyBytes(ByteBuffer source) {
