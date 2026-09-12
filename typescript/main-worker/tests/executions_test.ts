@@ -5,6 +5,7 @@ import { DurableAuthStore } from '../src/auth/store.ts';
 import { createHandler } from '../src/index.ts';
 import type { ActiveProgram, ProgramStore } from '../src/programs/types.ts';
 import type { ProgramRunner } from '../src/programs/start-states.ts';
+import { MAX_EVENTS_PER_EXECUTION } from '../src/executions/manager.ts';
 
 const API_KEY = 'test-api-key';
 const PATH = 'http://localhost/modapi/v1/executions';
@@ -327,38 +328,39 @@ Deno.test('Execution sync ignores a stale invocation after an authoritative re-s
 });
 
 Deno.test('Execution sync retains at most ten events and refills after the Mod accepts a prefix', async () => {
+  const maxEvents = MAX_EVENTS_PER_EXECUTION;
   let calls = 0;
   const app = await createTestApp(() => {
     calls += 1;
-    return Promise.resolve(stepResponse(new Uint8Array([9])));
+    return Promise.resolve(stepResponse(new Uint8Array([maxEvents - 1])));
   });
   const firstBatch = execution({
-    events: Array.from({ length: 11 }, (_, index) => startedEvent(BigInt(index + 1))),
+    events: Array.from({ length: maxEvents + 1 }, (_, index) => startedEvent(BigInt(index + 1))),
   });
   try {
     let result: Internal.ExecutionResult | undefined;
     for (let attempt = 0; attempt < 100; attempt += 1) {
       result = (await decodeResponse(await app.handler(request([firstBatch])))).results[0];
-      if (result?.eventSeqNum === 10n) break;
+      if (result?.eventSeqNum === BigInt(maxEvents)) break;
       await new Promise((resolve) => setTimeout(resolve, 0));
     }
-    if (result === undefined || result.eventSeqNum !== 10n) {
+    if (result === undefined || result.eventSeqNum !== BigInt(maxEvents)) {
       throw new Error('the first ten events did not complete');
     }
-    assertEquals(calls, 10, 'only the ten-event window should be dispatched');
+    assertEquals(calls, maxEvents, 'only the event window should be dispatched');
 
     const remainingEvent = execution({
-      initialState: new Uint8Array([9]),
-      events: [startedEvent(11n)],
-      eventSeqNum: 11n,
+      initialState: new Uint8Array([maxEvents-1]),
+      events: [startedEvent(BigInt(maxEvents+1))],
+      eventSeqNum: BigInt(maxEvents+1),
     });
     for (let attempt = 0; attempt < 100; attempt += 1) {
       result = (await decodeResponse(await app.handler(request([remainingEvent])))).results[0];
-      if (result?.eventSeqNum === 11n) break;
+      if (result?.eventSeqNum === BigInt(maxEvents+1)) break;
       await new Promise((resolve) => setTimeout(resolve, 0));
     }
-    assertEquals(result?.eventSeqNum, 11n, 'the next sync should refill and dispatch event eleven');
-    assertEquals(calls, 11, 'the refilled event should dispatch once');
+    assertEquals(result?.eventSeqNum, BigInt(maxEvents+1), 'the next sync should refill and dispatch event eleven');
+    assertEquals(calls, maxEvents+1, 'the refilled event should dispatch once');
   } finally {
     await app.cleanup();
   }

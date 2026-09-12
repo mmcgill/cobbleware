@@ -4,8 +4,8 @@ import * as Internal from '@cobbleware/core/internal';
 import type { ActiveProgram, ProgramStore } from '../programs/types.ts';
 import { PROGRAM_BINARY_CONTENT_TYPE, type ProgramRunner } from '../programs/start-states.ts';
 
-const MAX_EVENTS_PER_EXECUTION = 10;
-const MAX_EFFECTS_PER_EXECUTION = 50;
+export const MAX_EVENTS_PER_EXECUTION = 50;
+export const MAX_EFFECTS_PER_EXECUTION = 50;
 
 type CachedEffect = {
   sequence: bigint;

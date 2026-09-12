@@ -54,8 +54,7 @@ import org.slf4j.Logger;
 
 /** Drives the best-effort synchronization of active Cobbleputer executions. */
 public final class ExecutionDriver {
-    private static final int MAX_PENDING_EVENTS_PER_EXECUTION = 10;
-    private static final int MAX_OFFERED_EVENTS_PER_EXECUTION = 10;
+    private static final int MAX_PENDING_EVENTS_PER_EXECUTION = 50;
     private static final double CHAT_RADIUS = 16.0;
     private static final double CHAT_RADIUS_SQUARED = CHAT_RADIUS * CHAT_RADIUS;
 
@@ -462,7 +461,7 @@ public final class ExecutionDriver {
             byte[] executionState = blockEntity.executionState().orElseThrow();
             List<Event> events = new ArrayList<>();
             for (QueuedEvent queued : entry.getValue().events) {
-                if (events.size() == MAX_OFFERED_EVENTS_PER_EXECUTION) {
+                if (events.size() == MAX_PENDING_EVENTS_PER_EXECUTION) {
                     break;
                 }
                 events.add(queued.event);
