@@ -5,6 +5,7 @@ import io.github.mmcgill.cobbleware.command.CobblewareCommands;
 import io.github.mmcgill.cobbleware.config.CobblewareConfig;
 import io.github.mmcgill.cobbleware.config.CobblewareConfigLoader;
 import io.github.mmcgill.cobbleware.execution.ExecutionDriver;
+import io.github.mmcgill.cobbleware.instrumentation.Instrumentation;
 import io.github.mmcgill.cobbleware.block.WirelessObserverBlockEntity;
 import io.github.mmcgill.cobbleware.block.WirelessObserverNetwork;
 import io.github.mmcgill.cobbleware.polymer.CobblewarePolymer;
@@ -53,7 +54,8 @@ public final class CobblewareMod implements ModInitializer {
             LOGGER.error("Cobbleware mainWorkerApiKey is empty; authentication commands are disabled until it is configured");
         }
         MainWorkerClient mainWorkerClient = new MainWorkerClient(config, LOGGER);
-        executionDriver = new ExecutionDriver(mainWorkerClient, LOGGER);
+        executionDriver = new ExecutionDriver(
+                mainWorkerClient, new Instrumentation(config.instrumentationWindowTicks()), LOGGER);
         wirelessObserverNetwork = new WirelessObserverNetwork();
         ServerChunkEvents.CHUNK_LOAD.register((level, chunk, generated) -> chunk.getBlockEntities().values().forEach(blockEntity -> {
             if (blockEntity instanceof io.github.mmcgill.cobbleware.block.CobbleputerBlockEntity cobbleputer) {

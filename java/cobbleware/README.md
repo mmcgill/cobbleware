@@ -51,14 +51,17 @@ On first startup, the Mod creates `config/cobbleware.json` in Fabric's config di
 ```json
 {
   "mainWorkerUrl": "http://localhost:9000",
-  "mainWorkerApiKey": ""
+  "mainWorkerApiKey": "",
+  "instrumentationWindowTicks": 600
 }
 ```
 
 Set `mainWorkerApiKey` to the same value used for the Main Worker's
 `COBBLEWARE_API_KEY`. The Mod logs an error and disables authentication requests while
 the value is empty. `mainWorkerUrl` may use either `http` or `https`; it points to an
-already-running Main Worker.
+already-running Main Worker. `instrumentationWindowTicks` retains in-memory Mod
+instrumentation for that many server ticks; it defaults to 600 when omitted
+from an existing configuration file.
 
 Open the Main Worker's browser UI, then run its displayed
 `/cobbleware auth <code>` command in-game. On success, the next browser poll completes

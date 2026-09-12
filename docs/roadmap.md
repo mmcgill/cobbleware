@@ -12,12 +12,17 @@ Here's a rough sketch of the current plan to getting something working end-to-en
 * [x] First interactions
 * [x] Cobblemeter
   * [x] Pairing
-* [ ] Wireless Observer
+* [x] Wireless Observer
   * [x] Pairing
   * [x] Color
   * [x] Cobblemeter path visualization
   * [x] Block state change
   * [x] Set Redstone level
+* [x] In-memory Mod instrumentation foundation
+  * [x] Configurable sliding-window execution, event, effect, and state metrics
+* [ ] Per-Player stats in the Browser UI
+  * [ ] Memory utilization
+  * [ ] Aggregate event/effect rates
 * [ ] Drop events for Players not online (configurable)
 * [ ] Cobbleputer art assets
 * [ ] Wireless Observer art assets

@@ -7,6 +7,7 @@ import java.io.IOException;
 import java.nio.file.FileAlreadyExistsException;
 import java.net.URI;
 import java.net.URISyntaxException;
+import java.math.BigDecimal;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -18,6 +19,7 @@ import org.slf4j.Logger;
 public final class CobblewareConfigLoader {
     public static final String FILE_NAME = "cobbleware.json";
     public static final String DEFAULT_MAIN_WORKER_URL = "http://localhost:9000";
+    public static final int DEFAULT_INSTRUMENTATION_WINDOW_TICKS = 600;
 
     private CobblewareConfigLoader() {
     }
@@ -66,8 +68,10 @@ public final class CobblewareConfigLoader {
         JsonObject object = element.getAsJsonObject();
         String mainWorkerUrl = requiredString(object, "mainWorkerUrl");
         String mainWorkerApiKey = requiredString(object, "mainWorkerApiKey");
+        int instrumentationWindowTicks = optionalPositiveInt(
+                object, "instrumentationWindowTicks", DEFAULT_INSTRUMENTATION_WINDOW_TICKS);
         URI baseUri = normalizeBaseUri(mainWorkerUrl);
-        return new CobblewareConfig(baseUri, mainWorkerApiKey, null);
+        return new CobblewareConfig(baseUri, mainWorkerApiKey, instrumentationWindowTicks, null);
     }
 
     private static String requiredString(JsonObject object, String property) {
@@ -76,6 +80,26 @@ public final class CobblewareConfigLoader {
             throw new IllegalArgumentException(property + " must be a JSON string");
         }
         return value.getAsString();
+    }
+
+    private static int optionalPositiveInt(JsonObject object, String property, int defaultValue) {
+        JsonElement value = object.get(property);
+        if (value == null) {
+            return defaultValue;
+        }
+        if (!value.isJsonPrimitive() || !value.getAsJsonPrimitive().isNumber()) {
+            throw new IllegalArgumentException(property + " must be a positive integer");
+        }
+        try {
+            BigDecimal number = value.getAsBigDecimal();
+            int result = number.intValueExact();
+            if (result <= 0) {
+                throw new IllegalArgumentException(property + " must be a positive integer");
+            }
+            return result;
+        } catch (ArithmeticException exception) {
+            throw new IllegalArgumentException(property + " must be a positive integer", exception);
+        }
     }
 
     private static URI normalizeBaseUri(String value) {
@@ -96,7 +120,8 @@ public final class CobblewareConfigLoader {
     private static String defaultJson() {
         return "{\n"
                 + "  \"mainWorkerUrl\": \"" + DEFAULT_MAIN_WORKER_URL + "\",\n"
-                + "  \"mainWorkerApiKey\": \"\"\n"
+                + "  \"mainWorkerApiKey\": \"\",\n"
+                + "  \"instrumentationWindowTicks\": " + DEFAULT_INSTRUMENTATION_WINDOW_TICKS + "\n"
                 + "}\n";
     }
 }

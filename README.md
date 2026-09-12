@@ -46,7 +46,8 @@ The Fabric Mod currently creates `config/cobbleware.json` on first start. Set
 `COBBLEWARE_API_KEY`; leave `mainWorkerUrl` at its default `http://localhost:9000` or
 set it to that worker's HTTP/HTTPS base URL. The API key defaults to an empty string,
 which causes the Mod to log an error and disable authentication requests until an
-administrator sets it.
+administrator sets it. `instrumentationWindowTicks` controls the in-memory
+instrumentation retention window in server ticks and defaults to 600 (30 seconds).
 
 The Mod will provide server admins with the following configuration options:
 

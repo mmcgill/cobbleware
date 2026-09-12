@@ -2,11 +2,18 @@ package io.github.mmcgill.cobbleware.config;
 
 import java.net.URI;
 
-/** Immutable server configuration used to reach the Main Worker. */
-public record CobblewareConfig(URI mainWorkerBaseUri, String mainWorkerApiKey, String configurationError) {
+/** Immutable server configuration used to reach the Main Worker and retain Mod instrumentation. */
+public record CobblewareConfig(
+        URI mainWorkerBaseUri,
+        String mainWorkerApiKey,
+        int instrumentationWindowTicks,
+        String configurationError) {
     public CobblewareConfig {
         if (mainWorkerApiKey == null) {
             throw new IllegalArgumentException("mainWorkerApiKey must not be null");
+        }
+        if (instrumentationWindowTicks <= 0) {
+            throw new IllegalArgumentException("instrumentationWindowTicks must be positive");
         }
     }
 
@@ -27,6 +34,6 @@ public record CobblewareConfig(URI mainWorkerBaseUri, String mainWorkerApiKey, S
     }
 
     public static CobblewareConfig disabled(String reason) {
-        return new CobblewareConfig(null, "", reason);
+        return new CobblewareConfig(null, "", CobblewareConfigLoader.DEFAULT_INSTRUMENTATION_WINDOW_TICKS, reason);
     }
 }

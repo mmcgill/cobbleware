@@ -153,3 +153,27 @@ emitting Cobbleputer. An effect with neither selector changes all of those obser
 `observer_id` and `observer_color` independently narrow that set, and both selectors
 must match when both are supplied. Unspecified or unrecognized selected colors are
 ignored rather than treated as an unfiltered effect.
+
+## Instrumentation
+
+The Mod records a configurable sliding window of in-memory instrumentation.
+`instrumentationWindowTicks` in `config/cobbleware.json` sets the number of
+server ticks retained; it defaults to 600 ticks (30 seconds at 20 ticks per
+second). Existing configuration files without the setting use that default.
+The data is discarded at server shutdown.
+
+The recorded measurements are:
+
+* full wall-clock duration and outcome of each execution-sync request, measured
+  from dispatch until its `CompletableFuture` completes;
+* accepted and dropped events, per player, physical Cobbleputer, and event type;
+* attempted and failed effect applications, plus processing duration, per
+  player, physical Cobbleputer, and effect type; and
+* the current count of loaded running and stopped Cobbleputers, per player.
+
+An event is accepted when it enters the Cobbleputer's pending queue; every
+other admission attempt is recorded as dropped. An effect is attempted whenever
+the Mod calls its existing effect-application path and is failed only when that
+path throws. Metrics do not alter the existing best-effort event/effect
+semantics.
+

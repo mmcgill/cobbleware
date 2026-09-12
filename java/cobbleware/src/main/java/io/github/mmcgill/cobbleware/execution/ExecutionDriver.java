@@ -22,6 +22,7 @@ import io.github.mmcgill.cobbleware.block.CobbleputerBlockEntity;
 import io.github.mmcgill.cobbleware.block.CobbleputerState;
 import io.github.mmcgill.cobbleware.block.WirelessObserverBlock;
 import io.github.mmcgill.cobbleware.block.WirelessObserverBlockEntity;
+import io.github.mmcgill.cobbleware.instrumentation.Instrumentation;
 import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.Collections;
@@ -59,6 +60,7 @@ public final class ExecutionDriver {
     private static final double CHAT_RADIUS_SQUARED = CHAT_RADIUS * CHAT_RADIUS;
 
     private final MainWorkerClient mainWorkerClient;
+    private final Instrumentation instrumentation;
     private final Logger logger;
     private final Map<CobbleputerBlockEntity, ActiveExecution> activeExecutions = new IdentityHashMap<>();
     private final Set<WirelessObserverBlockEntity> pendingObserverInitializations =
@@ -71,12 +73,14 @@ public final class ExecutionDriver {
     private CompletableFuture<MainWorkerClient.ExecutionSyncResult> inFlight;
     private Flight flight;
     private boolean runtimeMayHaveExecutions;
+    private long instrumentationTick;
 
-    public ExecutionDriver(MainWorkerClient mainWorkerClient, Logger logger) {
-        if (mainWorkerClient == null || logger == null) {
+    public ExecutionDriver(MainWorkerClient mainWorkerClient, Instrumentation instrumentation, Logger logger) {
+        if (mainWorkerClient == null || instrumentation == null || logger == null) {
             throw new IllegalArgumentException("ExecutionDriver dependencies must not be null");
         }
         this.mainWorkerClient = mainWorkerClient;
+        this.instrumentation = instrumentation;
         this.logger = logger;
         ServerTickEvents.END_SERVER_TICK.register(this::tick);
         ServerMessageEvents.CHAT_MESSAGE.register(
@@ -119,6 +123,11 @@ public final class ExecutionDriver {
         pendingObserverInitializations.remove(observer);
         pendingObserverIdMigrations.remove(observer);
         pendingObserverChanges.remove(observer);
+    }
+
+    /** Returns the Mod's read-only in-memory instrumentation collector. */
+    public Instrumentation instrumentation() {
+        return instrumentation;
     }
 
     /** Delivers lifecycle events after an observer's durable pairing has been replaced. */
@@ -198,6 +207,8 @@ public final class ExecutionDriver {
         ActiveExecution active = activeExecutions.get(blockEntity);
         if (active != null) {
             enqueueActiveEvent(blockEntity, active, event);
+        } else {
+            recordEvent(blockEntity, event, false);
         }
     }
 
@@ -220,24 +231,31 @@ public final class ExecutionDriver {
     private void enqueueActiveEvent(CobbleputerBlockEntity blockEntity, ActiveExecution active, Event event) {
         if (active == null || !blockEntity.hasExecution()
                 || blockEntity.getBlockState().getValue(CobbleputerBlock.STATE) != CobbleputerState.RUNNING) {
+            recordEvent(blockEntity, event, false);
             return;
         }
         if (active.events.size() >= MAX_PENDING_EVENTS_PER_EXECUTION) {
             logger.warn("Dropping Cobbleputer event at {} because its pending queue is full",
                     blockEntity.getBlockPos().toShortString());
+            recordEvent(blockEntity, event, false);
             return;
         }
         try {
             active.events.addLast(new QueuedEvent(blockEntity.claimNextEventSequenceNum(), event));
+            recordEvent(blockEntity, event, true);
         } catch (RuntimeException exception) {
             logger.error("Could not enqueue Cobbleputer event at {}: {}",
                     blockEntity.getBlockPos().toShortString(), exception.toString());
+            recordEvent(blockEntity, event, false);
         }
     }
 
     private void tick(MinecraftServer server) {
+        instrumentationTick += 1;
+        instrumentation.advanceTick(instrumentationTick);
         if (inFlight != null) {
             if (!inFlight.isDone()) {
+                recordCobbleputerStateGauge();
                 return;
             }
             MainWorkerClient.ExecutionSyncResult result;
@@ -264,13 +282,19 @@ public final class ExecutionDriver {
         drainObserverChanges(server);
         Flight nextFlight = buildFlight();
         if (!nextFlight.hadExecutions() && !runtimeMayHaveExecutions) {
+            recordCobbleputerStateGauge();
             return;
         }
         if (nextFlight.hadExecutions()) {
             runtimeMayHaveExecutions = true;
         }
-        flight = nextFlight;
+        long dispatchedAt = System.nanoTime();
+        Flight dispatchedFlight = nextFlight.withDispatchNanos(dispatchedAt);
+        flight = dispatchedFlight;
         inFlight = mainWorkerClient.syncExecutions(nextFlight.request);
+        inFlight.whenComplete((result, failure) -> instrumentation.recordSyncCompletion(
+                System.nanoTime() - dispatchedFlight.dispatchNanos(), syncOutcome(result, failure)));
+        recordCobbleputerStateGauge();
     }
 
     private void drainObserverChanges(MinecraftServer server) {
@@ -508,11 +532,16 @@ public final class ExecutionDriver {
     private void applyEffects(CobbleputerBlockEntity blockEntity, ExecutionResult result) {
         long sequence = result.getEffectSeqNum();
         for (Effect effect : result.getEffectsList()) {
+            boolean failed = false;
+            long startedAt = System.nanoTime();
             try {
                 applyEffect(blockEntity, effect);
             } catch (RuntimeException exception) {
+                failed = true;
                 logger.warn("Could not apply Cobbleputer effect at {}: {}",
                         blockEntity.getBlockPos().toShortString(), exception.toString());
+            } finally {
+                recordEffect(blockEntity, effect, System.nanoTime() - startedAt, failed);
             }
             blockEntity.acknowledgeEffect(sequence);
             sequence += 1;
@@ -706,6 +735,59 @@ public final class ExecutionDriver {
         return uuid.getHigh() + ":" + uuid.getLow();
     }
 
+    private void recordEvent(CobbleputerBlockEntity blockEntity, Event event, boolean accepted) {
+        instrumentationKey(blockEntity).ifPresent(target ->
+                instrumentation.recordEvent(target, event.getEventCase(), accepted));
+    }
+
+    private void recordEffect(CobbleputerBlockEntity blockEntity, Effect effect, long elapsedNanos, boolean failed) {
+        instrumentationKey(blockEntity).ifPresent(target ->
+                instrumentation.recordEffect(target, effect.getEffectCase(), elapsedNanos, failed));
+    }
+
+    private static Optional<Instrumentation.PlayerCobbleputerKey> instrumentationKey(
+            CobbleputerBlockEntity blockEntity) {
+        Optional<UUID> owner = blockEntity.ownerPlayerId();
+        if (owner.isEmpty() || !(blockEntity.getLevel() instanceof ServerLevel level)) {
+            return Optional.empty();
+        }
+        Identifier dimension = level.dimension().identifier();
+        BlockPos pos = blockEntity.getBlockPos();
+        return Optional.of(new Instrumentation.PlayerCobbleputerKey(
+                owner.orElseThrow(),
+                new Instrumentation.CobbleputerKey(dimension.toString(), pos.getX(), pos.getY(), pos.getZ())));
+    }
+
+    private void recordCobbleputerStateGauge() {
+        Map<Instrumentation.PlayerStateKey, Integer> states = new HashMap<>();
+        for (CobbleputerBlockEntity blockEntity : activeExecutions.keySet()) {
+            Optional<UUID> owner = blockEntity.ownerPlayerId();
+            Instrumentation.LifecycleState lifecycle = switch (blockEntity.getBlockState().getValue(CobbleputerBlock.STATE)) {
+                case RUNNING -> Instrumentation.LifecycleState.RUNNING;
+                case STOPPED -> Instrumentation.LifecycleState.STOPPED;
+                case UNINITIALIZED, CRASHED -> null;
+            };
+            if (owner.isEmpty() || lifecycle == null) {
+                continue;
+            }
+            states.merge(new Instrumentation.PlayerStateKey(owner.orElseThrow(), lifecycle), 1, Integer::sum);
+        }
+        instrumentation.recordCobbleputerStates(states);
+    }
+
+    private static Instrumentation.SyncOutcome syncOutcome(
+            MainWorkerClient.ExecutionSyncResult result, Throwable failure) {
+        if (failure != null || result == null) {
+            return Instrumentation.SyncOutcome.EXCEPTION;
+        }
+        return switch (result.status()) {
+            case SUCCESS -> Instrumentation.SyncOutcome.SUCCESS;
+            case CONFIGURATION_ERROR -> Instrumentation.SyncOutcome.CONFIGURATION_ERROR;
+            case UNAUTHORIZED -> Instrumentation.SyncOutcome.UNAUTHORIZED;
+            case UNAVAILABLE -> Instrumentation.SyncOutcome.UNAVAILABLE;
+        };
+    }
+
     private record QueuedEvent(long sequenceNum, Event event) {
     }
 
@@ -721,7 +803,15 @@ public final class ExecutionDriver {
             ExecutionStatus lifecycleState) {
     }
 
-    private record Flight(ExecutionsRequest request, Map<String, OfferedExecution> offered) {
+    private record Flight(ExecutionsRequest request, Map<String, OfferedExecution> offered, long dispatchNanos) {
+        private Flight(ExecutionsRequest request, Map<String, OfferedExecution> offered) {
+            this(request, offered, -1);
+        }
+
+        private Flight withDispatchNanos(long nextDispatchNanos) {
+            return new Flight(request, offered, nextDispatchNanos);
+        }
+
         private boolean hadExecutions() {
             return !offered.isEmpty();
         }
