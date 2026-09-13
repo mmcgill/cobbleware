@@ -81,6 +81,8 @@ server-tick work after chunk attachment, never from a block-entity loading or
 attachment callback.
 
 Breaking the Cobbleputer block destroys the block entity; effectively terminating the execution.
+It also immediately unpairs every loaded Wireless Observer paired to that Cobbleputer. Unloaded
+Observers retain their pairing until the next safe validation finds that the Cobbleputer no longer exists.
 
 Execution state is durable as long as the execution does not crash and the Cobbleputer block is not broken.
 Events and Effects, on the other hand, are ephemeral and best-effort. There is no guarantee that every
@@ -134,6 +136,16 @@ block entity is removed; chunk unloading does not emit that event. These lifecyc
 best-effort just like block-state changes: the pairing remains durable, while delivery is dropped
 when the target is unloaded, unavailable, or has a full event queue. Events produced while the
 target is stopped are not enqueued and are not replayed when it resumes.
+
+Breaking a Cobbleputer unpairs all currently loaded observers indexed for its global position.
+That index is held by the Mod, not by a Cobbleputer block entity. An unloaded paired observer is
+validated after it, or its target chunk, next loads: if the target dimension is unavailable or its
+already-loaded target position has no Cobbleputer block entity, the observer clears its pairing and
+resets its power to zero. An unloaded target chunk is not treated as missing and is never loaded just
+to validate a pairing. Validation is queued from chunk callbacks and runs on a normal server tick,
+because persisting the clear pairing from chunk attachment would call `setChanged` and can deadlock.
+No `WirelessObserverUnpaired` event is delivered for Cobbleputer destruction, because the target
+execution is being terminated or is already absent.
 
 `WirelessObserverPaired` and `WirelessObserverUnpaired` contain the observer color, UUID, facing
 direction, and global position. `BlockStateChange` likewise contains the observer UUID, in

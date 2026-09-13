@@ -5,7 +5,12 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.util.Optional;
 import java.util.UUID;
+import net.minecraft.core.BlockPos;
+import net.minecraft.core.GlobalPos;
+import net.minecraft.resources.ResourceKey;
 import net.minecraft.world.item.DyeColor;
+import net.minecraft.world.level.ChunkPos;
+import net.minecraft.world.level.Level;
 import org.junit.jupiter.api.Test;
 
 class WirelessObserverNetworkTest {
@@ -22,6 +27,17 @@ class WirelessObserverNetworkTest {
         assertTrue(matches(Optional.of(OBSERVER_ID), Optional.of(DyeColor.RED)));
         assertFalse(matches(Optional.of(OBSERVER_ID), Optional.of(DyeColor.BLUE)));
         assertFalse(matches(Optional.of(OTHER_OBSERVER_ID), Optional.of(DyeColor.RED)));
+    }
+
+    @Test
+    void matchesOnlyTheTargetChunkInItsOwnDimension() {
+        ResourceKey<Level> overworld = Level.OVERWORLD;
+        ResourceKey<Level> nether = Level.NETHER;
+        GlobalPos target = GlobalPos.of(overworld, new BlockPos(33, 64, -17));
+
+        assertTrue(WirelessObserverNetwork.targetIsInChunk(target, overworld, new ChunkPos(2, -2)));
+        assertFalse(WirelessObserverNetwork.targetIsInChunk(target, overworld, new ChunkPos(1, -2)));
+        assertFalse(WirelessObserverNetwork.targetIsInChunk(target, nether, new ChunkPos(2, -2)));
     }
 
     private static boolean matches(Optional<UUID> observerId, Optional<DyeColor> observerColor) {

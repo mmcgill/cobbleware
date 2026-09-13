@@ -9,6 +9,7 @@ import java.util.Arrays;
 import java.util.Optional;
 import java.util.UUID;
 import net.minecraft.core.BlockPos;
+import net.minecraft.core.GlobalPos;
 import net.minecraft.core.UUIDUtil;
 import net.minecraft.world.level.block.entity.BlockEntity;
 import net.minecraft.world.level.block.state.BlockState;
@@ -57,6 +58,17 @@ public final class CobbleputerBlockEntity extends BlockEntity {
             executionDriver.deactivate(this);
         }
         super.setRemoved();
+    }
+
+    @Override
+    public void preRemoveSideEffects(BlockPos pos, BlockState state) {
+        if (level instanceof net.minecraft.server.level.ServerLevel serverLevel) {
+            WirelessObserverNetwork network = CobblewareMod.wirelessObserverNetworkOrNull();
+            if (network != null) {
+                network.unpairLoadedObserversFor(GlobalPos.of(serverLevel.dimension(), pos));
+            }
+        }
+        super.preRemoveSideEffects(pos, state);
     }
 
     /** Starts a fresh execution owned by {@code owner}, replacing any previous execution record. */

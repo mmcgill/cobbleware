@@ -59,14 +59,17 @@ public final class CobblewareMod implements ModInitializer {
         executionDriver = new ExecutionDriver(
                 mainWorkerClient, new Instrumentation(config.instrumentationWindowTicks()), LOGGER);
         wirelessObserverNetwork = new WirelessObserverNetwork();
-        ServerChunkEvents.CHUNK_LOAD.register((level, chunk, generated) -> chunk.getBlockEntities().values().forEach(blockEntity -> {
-            if (blockEntity instanceof io.github.mmcgill.cobbleware.block.CobbleputerBlockEntity cobbleputer) {
-                executionDriver.activate(cobbleputer);
-            }
-            if (blockEntity instanceof WirelessObserverBlockEntity observer) {
-                wirelessObserverNetwork.activate(observer);
-            }
-        }));
+        ServerChunkEvents.CHUNK_LOAD.register((level, chunk, generated) -> {
+            chunk.getBlockEntities().values().forEach(blockEntity -> {
+                if (blockEntity instanceof io.github.mmcgill.cobbleware.block.CobbleputerBlockEntity cobbleputer) {
+                    executionDriver.activate(cobbleputer);
+                }
+                if (blockEntity instanceof WirelessObserverBlockEntity observer) {
+                    wirelessObserverNetwork.activate(observer);
+                }
+            });
+            wirelessObserverNetwork.targetChunkLoaded(level, chunk.getPos());
+        });
         ServerChunkEvents.CHUNK_UNLOAD.register((level, chunk) -> chunk.getBlockEntities().values().forEach(blockEntity -> {
             if (blockEntity instanceof io.github.mmcgill.cobbleware.block.CobbleputerBlockEntity cobbleputer) {
                 executionDriver.deactivate(cobbleputer);

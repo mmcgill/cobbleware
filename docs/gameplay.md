@@ -83,6 +83,8 @@ has a UUID in its block entity that uniquely identifies it. That UUID is not pre
 when the block is broken.
 Wireless Observers come in 16 colors, one for each of the 16 dye variants.
 A Wireless Observer is initially unpaired when placed, and breaking a paired Wireless Observer unpairs it.
+Breaking a Cobbleputer eventually unpairs its Wireless Observers: loaded Observers are unpaired immediately,
+while unloaded Observers unpair once their pairing can next be checked. Unpaired Observers emit no Redstone power.
 A placed Wireless Observer may be paired to a specific 'puter by
 using a paired Cobblemeter on the placed Wireless Observer.
 When a Wireless Observer is paired, the associated Cobbleputer receives a

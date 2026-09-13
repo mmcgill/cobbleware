@@ -145,6 +145,26 @@ public final class WirelessObserverBlockEntity extends BlockEntity {
         return Optional.ofNullable(previous);
     }
 
+    /** Clears the paired Cobbleputer, disables output, and updates the loaded-observer index. */
+    public Optional<GlobalPos> clearPairedCobbleputer() {
+        GlobalPos previous = pairedCobbleputer;
+        if (previous == null) {
+            return Optional.empty();
+        }
+        pairedCobbleputer = null;
+        if (level != null && !level.isClientSide() && getBlockState().getBlock() instanceof WirelessObserverBlock) {
+            WirelessObserverBlock.setPower(level, worldPosition, getBlockState(), 0);
+        }
+        setChanged();
+        if (level != null && !level.isClientSide()) {
+            WirelessObserverNetwork network = CobblewareMod.wirelessObserverNetworkOrNull();
+            if (network != null) {
+                network.reindex(this);
+            }
+        }
+        return Optional.of(previous);
+    }
+
     @Override
     protected void saveAdditional(ValueOutput output) {
         super.saveAdditional(output);

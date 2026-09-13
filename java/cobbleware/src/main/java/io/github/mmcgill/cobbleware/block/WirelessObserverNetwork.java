@@ -18,6 +18,7 @@ import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.item.DyeColor;
 import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.level.ChunkPos;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.phys.Vec3;
 
@@ -29,6 +30,8 @@ public final class WirelessObserverNetwork {
 
     private final Map<GlobalPos, Set<WirelessObserverBlockEntity>> observersByTarget = new HashMap<>();
     private final Map<WirelessObserverBlockEntity, GlobalPos> targetsByObserver = new IdentityHashMap<>();
+    private final Set<WirelessObserverBlockEntity> pendingPairingValidations =
+            Collections.newSetFromMap(new IdentityHashMap<>());
 
     public WirelessObserverNetwork() {
         ServerTickEvents.END_SERVER_TICK.register(this::tick);
@@ -39,6 +42,7 @@ public final class WirelessObserverNetwork {
     }
 
     public void deactivate(WirelessObserverBlockEntity observer) {
+        pendingPairingValidations.remove(observer);
         GlobalPos previous = targetsByObserver.remove(observer);
         if (previous != null) {
             removeFromTarget(previous, observer);
@@ -53,7 +57,34 @@ public final class WirelessObserverNetwork {
             observersByTarget
                     .computeIfAbsent(target, ignored -> Collections.newSetFromMap(new IdentityHashMap<>()))
                     .add(observer);
+            pendingPairingValidations.add(observer);
         });
+    }
+
+    /** Schedules validation of loaded observers whose targets lie in a newly loaded chunk. */
+    public void targetChunkLoaded(ServerLevel level, ChunkPos chunkPos) {
+        for (Map.Entry<GlobalPos, Set<WirelessObserverBlockEntity>> entry : observersByTarget.entrySet()) {
+            if (targetIsInChunk(entry.getKey(), level.dimension(), chunkPos)) {
+                pendingPairingValidations.addAll(entry.getValue());
+            }
+        }
+    }
+
+    /** Unpairs every loaded observer that is still paired to {@code target}. */
+    public void unpairLoadedObserversFor(GlobalPos target) {
+        Set<WirelessObserverBlockEntity> indexedObservers = observersByTarget.get(target);
+        if (indexedObservers == null) {
+            return;
+        }
+        for (WirelessObserverBlockEntity observer : List.copyOf(indexedObservers)) {
+            if (observer.isRemoved()
+                    || !(observer.getLevel() instanceof ServerLevel)
+                    || !observer.pairedCobbleputer().filter(target::equals).isPresent()) {
+                removeIndexedObserver(target, observer);
+                continue;
+            }
+            observer.clearPairedCobbleputer();
+        }
     }
 
     /** Applies a power level to every matching loaded observer still paired to the emitting Cobbleputer. */
@@ -87,6 +118,21 @@ public final class WirelessObserverNetwork {
                 && targetColor.map(observerColor::equals).orElse(true);
     }
 
+    static boolean targetIsInChunk(
+            GlobalPos target, net.minecraft.resources.ResourceKey<Level> dimension, ChunkPos chunkPos) {
+        return target.dimension().equals(dimension)
+                && target.pos().getX() >> 4 == chunkPos.x()
+                && target.pos().getZ() >> 4 == chunkPos.z();
+    }
+
+    private void removeIndexedObserver(GlobalPos target, WirelessObserverBlockEntity observer) {
+        pendingPairingValidations.remove(observer);
+        if (target.equals(targetsByObserver.get(observer))) {
+            targetsByObserver.remove(observer);
+        }
+        removeFromTarget(target, observer);
+    }
+
     private void removeFromTarget(GlobalPos target, WirelessObserverBlockEntity observer) {
         Set<WirelessObserverBlockEntity> observers = observersByTarget.get(target);
         if (observers == null) {
@@ -99,11 +145,41 @@ public final class WirelessObserverNetwork {
     }
 
     private void tick(MinecraftServer server) {
+        validatePairings(server);
         if (server.overworld().getGameTime() % VISUALIZATION_INTERVAL_TICKS != 0) {
             return;
         }
         for (ServerPlayer player : server.getPlayerList().getPlayers()) {
             pairedMeterTarget(player).ifPresent(target -> drawPaths(player, target));
+        }
+    }
+
+    private void validatePairings(MinecraftServer server) {
+        if (pendingPairingValidations.isEmpty()) {
+            return;
+        }
+        List<WirelessObserverBlockEntity> observers = List.copyOf(pendingPairingValidations);
+        pendingPairingValidations.clear();
+        for (WirelessObserverBlockEntity observer : observers) {
+            if (observer.isRemoved() || !(observer.getLevel() instanceof ServerLevel)) {
+                continue;
+            }
+            Optional<GlobalPos> pairedTarget = observer.pairedCobbleputer();
+            if (pairedTarget.isEmpty()) {
+                continue;
+            }
+            GlobalPos target = pairedTarget.orElseThrow();
+            ServerLevel targetLevel = server.getLevel(target.dimension());
+            if (targetLevel == null) {
+                observer.clearPairedCobbleputer();
+                continue;
+            }
+            if (!targetLevel.isLoaded(target.pos())) {
+                continue;
+            }
+            if (!(targetLevel.getBlockEntity(target.pos()) instanceof CobbleputerBlockEntity)) {
+                observer.clearPairedCobbleputer();
+            }
         }
     }
 
