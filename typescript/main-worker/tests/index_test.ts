@@ -49,6 +49,11 @@ Deno.test('/index.html contains the programs UI', async () => {
       '/playerapi/v1/logout',
       'execution-stats-stream-already-open',
       'statsConnectionError(error.error, false)',
+      'Events and effects per tick',
+      'stats-activity-graph',
+      'stats-graph-tooltip',
+      'drawStatsGraphColumn',
+      'updateStatsGraphTooltip',
     ]
   ) {
     if (!body.includes(landmark)) {

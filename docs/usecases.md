@@ -53,4 +53,7 @@ The view receives only the Player's own raw per-tick instrumentation and aggrega
 sliding window of 600 received ticks: offered events per execution sync, accepted and dropped events, effect
 attempts, failures and timing, and the current number of loaded running and stopped Cobbleputers. It identifies
 the newest sampling time and local-window coverage, including observed gaps, and indicates when no report is
-available or the displayed report is stale. It must not expose another Player's statistics.
+available or the displayed report is stale. It includes one responsive 200-pixel-high canvas history, where each
+received tick is a right-aligned pixel column, events extend upward from its middle, effects extend downward, and color
+distinguishes accepted from dropped events and successful from failed effects. Hovering the canvas shows the selected
+half's scale value at the pointer. It must not expose another Player's statistics.

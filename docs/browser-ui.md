@@ -34,6 +34,16 @@ newest sample was captured, marks the view stale when no update arrives for more
 marks coverage incomplete when tick-sequence gaps are observed. The section initially indicates that no statistics are
 available if the Main Worker has not yet received a report for the Player. A rejected or closed connection is shown as
 a stats-connection error and may be retried without reloading the rest of the page.
+
+The section also displays one responsive 200-pixel-high canvas history. Each received tick occupies one right-aligned
+CSS-pixel column. The middle of the canvas divides the two metric families: event columns extend upward and effect
+columns extend downward. Event-column height is the sum of accepted and dropped events, colored by outcome.
+Effect-column height is the number of attempted effects, split into successful and failed applications, since failed
+effects are a subset of attempts. Each half is capped at 100 pixels; a distinct cap marker identifies a tick whose
+count exceeds the visible range. The graph retains only received ticks, so a reported sequence gap remains a coverage
+warning rather than being displayed as a zero-valued tick. Hovering the canvas shows the event or effect scale value
+at the pointer, selecting events above the divider and effects below it.
+
 When the server reports that an execution-stats stream is already open in another browser window, the UI shows that
 specific error and does not retry the connection. The UI never displays another Player's statistics.
 

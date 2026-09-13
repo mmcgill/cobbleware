@@ -75,6 +75,26 @@
         <p id="stats-status" class="muted" role="status"
           aria-live="polite">Connecting to statistics...</p>
         <div id="stats-details" class="stats-details" hidden>
+          <figure class="stats-graph">
+            <figcaption>
+              <strong>Events and effects per tick</strong>
+              <span
+                class="stats-graph-scale">Each column is one received tick. Events extend upward from the middle;
+                effects extend downward. 1 px per operation, capped at 100 px per half.</span>
+            </figcaption>
+            <canvas id="stats-activity-graph" class="stats-graph-canvas" height="200" role="img"
+              aria-label="Events and effects per received tick. Events extend upward and effects downward from the middle.">
+              Events and effects per received tick.
+            </canvas>
+            <div id="stats-graph-tooltip" class="stats-graph-tooltip" role="tooltip" hidden></div>
+            <ul class="stats-graph-legend" aria-label="Events and effects graph legend">
+              <li><span class="stats-graph-swatch accepted" aria-hidden="true"></span>Accepted events</li>
+              <li><span class="stats-graph-swatch dropped" aria-hidden="true"></span>Dropped events</li>
+              <li><span class="stats-graph-swatch succeeded" aria-hidden="true"></span>Successful effects</li>
+              <li><span class="stats-graph-swatch failed" aria-hidden="true"></span>Failed effects</li>
+              <li><span class="stats-graph-swatch capped" aria-hidden="true"></span>Capped</li>
+            </ul>
+          </figure>
           <dl>
             <div>
               <dt>Captured</dt>
@@ -129,6 +149,8 @@
         statsStatus: document.querySelector('#stats-status'),
         statsDetails: document.querySelector('#stats-details'),
         statsRetryButton: document.querySelector('#stats-retry-button'),
+        statsActivityGraph: document.querySelector('#stats-activity-graph'),
+        statsGraphTooltip: document.querySelector('#stats-graph-tooltip'),
         statsSampledAt: document.querySelector('#stats-sampled-at'),
         statsWindow: document.querySelector('#stats-window'),
         statsEventsPerSync: document.querySelector('#stats-events-per-sync'),
@@ -143,7 +165,16 @@
         timeStyle: 'short',
       });
       const STATS_RETENTION_TICKS = 600;
+      const STATS_GRAPH_HEIGHT = 200;
       const DUPLICATE_STATS_STREAM_CODE = 'execution-stats-stream-already-open';
+      const STATS_GRAPH_COLORS = {
+        accepted: '#78c091',
+        dropped: '#ff9c9c',
+        succeeded: '#78aee8',
+        failed: '#ffb36b',
+        capped: '#f9d65c',
+        divider: '#405666',
+      };
 
       let programList = null;
       let startStates = null;
@@ -417,6 +448,133 @@
         elements.statsCobbleputers.textContent =
           `${player.runningCobbleputers.toLocaleString()} running; ${player.stoppedCobbleputers.toLocaleString()} stopped`;
         elements.statsDetails.hidden = false;
+        renderStatsGraphs();
+      }
+
+      function renderStatsGraphs() {
+        if (statsTicks.length === 0) return;
+        const graphTicks = statsTicks.map((tick) => tick.graph);
+        renderStatsGraph(elements.statsActivityGraph, graphTicks);
+
+        const latest = graphTicks.at(-1);
+        elements.statsActivityGraph.setAttribute(
+          'aria-label',
+          `Events and effects per received tick. Latest tick: ${
+            formatBigInt(latest.eventsAccepted)
+          } accepted and ${formatBigInt(latest.eventsDropped)} dropped events; ${
+            formatBigInt(latest.effectsSucceeded)
+          } successful and ${
+            formatBigInt(latest.effectsFailed)
+          } failed effects. Events extend upward from the middle,
+          effects downward, and yellow marks a capped column.`,
+        );
+      }
+
+      function renderStatsGraph(canvas, graphTicks) {
+        const width = canvas.clientWidth;
+        const height = canvas.clientHeight;
+        if (width === 0 || height === 0) return;
+
+        const devicePixelRatio = window.devicePixelRatio || 1;
+        const backingWidth = Math.round(width * devicePixelRatio);
+        const backingHeight = Math.round(height * devicePixelRatio);
+        if (canvas.width !== backingWidth || canvas.height !== backingHeight) {
+          canvas.width = backingWidth;
+          canvas.height = backingHeight;
+        }
+
+        const context = canvas.getContext('2d');
+        context.setTransform(devicePixelRatio, 0, 0, devicePixelRatio, 0, 0);
+        context.clearRect(0, 0, width, height);
+        const middle = Math.floor(height / 2);
+        context.fillStyle = STATS_GRAPH_COLORS.divider;
+        context.fillRect(0, middle, width, 1);
+
+        const graphWidth = Math.floor(width);
+        const firstTick = Math.max(0, graphTicks.length - graphWidth);
+        let x = graphWidth - (graphTicks.length - firstTick);
+        for (let index = firstTick; index < graphTicks.length; index += 1, x += 1) {
+          drawStatsGraphColumn(context, x, middle, graphTicks[index]);
+        }
+      }
+
+      function drawStatsGraphColumn(context, x, middle, tick) {
+        drawStatsGraphStack(
+          context,
+          x,
+          middle,
+          -1,
+          tick.eventsAccepted,
+          tick.eventsDropped,
+          STATS_GRAPH_COLORS.accepted,
+          STATS_GRAPH_COLORS.dropped,
+        );
+        drawStatsGraphStack(
+          context,
+          x,
+          middle,
+          1,
+          tick.effectsSucceeded,
+          tick.effectsFailed,
+          STATS_GRAPH_COLORS.succeeded,
+          STATS_GRAPH_COLORS.failed,
+        );
+      }
+
+      function drawStatsGraphStack(
+        context,
+        x,
+        middle,
+        direction,
+        primary,
+        secondary,
+        primaryColor,
+        secondaryColor,
+      ) {
+        const cap = BigInt(middle);
+        const total = primary + secondary;
+        const secondaryHeight = Number(secondary > cap ? cap : secondary);
+        const primaryHeight = Number(
+          primary > cap - BigInt(secondaryHeight) ? cap - BigInt(secondaryHeight) : primary,
+        );
+        if (secondaryHeight > 0) {
+          context.fillStyle = secondaryColor;
+          const y = direction < 0 ? middle - secondaryHeight : middle;
+          context.fillRect(x, y, 1, secondaryHeight);
+        }
+        if (primaryHeight > 0) {
+          context.fillStyle = primaryColor;
+          const y = direction < 0 ? middle - secondaryHeight - primaryHeight : middle + secondaryHeight;
+          context.fillRect(x, y, 1, primaryHeight);
+        }
+        if (total > cap) {
+          context.fillStyle = STATS_GRAPH_COLORS.capped;
+          context.fillRect(x, direction < 0 ? 0 : middle * 2 - 1, 1, 1);
+        }
+      }
+
+      function updateStatsGraphTooltip(event) {
+        const canvas = elements.statsActivityGraph;
+        const bounds = canvas.getBoundingClientRect();
+        const graphHeight = canvas.clientHeight;
+        if (graphHeight === 0) return;
+
+        const y = (event.clientY - bounds.top) * graphHeight / bounds.height;
+        const middle = graphHeight / 2;
+        const events = y < middle;
+        const value = Math.ceil(events ? middle - y : y - middle);
+        elements.statsGraphTooltip.textContent = `${events ? 'Events' : 'Effects'}: ${value}`;
+        elements.statsGraphTooltip.hidden = false;
+
+        const offset = 12;
+        const right = window.innerWidth - elements.statsGraphTooltip.offsetWidth - 8;
+        const bottom = window.innerHeight - elements.statsGraphTooltip.offsetHeight - 8;
+        elements.statsGraphTooltip.style.left = `${Math.min(event.clientX + offset, right)}px`;
+        elements.statsGraphTooltip.style.top = `${Math.min(event.clientY + offset, bottom)}px`;
+      }
+
+      function hideStatsGraphTooltip() {
+        elements.statsGraphTooltip.hidden = true;
       }
 
       function updateStatsStaleness() {
@@ -507,7 +665,15 @@
         const syncs = (playerFields.get(3) || []).map(decodeEventsPerSyncMeasurement);
         const effects = (playerFields.get(4) || []).map(decodeEffectMeasurement);
         const states = (playerFields.get(5) || []).map(decodeCobbleputerState);
-        return { sampledAt, sequence, events, syncs, effects, states };
+        return {
+          sampledAt,
+          sequence,
+          events,
+          syncs,
+          effects,
+          states,
+          graph: summarizeStatsTickGraph(events, effects),
+        };
       }
 
       function decodeEventMeasurement(bytes) {
@@ -576,6 +742,24 @@
         if (last !== undefined && tick.sequence > last.sequence + 1n) statsGapObserved = true;
         statsTicks.push(tick);
         if (statsTicks.length > STATS_RETENTION_TICKS) statsTicks.shift();
+      }
+
+      function summarizeStatsTickGraph(events, effects) {
+        const graph = {
+          eventsAccepted: 0n,
+          eventsDropped: 0n,
+          effectsSucceeded: 0n,
+          effectsFailed: 0n,
+        };
+        for (const event of events) {
+          graph.eventsAccepted += event.accepted;
+          graph.eventsDropped += event.dropped;
+        }
+        for (const effect of effects) {
+          graph.effectsSucceeded += effect.attempted - effect.failed;
+          graph.effectsFailed += effect.failed;
+        }
+        return graph;
       }
 
       function aggregateStatsTicks() {
@@ -856,7 +1040,9 @@
       elements.refreshButton.addEventListener('click', () => loadPrograms());
       elements.logoutButton.addEventListener('click', () => logout());
       elements.statsRetryButton.addEventListener('click', () => connectStats());
-
+      elements.statsActivityGraph.addEventListener('pointermove', updateStatsGraphTooltip);
+      elements.statsActivityGraph.addEventListener('pointerleave', hideStatsGraphTooltip);
+      window.addEventListener('resize', renderStatsGraphs);
       render();
       loadPlayerIdentity().then((identityLoaded) => {
         if (identityLoaded) {

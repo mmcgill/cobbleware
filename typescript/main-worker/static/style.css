@@ -269,6 +269,89 @@ td code {
   color: var(--muted);
 }
 
+.stats-graph {
+  margin: 1rem 0 0;
+  padding: 0.75rem;
+  border: 1px solid var(--border);
+  border-radius: 0.35rem;
+  background: var(--surface-subtle);
+}
+
+.stats-graph figcaption {
+  display: grid;
+  gap: 0.25rem;
+  margin-bottom: 0.6rem;
+}
+
+.stats-graph-scale {
+  color: var(--muted);
+  font-size: 0.8rem;
+}
+
+.stats-graph-canvas {
+  display: block;
+  width: 100%;
+  height: 200px;
+  background: #17212b;
+  outline: 1px solid var(--border);
+}
+
+.stats-graph-tooltip {
+  position: fixed;
+  z-index: 1;
+  max-width: min(28rem, calc(100vw - 1rem));
+  padding: 0.4rem 0.55rem;
+  border: 1px solid var(--border);
+  border-radius: 0.25rem;
+  background: #17212b;
+  color: var(--muted);
+  font-size: 0.8rem;
+  pointer-events: none;
+}
+
+.stats-graph-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem 0.75rem;
+  padding: 0;
+  margin: 0.6rem 0 0;
+  color: var(--muted);
+  font-size: 0.8rem;
+  list-style: none;
+}
+
+.stats-graph-legend li {
+  display: flex;
+  align-items: center;
+  gap: 0.3rem;
+}
+
+.stats-graph-swatch {
+  width: 0.75rem;
+  height: 0.75rem;
+  background: currentColor;
+}
+
+.stats-graph-swatch.accepted {
+  background: #78c091;
+}
+
+.stats-graph-swatch.dropped {
+  background: #ff9c9c;
+}
+
+.stats-graph-swatch.succeeded {
+  background: #78aee8;
+}
+
+.stats-graph-swatch.failed {
+  background: #ffb36b;
+}
+
+.stats-graph-swatch.capped {
+  background: #f9d65c;
+}
+
 .stats-details dl {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
