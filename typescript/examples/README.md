@@ -61,7 +61,8 @@ The program's intended use is as follows:
   - storing in program state the board size, state, and a queue of pixels to activate
 - When the program is in 'simulate' mode:
   - receiving a block state change from a green observer indicating that its observed block is unpowered
-    sends it back to 'init' mode while retaining the recorded paired black observers
+    sends it back to 'init' mode while retaining the recorded paired black observers and turning all
+    black observers off
   - receiving a block state change from a blue observer advances the simulation:
     - up to the max allowed effects are prepared for updating the "display"
     - if no queued display pixel changes remain in execution state, a new GOL board state is computed

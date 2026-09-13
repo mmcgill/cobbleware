@@ -182,7 +182,7 @@ function handleSimulation(
     return drainAndRespond({
       ...emptyInitState(),
       observers: state.observers,
-      pending: [{ type: 'chat', message: 'Conway: init mode' }],
+      pending: [{ type: 'clear' }, { type: 'chat', message: 'Conway: init mode' }],
     }, effectLimit);
   }
 

@@ -104,7 +104,8 @@ Deno.test('Conway green-off resets simulation and unrelated events do not advanc
   const reset = step(ignored.state, blockChange(DyeColor.GREEN, false), 50);
   const decoded = decodeConwayState(reset.state);
   assertEquals(decoded.mode, 'init', 'green unpowered event should reset to init');
-  assertChatEffect(reset.effects[0], 'Conway: init mode');
+  assertClearEffect(reset.effects[0]);
+  assertChatEffect(reset.effects[1], 'Conway: init mode');
 });
 
 Deno.test('Conway chat commands enter simulation, step it, and return to init', () => {
@@ -131,7 +132,8 @@ Deno.test('Conway chat commands enter simulation, step it, and return to init', 
 
   const initialized = step(stepped.state, chatMessage('init'));
   assertEquals(decodeConwayState(initialized.state).mode, 'init', 'init command should reset');
-  assertChatEffect(initialized.effects[0], 'Conway: init mode');
+  assertClearEffect(initialized.effects[0]);
+  assertChatEffect(initialized.effects[1], 'Conway: init mode');
 });
 
 function step(state: Uint8Array, event: Events.Event, effectLimit = 50) {
