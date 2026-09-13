@@ -49,7 +49,8 @@ failed replacement. The uploaded payload must fit within the player's program si
 **ES01**: As a Player, I want to view my Cobbleputer execution statistics live in the Browser UI so that I can tell
 how my program is behaving.
 
-The view shows only the Player's own aggregate sliding-window instrumentation: offered events per execution sync,
-accepted and dropped events, effect attempts, failures and timing, and the current number of loaded running and
-stopped Cobbleputers. It identifies the sampling time and instrumentation-window coverage, and indicates when no
-report is available or the displayed report is stale. It must not expose another Player's statistics.
+The view receives only the Player's own raw per-tick instrumentation and aggregates it in a Browser-local
+sliding window of 600 received ticks: offered events per execution sync, accepted and dropped events, effect
+attempts, failures and timing, and the current number of loaded running and stopped Cobbleputers. It identifies
+the newest sampling time and local-window coverage, including observed gaps, and indicates when no report is
+available or the displayed report is stale. It must not expose another Player's statistics.

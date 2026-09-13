@@ -99,17 +99,15 @@ error body. Other methods receive `405` with `Allow: POST`.
 The authenticated `GET /playerapi/v1/execution-stats` operation upgrades to a WebSocket that streams the
 authenticated Player's current execution instrumentation. The browser supplies its session cookie during the
 handshake. Because WebSockets are not protected by normal fetch cross-origin rules, the request must also contain a
-same-origin `Origin` header; a missing or different origin receives `403` with a JSON error body. An invalid or
-missing session receives the normal Player API `401` response before upgrade.
+same-origin `Origin` header.
 
 After a successful `101 Switching Protocols` handshake for an accepted stream, every server-to-client message is one
-binary WebSocket frame containing the binary protobuf wire representation of `cobbleware.internal.ExecutionStats`.
-Each message is a complete player-scoped snapshot rather than a delta: its `players` list contains exactly one entry,
-for the authenticated Player. The Main Worker sends its cached latest player-scoped snapshot immediately after
-connecting, when one exists, then sends an updated player-scoped snapshot whenever the Mod's next bundle contains an
-entry for that Player. The Mod normally supplies one bundle per second; the Main Worker has no independent sampling
-timer. The connection is read-only: clients do not send application messages, and the endpoint defines no WebSocket
-subprotocol.
+binary WebSocket frame containing the binary protobuf wire representation of
+`cobbleware.internal.ExecutionStatsTick`. Each message contains exactly one entry, for the authenticated Player,
+and preserves that server tick's raw per-Cobbleputer/type measurements. The Main Worker sends its cached latest
+player-scoped tick immediately after connecting, when one exists, then sends subsequent ticks for that Player. The
+Mod normally supplies one tick per server tick; the Main Worker has no independent sampling timer. The connection is
+read-only: clients do not send application messages, and the endpoint defines no WebSocket subprotocol.
 
 There may be only one open execution-stats WebSocket for a Player, regardless of browser session. A second upgrade
 attempt succeeds at the WebSocket handshake, then receives exactly one text WebSocket frame before the Main Worker
@@ -123,19 +121,18 @@ closes it with close code `1008` (`Policy Violation`). The text frame is UTF-8 J
 ```
 
 The existing stream remains open. Clients that receive this signal must not automatically reconnect; they should
-present the error to the Player. An ordinary non-upgrade `GET` receives `426` with `Upgrade: websocket`; other
-methods receive `405` with `Allow: GET`. Closing an accepted socket releases the Player's stream slot. If the session
-that opened a stream is logged out or otherwise invalidated, the Main Worker closes that stream and stops sending it
-data.
+present the error to the Player. Because Edge Runtime converts a rejected upgrade with an HTTP error body into a
+`502`, missing/invalid Player authentication and same-origin failures also complete the upgrade, send one UTF-8 JSON
+error frame with `code` and `error`, then close with `1008`. An ordinary non-upgrade `GET` receives `426` with
+`Upgrade: websocket`; other methods receive `405` with `Allow: GET`. Closing an accepted socket releases the Player's
+stream slot. If the session that opened a stream is logged out or otherwise invalidated, the Main Worker closes that
+stream and stops sending it data.
 
-`ExecutionStats` represents the Mod's in-memory sliding window and is not durable. The Mod POSTs one complete bundle
-whose `players` list contains every represented Player; the Main Worker filters that bundle before sending it over a
-Player stream. Its `sampled_at_unix_millis` value lets the UI identify stale data, while `window_ticks` and
-`retained_tick_count` describe the effective window. Each `PlayerStats` entry's event and effect fields are totals
-across that Player's Cobbleputers and event/effect types. `events_per_sync_*` summarizes the per-Cobbleputer execution
-records offered to execution-sync calls, including zero-event records. `running_cobbleputers` and
-`stopped_cobbleputers` are an instantaneous gauge for loaded Cobbleputers, rather than window totals. Server-wide
-execution-sync request duration and outcome are deliberately absent because they cannot be assigned to one Player.
+`ExecutionStatsTick` is not durable. Its `tick_sequence` lets the Browser identify duplicates, gaps, and a restarted
+Mod stream; `sampled_at_unix_millis` lets it identify stale data. The Browser retains and aggregates up to 600
+received ticks itself. Events and effects retain their physical Cobbleputer and type dimensions, while the lifecycle
+gauge is instantaneous for the latest tick. Server-wide execution-sync request duration and outcome are deliberately
+absent because they cannot be assigned to one Player.
 
 ### Programs
 
@@ -362,29 +359,24 @@ not validate its contents.
 
 ### Execution Stats
 
-The authenticated `POST /modapi/v1/execution-stats` endpoint accepts one
-`cobbleware.internal.ExecutionStats` message. The body uses the binary protobuf wire format with an
-`application/octet-stream` media type (parameters are permitted), and the request uses the same Bearer
-authentication as the other Mod API endpoints. The Mod sends one complete bundle, normally once per second, and does
-not wait for or retry the response.
+The authenticated `GET /modapi/v1/execution-stats` operation upgrades to the Mod's long-lived reporting WebSocket.
+The Mod supplies the normal Bearer authorization header in the handshake and sends one binary protobuf
+`cobbleware.internal.ExecutionStatsTick` frame after each finalized server tick. The Main Worker sends no application
+frames on this socket. It permits one active Mod stream; a newer authenticated stream closes and replaces its
+predecessor, allowing a restarted Mod to reset its process-local tick sequence.
 
-The Main Worker validates the application contract for required fields and internally consistent aggregates: the
-sample time and window length must be nonzero; retained ticks cannot exceed the window; every `players` entry must
-have a player id; player ids must be unique within the bundle; failed effects cannot exceed attempted effects; and each
-events-per-sync total and maximum must be consistent with its count. A valid bundle is the complete current report:
-the Main Worker replaces its in-memory per-player cache, discarding entries absent from the new bundle, and forwards a
-one-entry player-scoped snapshot to each connected Player represented in it. The report is not written to disk and
-does not affect program execution. Bundles lost while the Main Worker is unavailable, or when the Mod does not wait
-for their response, are intentionally not recovered.
+The Main Worker validates each frame: sample time and tick sequence must be nonzero and increase within the current
+stream; player ids and per-player raw metric keys must be unique; Cobbleputer IDs, positions, and instrumentation
+enums must be present and valid; failed effects cannot exceed attempts; and events-per-sync totals/maxima must be
+consistent with their count. It caches the latest valid player-scoped tick and forwards it only to that Player's
+Browser stream. Players absent from a tick retain their cached latest tick. Data is not written to disk and does not
+affect program execution.
 
-On acceptance, the endpoint returns `204` with no body. Errors generated by this endpoint use
-`application/octet-stream` and contain a `cobbleware.internal.ErrorResponse` protobuf message:
-
-* `400` for an unreadable protobuf payload or an invalid stats aggregate
-* `401` with `WWW-Authenticate: Bearer` when Mod authentication fails
-* `405` with `Allow: POST` for other methods
-* `415` for a request whose media type is not `application/octet-stream`
-* `500` when server authentication is not configured or an unexpected Main Worker failure occurs
+The Mod may discard ticks when disconnected or when a prior send remains pending; the Main Worker does not recover
+them. A malformed frame closes the socket with `1008`. Authentication/configuration failures on an attempted upgrade
+also complete the upgrade, send one UTF-8 JSON error frame containing `code` and `error`, then close with `1008`;
+this avoids Edge Runtime's erroneous `502` conversion for pre-upgrade error bodies. A non-upgrade `GET` receives
+`426` with `Upgrade: websocket`; other methods receive `405` with `Allow: GET`.
 
 ### Program Query
 

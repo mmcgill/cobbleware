@@ -24,7 +24,7 @@ import { handleExecutions } from './executions/handlers.ts';
 import { type ExecutionCoordinator, ExecutionManager } from './executions/manager.ts';
 import {
   ExecutionStatsHub,
-  handleExecutionStatsReport,
+  handleModExecutionStats,
   handlePlayerExecutionStats,
 } from './stats/handlers.ts';
 
@@ -120,8 +120,14 @@ async function routeRequest(
   if (pathname === '/playerapi/v1/execution-stats') {
     const context: RequestContext = {};
     const authError = await requirePlayerAuth(request, config, store, context, 'api');
-    return authError ??
-      handlePlayerExecutionStats(request, context.player!.playerUUID, executionStatsHub);
+    if (authError !== null) {
+      if (request.headers.get('upgrade')?.toLowerCase() !== 'websocket') return authError;
+      return handlePlayerExecutionStats(request, undefined, executionStatsHub, {
+        code: 'unauthorized',
+        error: 'Player authentication failed.',
+      });
+    }
+    return handlePlayerExecutionStats(request, context.player!.playerUUID, executionStatsHub);
   }
 
   if (pathname === '/playerapi/v1/programs') {
@@ -192,7 +198,7 @@ async function routeRequest(
       return await handleExecutions(request, config, executionCoordinator);
     }
     if (pathname === '/modapi/v1/execution-stats') {
-      return await handleExecutionStatsReport(request, config, executionStatsHub);
+      return handleModExecutionStats(request, config, executionStatsHub);
     }
     const programMatch = /^\/modapi\/v1\/players\/([^/]+)\/program$/.exec(pathname);
     if (programMatch !== null) {

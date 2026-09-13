@@ -4,7 +4,7 @@
 
 import type { GenEnum, GenFile, GenMessage } from "@bufbuild/protobuf/codegenv2";
 import { enumDesc, fileDesc, messageDesc } from "@bufbuild/protobuf/codegenv2";
-import type { Uuid } from "./common_pb.ts";
+import type { GlobalPos, Uuid } from "./common_pb.ts";
 import { file_common } from "./common_pb.ts";
 import type { Effect } from "./effects_pb.ts";
 import { file_effects } from "./effects_pb.ts";
@@ -16,7 +16,7 @@ import type { Message } from "@bufbuild/protobuf";
  * Describes the file internal.proto.
  */
 export const file_internal: GenFile = /*@__PURE__*/
-  fileDesc("Cg5pbnRlcm5hbC5wcm90bxITY29iYmxld2FyZS5pbnRlcm5hbCKQAgoORXhlY3V0aW9uU3RhdGUSLQoMZXhlY3V0aW9uX2lkGAEgASgLMhcuY29iYmxld2FyZS5jb21tb24uVXVpZBIVCg1pbml0aWFsX3N0YXRlGAIgASgMEigKBmV2ZW50cxgDIAMoCzIYLmNvYmJsZXdhcmUuZXZlbnRzLkV2ZW50EhUKDWV2ZW50X3NlcV9udW0YBCABKAQSFgoOZWZmZWN0X3NlcV9udW0YBSABKAQSKgoJcGxheWVyX2lkGAYgASgLMhcuY29iYmxld2FyZS5jb21tb24uVXVpZBIzCgVzdGF0ZRgHIAEoDjIkLmNvYmJsZXdhcmUuaW50ZXJuYWwuRXhlY3V0aW9uU3RhdHVzIuYBCg9FeGVjdXRpb25SZXN1bHQSLQoMZXhlY3V0aW9uX2lkGAEgASgLMhcuY29iYmxld2FyZS5jb21tb24uVXVpZBITCgtmaW5hbF9zdGF0ZRgCIAEoDBIrCgdlZmZlY3RzGAMgAygLMhouY29iYmxld2FyZS5lZmZlY3RzLkVmZmVjdBIVCg1ldmVudF9zZXFfbnVtGAQgASgEEhYKDmVmZmVjdF9zZXFfbnVtGAUgASgEEjMKBXN0YXRlGAYgASgOMiQuY29iYmxld2FyZS5pbnRlcm5hbC5FeGVjdXRpb25TdGF0dXMiTAoRRXhlY3V0aW9uc1JlcXVlc3QSNwoKZXhlY3V0aW9ucxgBIAMoCzIjLmNvYmJsZXdhcmUuaW50ZXJuYWwuRXhlY3V0aW9uU3RhdGUiSwoSRXhlY3V0aW9uc1Jlc3BvbnNlEjUKB3Jlc3VsdHMYASADKAsyJC5jb2JibGV3YXJlLmludGVybmFsLkV4ZWN1dGlvblJlc3VsdCKUBAoORXhlY3V0aW9uU3RhdHMSHgoWc2FtcGxlZF9hdF91bml4X21pbGxpcxgBIAEoBBIUCgx3aW5kb3dfdGlja3MYAiABKA0SGwoTcmV0YWluZWRfdGlja19jb3VudBgDIAEoDRJACgdwbGF5ZXJzGAQgAygLMi8uY29iYmxld2FyZS5pbnRlcm5hbC5FeGVjdXRpb25TdGF0cy5QbGF5ZXJTdGF0cxrsAgoLUGxheWVyU3RhdHMSKgoJcGxheWVyX2lkGAEgASgLMhcuY29iYmxld2FyZS5jb21tb24uVXVpZBIdChVldmVudHNfcGVyX3N5bmNfY291bnQYAiABKAQSHQoVZXZlbnRzX3Blcl9zeW5jX3RvdGFsGAMgASgEEhsKE2V2ZW50c19wZXJfc3luY19tYXgYBCABKAQSFwoPZXZlbnRzX2FjY2VwdGVkGAUgASgEEhYKDmV2ZW50c19kcm9wcGVkGAYgASgEEhkKEWVmZmVjdHNfYXR0ZW1wdGVkGAcgASgEEhYKDmVmZmVjdHNfZmFpbGVkGAggASgEEhsKE2VmZmVjdHNfdG90YWxfbmFub3MYCSABKAQSGQoRZWZmZWN0c19tYXhfbmFub3MYCiABKAQSHAoUcnVubmluZ19jb2JibGVwdXRlcnMYCyABKA0SHAoUc3RvcHBlZF9jb2JibGVwdXRlcnMYDCABKA0iHgoNRXJyb3JSZXNwb25zZRINCgVlcnJvchgBIAEoCSqNAQoPRXhlY3V0aW9uU3RhdHVzEiAKHEVYRUNVVElPTl9TVEFUVVNfVU5TUEVDSUZJRUQQABIcChhFWEVDVVRJT05fU1RBVFVTX1JVTk5JTkcQARIcChhFWEVDVVRJT05fU1RBVFVTX1NUT1BQRUQQAhIcChhFWEVDVVRJT05fU1RBVFVTX0NSQVNIRUQQA2IIZWRpdGlvbnNw6Qc", [file_common, file_effects, file_events]);
+  fileDesc("Cg5pbnRlcm5hbC5wcm90bxITY29iYmxld2FyZS5pbnRlcm5hbCKQAgoORXhlY3V0aW9uU3RhdGUSLQoMZXhlY3V0aW9uX2lkGAEgASgLMhcuY29iYmxld2FyZS5jb21tb24uVXVpZBIVCg1pbml0aWFsX3N0YXRlGAIgASgMEigKBmV2ZW50cxgDIAMoCzIYLmNvYmJsZXdhcmUuZXZlbnRzLkV2ZW50EhUKDWV2ZW50X3NlcV9udW0YBCABKAQSFgoOZWZmZWN0X3NlcV9udW0YBSABKAQSKgoJcGxheWVyX2lkGAYgASgLMhcuY29iYmxld2FyZS5jb21tb24uVXVpZBIzCgVzdGF0ZRgHIAEoDjIkLmNvYmJsZXdhcmUuaW50ZXJuYWwuRXhlY3V0aW9uU3RhdHVzIuYBCg9FeGVjdXRpb25SZXN1bHQSLQoMZXhlY3V0aW9uX2lkGAEgASgLMhcuY29iYmxld2FyZS5jb21tb24uVXVpZBITCgtmaW5hbF9zdGF0ZRgCIAEoDBIrCgdlZmZlY3RzGAMgAygLMhouY29iYmxld2FyZS5lZmZlY3RzLkVmZmVjdBIVCg1ldmVudF9zZXFfbnVtGAQgASgEEhYKDmVmZmVjdF9zZXFfbnVtGAUgASgEEjMKBXN0YXRlGAYgASgOMiQuY29iYmxld2FyZS5pbnRlcm5hbC5FeGVjdXRpb25TdGF0dXMiTAoRRXhlY3V0aW9uc1JlcXVlc3QSNwoKZXhlY3V0aW9ucxgBIAMoCzIjLmNvYmJsZXdhcmUuaW50ZXJuYWwuRXhlY3V0aW9uU3RhdGUiSwoSRXhlY3V0aW9uc1Jlc3BvbnNlEjUKB3Jlc3VsdHMYASADKAsyJC5jb2JibGV3YXJlLmludGVybmFsLkV4ZWN1dGlvblJlc3VsdCLvCgoSRXhlY3V0aW9uU3RhdHNUaWNrEh4KFnNhbXBsZWRfYXRfdW5peF9taWxsaXMYASABKAQSFQoNdGlja19zZXF1ZW5jZRgCIAEoBBJECgdwbGF5ZXJzGAMgAygLMjMuY29iYmxld2FyZS5pbnRlcm5hbC5FeGVjdXRpb25TdGF0c1RpY2suUGxheWVyU3RhdHMacQoOQ29iYmxlcHV0ZXJSZWYSLwoOY29iYmxlcHV0ZXJfaWQYASABKAsyFy5jb2JibGV3YXJlLmNvbW1vbi5VdWlkEi4KCHBvc2l0aW9uGAIgASgLMhwuY29iYmxld2FyZS5jb21tb24uR2xvYmFsUG9zGoADCgtQbGF5ZXJTdGF0cxIqCglwbGF5ZXJfaWQYASABKAsyFy5jb2JibGV3YXJlLmNvbW1vbi5VdWlkEkgKBmV2ZW50cxgCIAMoCzI4LmNvYmJsZXdhcmUuaW50ZXJuYWwuRXhlY3V0aW9uU3RhdHNUaWNrLkV2ZW50TWVhc3VyZW1lbnQSWQoPZXZlbnRzX3Blcl9zeW5jGAMgAygLMkAuY29iYmxld2FyZS5pbnRlcm5hbC5FeGVjdXRpb25TdGF0c1RpY2suRXZlbnRzUGVyU3luY01lYXN1cmVtZW50EkoKB2VmZmVjdHMYBCADKAsyOS5jb2JibGV3YXJlLmludGVybmFsLkV4ZWN1dGlvblN0YXRzVGljay5FZmZlY3RNZWFzdXJlbWVudBJUChJjb2JibGVwdXRlcl9zdGF0ZXMYBSADKAsyOC5jb2JibGV3YXJlLmludGVybmFsLkV4ZWN1dGlvblN0YXRzVGljay5Db2JibGVwdXRlclN0YXRlGr8BChBFdmVudE1lYXN1cmVtZW50EksKC2NvYmJsZXB1dGVyGAEgASgLMjYuY29iYmxld2FyZS5pbnRlcm5hbC5FeGVjdXRpb25TdGF0c1RpY2suQ29iYmxlcHV0ZXJSZWYSOwoEdHlwZRgCIAEoDjItLmNvYmJsZXdhcmUuaW50ZXJuYWwuSW5zdHJ1bWVudGF0aW9uRXZlbnRUeXBlEhAKCGFjY2VwdGVkGAMgASgEEg8KB2Ryb3BwZWQYBCABKAQakgEKGEV2ZW50c1BlclN5bmNNZWFzdXJlbWVudBJLCgtjb2JibGVwdXRlchgBIAEoCzI2LmNvYmJsZXdhcmUuaW50ZXJuYWwuRXhlY3V0aW9uU3RhdHNUaWNrLkNvYmJsZXB1dGVyUmVmEg0KBWNvdW50GAIgASgEEg0KBXRvdGFsGAMgASgEEgsKA21heBgEIAEoBBrpAQoRRWZmZWN0TWVhc3VyZW1lbnQSSwoLY29iYmxlcHV0ZXIYASABKAsyNi5jb2JibGV3YXJlLmludGVybmFsLkV4ZWN1dGlvblN0YXRzVGljay5Db2JibGVwdXRlclJlZhI8CgR0eXBlGAIgASgOMi4uY29iYmxld2FyZS5pbnRlcm5hbC5JbnN0cnVtZW50YXRpb25FZmZlY3RUeXBlEhEKCWF0dGVtcHRlZBgDIAEoBBIOCgZmYWlsZWQYBCABKAQSEwoLdG90YWxfbmFub3MYBSABKAQSEQoJbWF4X25hbm9zGAYgASgEGqIBChBDb2JibGVwdXRlclN0YXRlEksKC2NvYmJsZXB1dGVyGAEgASgLMjYuY29iYmxld2FyZS5pbnRlcm5hbC5FeGVjdXRpb25TdGF0c1RpY2suQ29iYmxlcHV0ZXJSZWYSQQoFc3RhdGUYAiABKA4yMi5jb2JibGV3YXJlLmludGVybmFsLkluc3RydW1lbnRhdGlvbkxpZmVjeWNsZVN0YXRlIh4KDUVycm9yUmVzcG9uc2USDQoFZXJyb3IYASABKAkqjQEKD0V4ZWN1dGlvblN0YXR1cxIgChxFWEVDVVRJT05fU1RBVFVTX1VOU1BFQ0lGSUVEEAASHAoYRVhFQ1VUSU9OX1NUQVRVU19SVU5OSU5HEAESHAoYRVhFQ1VUSU9OX1NUQVRVU19TVE9QUEVEEAISHAoYRVhFQ1VUSU9OX1NUQVRVU19DUkFTSEVEEAMq6gIKGEluc3RydW1lbnRhdGlvbkV2ZW50VHlwZRIqCiZJTlNUUlVNRU5UQVRJT05fRVZFTlRfVFlQRV9VTlNQRUNJRklFRBAAEiYKIklOU1RSVU1FTlRBVElPTl9FVkVOVF9UWVBFX1NUQVJURUQQARImCiJJTlNUUlVNRU5UQVRJT05fRVZFTlRfVFlQRV9SRVNVTUVEEAISKwonSU5TVFJVTUVOVEFUSU9OX0VWRU5UX1RZUEVfQ0hBVF9NRVNTQUdFEAMSMQotSU5TVFJVTUVOVEFUSU9OX0VWRU5UX1RZUEVfQkxPQ0tfU1RBVEVfQ0hBTkdFEAQSNwozSU5TVFJVTUVOVEFUSU9OX0VWRU5UX1RZUEVfV0lSRUxFU1NfT0JTRVJWRVJfUEFJUkVEEAUSOQo1SU5TVFJVTUVOVEFUSU9OX0VWRU5UX1RZUEVfV0lSRUxFU1NfT0JTRVJWRVJfVU5QQUlSRUQQBirSAQoZSW5zdHJ1bWVudGF0aW9uRWZmZWN0VHlwZRIrCidJTlNUUlVNRU5UQVRJT05fRUZGRUNUX1RZUEVfVU5TUEVDSUZJRUQQABIpCiVJTlNUUlVNRU5UQVRJT05fRUZGRUNUX1RZUEVfU0VORF9DSEFUEAESKQolSU5TVFJVTUVOVEFUSU9OX0VGRkVDVF9UWVBFX0VNSVRfQkVFUBACEjIKLklOU1RSVU1FTlRBVElPTl9FRkZFQ1RfVFlQRV9TRVRfUkVEU1RPTkVfUE9XRVIQAyqqAQodSW5zdHJ1bWVudGF0aW9uTGlmZWN5Y2xlU3RhdGUSLworSU5TVFJVTUVOVEFUSU9OX0xJRkVDWUNMRV9TVEFURV9VTlNQRUNJRklFRBAAEisKJ0lOU1RSVU1FTlRBVElPTl9MSUZFQ1lDTEVfU1RBVEVfUlVOTklORxABEisKJ0lOU1RSVU1FTlRBVElPTl9MSUZFQ1lDTEVfU1RBVEVfU1RPUFBFRBACYghlZGl0aW9uc3DpBw", [file_common, file_effects, file_events]);
 
 /**
  * @generated from message cobbleware.internal.ExecutionState
@@ -180,14 +180,14 @@ export const ExecutionsResponseSchema: GenMessage<ExecutionsResponse> = /*@__PUR
   messageDesc(file_internal, 3);
 
 /**
- * A complete, sliding-window execution-instrumentation snapshot for all represented players.
+ * One raw execution-instrumentation bucket finalized by the Mod at the end of a server tick.
  * It is sent by the Mod to the Main Worker and is not persisted.
  *
- * @generated from message cobbleware.internal.ExecutionStats
+ * @generated from message cobbleware.internal.ExecutionStatsTick
  */
-export type ExecutionStats = Message<"cobbleware.internal.ExecutionStats"> & {
+export type ExecutionStatsTick = Message<"cobbleware.internal.ExecutionStatsTick"> & {
   /**
-   * Wall-clock time at which the Mod captured this snapshot, as milliseconds since the Unix epoch.
+   * Wall-clock time at which the Mod finalized this tick, as milliseconds since the Unix epoch.
    * Required by the application contract.
    *
    * @generated from field: uint64 sampled_at_unix_millis = 1;
@@ -195,131 +195,219 @@ export type ExecutionStats = Message<"cobbleware.internal.ExecutionStats"> & {
   sampledAtUnixMillis: bigint;
 
   /**
-   * The configured number of server ticks in the instrumentation sliding window. Required by the application contract.
+   * Monotonically increasing, process-local Mod tick sequence number. Required by the application contract.
    *
-   * @generated from field: uint32 window_ticks = 2;
+   * @generated from field: uint64 tick_sequence = 2;
    */
-  windowTicks: number;
+  tickSequence: bigint;
 
   /**
-   * The number of ticks currently represented in this snapshot. Required by the application contract.
+   * Contains at most one entry for each player. Entries are raw per-tick measurements, not window aggregates.
    *
-   * @generated from field: uint32 retained_tick_count = 3;
+   * @generated from field: repeated cobbleware.internal.ExecutionStatsTick.PlayerStats players = 3;
    */
-  retainedTickCount: number;
-
-  /**
-   * Required by the application contract. A snapshot contains at most one entry for each player.
-   *
-   * @generated from field: repeated cobbleware.internal.ExecutionStats.PlayerStats players = 4;
-   */
-  players: ExecutionStats_PlayerStats[];
+  players: ExecutionStatsTick_PlayerStats[];
 };
 
 /**
- * Describes the message cobbleware.internal.ExecutionStats.
- * Use `create(ExecutionStatsSchema)` to create a new message.
+ * Describes the message cobbleware.internal.ExecutionStatsTick.
+ * Use `create(ExecutionStatsTickSchema)` to create a new message.
  */
-export const ExecutionStatsSchema: GenMessage<ExecutionStats> = /*@__PURE__*/
+export const ExecutionStatsTickSchema: GenMessage<ExecutionStatsTick> = /*@__PURE__*/
   messageDesc(file_internal, 4);
 
 /**
- * A player's aggregate execution instrumentation within the containing snapshot's window.
+ * Identifies the physical Cobbleputer to which a raw measurement belongs.
  *
- * @generated from message cobbleware.internal.ExecutionStats.PlayerStats
+ * @generated from message cobbleware.internal.ExecutionStatsTick.CobbleputerRef
  */
-export type ExecutionStats_PlayerStats = Message<"cobbleware.internal.ExecutionStats.PlayerStats"> & {
+export type ExecutionStatsTick_CobbleputerRef = Message<"cobbleware.internal.ExecutionStatsTick.CobbleputerRef"> & {
   /**
-   * Identifies the player whose execution metrics are represented. Required by the application contract.
+   * @generated from field: cobbleware.common.Uuid cobbleputer_id = 1;
+   */
+  cobbleputerId?: Uuid | undefined;
+
+  /**
+   * @generated from field: cobbleware.common.GlobalPos position = 2;
+   */
+  position?: GlobalPos | undefined;
+};
+
+/**
+ * Describes the message cobbleware.internal.ExecutionStatsTick.CobbleputerRef.
+ * Use `create(ExecutionStatsTick_CobbleputerRefSchema)` to create a new message.
+ */
+export const ExecutionStatsTick_CobbleputerRefSchema: GenMessage<ExecutionStatsTick_CobbleputerRef> = /*@__PURE__*/
+  messageDesc(file_internal, 4, 0);
+
+/**
+ * A player's raw instrumentation for this tick.
+ *
+ * @generated from message cobbleware.internal.ExecutionStatsTick.PlayerStats
+ */
+export type ExecutionStatsTick_PlayerStats = Message<"cobbleware.internal.ExecutionStatsTick.PlayerStats"> & {
+  /**
+   * Identifies the player whose metrics are represented. Required by the application contract.
    *
    * @generated from field: cobbleware.common.Uuid player_id = 1;
    */
   playerId?: Uuid | undefined;
 
   /**
-   * Number of per-Cobbleputer execution-sync records included in the window. Zero-event records are included.
-   *
-   * @generated from field: uint64 events_per_sync_count = 2;
+   * @generated from field: repeated cobbleware.internal.ExecutionStatsTick.EventMeasurement events = 2;
    */
-  eventsPerSyncCount: bigint;
+  events: ExecutionStatsTick_EventMeasurement[];
 
   /**
-   * Sum of events included in those execution-sync records.
-   *
-   * @generated from field: uint64 events_per_sync_total = 3;
+   * @generated from field: repeated cobbleware.internal.ExecutionStatsTick.EventsPerSyncMeasurement events_per_sync = 3;
    */
-  eventsPerSyncTotal: bigint;
+  eventsPerSync: ExecutionStatsTick_EventsPerSyncMeasurement[];
 
   /**
-   * Largest number of events included in one execution-sync record.
-   *
-   * @generated from field: uint64 events_per_sync_max = 4;
+   * @generated from field: repeated cobbleware.internal.ExecutionStatsTick.EffectMeasurement effects = 4;
    */
-  eventsPerSyncMax: bigint;
+  effects: ExecutionStatsTick_EffectMeasurement[];
 
   /**
-   * Number of event admissions accepted by the Mod in the window, across all event types and Cobbleputers.
-   *
-   * @generated from field: uint64 events_accepted = 5;
+   * @generated from field: repeated cobbleware.internal.ExecutionStatsTick.CobbleputerState cobbleputer_states = 5;
    */
-  eventsAccepted: bigint;
-
-  /**
-   * Number of event admissions dropped by the Mod in the window, across all event types and Cobbleputers.
-   *
-   * @generated from field: uint64 events_dropped = 6;
-   */
-  eventsDropped: bigint;
-
-  /**
-   * Number of effect-application attempts in the window, across all effect types and Cobbleputers.
-   *
-   * @generated from field: uint64 effects_attempted = 7;
-   */
-  effectsAttempted: bigint;
-
-  /**
-   * Number of effect-application attempts that threw in the window.
-   *
-   * @generated from field: uint64 effects_failed = 8;
-   */
-  effectsFailed: bigint;
-
-  /**
-   * Sum of the effect-application durations in nanoseconds.
-   *
-   * @generated from field: uint64 effects_total_nanos = 9;
-   */
-  effectsTotalNanos: bigint;
-
-  /**
-   * Longest effect-application duration in nanoseconds.
-   *
-   * @generated from field: uint64 effects_max_nanos = 10;
-   */
-  effectsMaxNanos: bigint;
-
-  /**
-   * Current number of loaded running Cobbleputers owned by the player.
-   *
-   * @generated from field: uint32 running_cobbleputers = 11;
-   */
-  runningCobbleputers: number;
-
-  /**
-   * Current number of loaded stopped Cobbleputers owned by the player.
-   *
-   * @generated from field: uint32 stopped_cobbleputers = 12;
-   */
-  stoppedCobbleputers: number;
+  cobbleputerStates: ExecutionStatsTick_CobbleputerState[];
 };
 
 /**
- * Describes the message cobbleware.internal.ExecutionStats.PlayerStats.
- * Use `create(ExecutionStats_PlayerStatsSchema)` to create a new message.
+ * Describes the message cobbleware.internal.ExecutionStatsTick.PlayerStats.
+ * Use `create(ExecutionStatsTick_PlayerStatsSchema)` to create a new message.
  */
-export const ExecutionStats_PlayerStatsSchema: GenMessage<ExecutionStats_PlayerStats> = /*@__PURE__*/
-  messageDesc(file_internal, 4, 0);
+export const ExecutionStatsTick_PlayerStatsSchema: GenMessage<ExecutionStatsTick_PlayerStats> = /*@__PURE__*/
+  messageDesc(file_internal, 4, 1);
+
+/**
+ * @generated from message cobbleware.internal.ExecutionStatsTick.EventMeasurement
+ */
+export type ExecutionStatsTick_EventMeasurement = Message<"cobbleware.internal.ExecutionStatsTick.EventMeasurement"> & {
+  /**
+   * @generated from field: cobbleware.internal.ExecutionStatsTick.CobbleputerRef cobbleputer = 1;
+   */
+  cobbleputer?: ExecutionStatsTick_CobbleputerRef | undefined;
+
+  /**
+   * @generated from field: cobbleware.internal.InstrumentationEventType type = 2;
+   */
+  type: InstrumentationEventType;
+
+  /**
+   * @generated from field: uint64 accepted = 3;
+   */
+  accepted: bigint;
+
+  /**
+   * @generated from field: uint64 dropped = 4;
+   */
+  dropped: bigint;
+};
+
+/**
+ * Describes the message cobbleware.internal.ExecutionStatsTick.EventMeasurement.
+ * Use `create(ExecutionStatsTick_EventMeasurementSchema)` to create a new message.
+ */
+export const ExecutionStatsTick_EventMeasurementSchema: GenMessage<ExecutionStatsTick_EventMeasurement> = /*@__PURE__*/
+  messageDesc(file_internal, 4, 2);
+
+/**
+ * @generated from message cobbleware.internal.ExecutionStatsTick.EventsPerSyncMeasurement
+ */
+export type ExecutionStatsTick_EventsPerSyncMeasurement = Message<"cobbleware.internal.ExecutionStatsTick.EventsPerSyncMeasurement"> & {
+  /**
+   * @generated from field: cobbleware.internal.ExecutionStatsTick.CobbleputerRef cobbleputer = 1;
+   */
+  cobbleputer?: ExecutionStatsTick_CobbleputerRef | undefined;
+
+  /**
+   * @generated from field: uint64 count = 2;
+   */
+  count: bigint;
+
+  /**
+   * @generated from field: uint64 total = 3;
+   */
+  total: bigint;
+
+  /**
+   * @generated from field: uint64 max = 4;
+   */
+  max: bigint;
+};
+
+/**
+ * Describes the message cobbleware.internal.ExecutionStatsTick.EventsPerSyncMeasurement.
+ * Use `create(ExecutionStatsTick_EventsPerSyncMeasurementSchema)` to create a new message.
+ */
+export const ExecutionStatsTick_EventsPerSyncMeasurementSchema: GenMessage<ExecutionStatsTick_EventsPerSyncMeasurement> = /*@__PURE__*/
+  messageDesc(file_internal, 4, 3);
+
+/**
+ * @generated from message cobbleware.internal.ExecutionStatsTick.EffectMeasurement
+ */
+export type ExecutionStatsTick_EffectMeasurement = Message<"cobbleware.internal.ExecutionStatsTick.EffectMeasurement"> & {
+  /**
+   * @generated from field: cobbleware.internal.ExecutionStatsTick.CobbleputerRef cobbleputer = 1;
+   */
+  cobbleputer?: ExecutionStatsTick_CobbleputerRef | undefined;
+
+  /**
+   * @generated from field: cobbleware.internal.InstrumentationEffectType type = 2;
+   */
+  type: InstrumentationEffectType;
+
+  /**
+   * @generated from field: uint64 attempted = 3;
+   */
+  attempted: bigint;
+
+  /**
+   * @generated from field: uint64 failed = 4;
+   */
+  failed: bigint;
+
+  /**
+   * @generated from field: uint64 total_nanos = 5;
+   */
+  totalNanos: bigint;
+
+  /**
+   * @generated from field: uint64 max_nanos = 6;
+   */
+  maxNanos: bigint;
+};
+
+/**
+ * Describes the message cobbleware.internal.ExecutionStatsTick.EffectMeasurement.
+ * Use `create(ExecutionStatsTick_EffectMeasurementSchema)` to create a new message.
+ */
+export const ExecutionStatsTick_EffectMeasurementSchema: GenMessage<ExecutionStatsTick_EffectMeasurement> = /*@__PURE__*/
+  messageDesc(file_internal, 4, 4);
+
+/**
+ * @generated from message cobbleware.internal.ExecutionStatsTick.CobbleputerState
+ */
+export type ExecutionStatsTick_CobbleputerState = Message<"cobbleware.internal.ExecutionStatsTick.CobbleputerState"> & {
+  /**
+   * @generated from field: cobbleware.internal.ExecutionStatsTick.CobbleputerRef cobbleputer = 1;
+   */
+  cobbleputer?: ExecutionStatsTick_CobbleputerRef | undefined;
+
+  /**
+   * @generated from field: cobbleware.internal.InstrumentationLifecycleState state = 2;
+   */
+  state: InstrumentationLifecycleState;
+};
+
+/**
+ * Describes the message cobbleware.internal.ExecutionStatsTick.CobbleputerState.
+ * Use `create(ExecutionStatsTick_CobbleputerStateSchema)` to create a new message.
+ */
+export const ExecutionStatsTick_CobbleputerStateSchema: GenMessage<ExecutionStatsTick_CobbleputerState> = /*@__PURE__*/
+  messageDesc(file_internal, 4, 5);
 
 /**
  * An error returned by an internal Mod API endpoint.
@@ -372,4 +460,113 @@ export enum ExecutionStatus {
  */
 export const ExecutionStatusSchema: GenEnum<ExecutionStatus> = /*@__PURE__*/
   enumDesc(file_internal, 0);
+
+/**
+ * The types of events recorded by execution instrumentation.
+ *
+ * @generated from enum cobbleware.internal.InstrumentationEventType
+ */
+export enum InstrumentationEventType {
+  /**
+   * @generated from enum value: INSTRUMENTATION_EVENT_TYPE_UNSPECIFIED = 0;
+   */
+  UNSPECIFIED = 0,
+
+  /**
+   * @generated from enum value: INSTRUMENTATION_EVENT_TYPE_STARTED = 1;
+   */
+  STARTED = 1,
+
+  /**
+   * @generated from enum value: INSTRUMENTATION_EVENT_TYPE_RESUMED = 2;
+   */
+  RESUMED = 2,
+
+  /**
+   * @generated from enum value: INSTRUMENTATION_EVENT_TYPE_CHAT_MESSAGE = 3;
+   */
+  CHAT_MESSAGE = 3,
+
+  /**
+   * @generated from enum value: INSTRUMENTATION_EVENT_TYPE_BLOCK_STATE_CHANGE = 4;
+   */
+  BLOCK_STATE_CHANGE = 4,
+
+  /**
+   * @generated from enum value: INSTRUMENTATION_EVENT_TYPE_WIRELESS_OBSERVER_PAIRED = 5;
+   */
+  WIRELESS_OBSERVER_PAIRED = 5,
+
+  /**
+   * @generated from enum value: INSTRUMENTATION_EVENT_TYPE_WIRELESS_OBSERVER_UNPAIRED = 6;
+   */
+  WIRELESS_OBSERVER_UNPAIRED = 6,
+}
+
+/**
+ * Describes the enum cobbleware.internal.InstrumentationEventType.
+ */
+export const InstrumentationEventTypeSchema: GenEnum<InstrumentationEventType> = /*@__PURE__*/
+  enumDesc(file_internal, 1);
+
+/**
+ * The types of effects recorded by execution instrumentation.
+ *
+ * @generated from enum cobbleware.internal.InstrumentationEffectType
+ */
+export enum InstrumentationEffectType {
+  /**
+   * @generated from enum value: INSTRUMENTATION_EFFECT_TYPE_UNSPECIFIED = 0;
+   */
+  UNSPECIFIED = 0,
+
+  /**
+   * @generated from enum value: INSTRUMENTATION_EFFECT_TYPE_SEND_CHAT = 1;
+   */
+  SEND_CHAT = 1,
+
+  /**
+   * @generated from enum value: INSTRUMENTATION_EFFECT_TYPE_EMIT_BEEP = 2;
+   */
+  EMIT_BEEP = 2,
+
+  /**
+   * @generated from enum value: INSTRUMENTATION_EFFECT_TYPE_SET_REDSTONE_POWER = 3;
+   */
+  SET_REDSTONE_POWER = 3,
+}
+
+/**
+ * Describes the enum cobbleware.internal.InstrumentationEffectType.
+ */
+export const InstrumentationEffectTypeSchema: GenEnum<InstrumentationEffectType> = /*@__PURE__*/
+  enumDesc(file_internal, 2);
+
+/**
+ * The lifecycle states represented in an instrumentation state gauge.
+ *
+ * @generated from enum cobbleware.internal.InstrumentationLifecycleState
+ */
+export enum InstrumentationLifecycleState {
+  /**
+   * @generated from enum value: INSTRUMENTATION_LIFECYCLE_STATE_UNSPECIFIED = 0;
+   */
+  UNSPECIFIED = 0,
+
+  /**
+   * @generated from enum value: INSTRUMENTATION_LIFECYCLE_STATE_RUNNING = 1;
+   */
+  RUNNING = 1,
+
+  /**
+   * @generated from enum value: INSTRUMENTATION_LIFECYCLE_STATE_STOPPED = 2;
+   */
+  STOPPED = 2,
+}
+
+/**
+ * Describes the enum cobbleware.internal.InstrumentationLifecycleState.
+ */
+export const InstrumentationLifecycleStateSchema: GenEnum<InstrumentationLifecycleState> = /*@__PURE__*/
+  enumDesc(file_internal, 3);
 

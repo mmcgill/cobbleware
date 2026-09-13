@@ -20,7 +20,7 @@ Here's a rough sketch of the current plan to getting something working end-to-en
   * [x] Set Redstone level
 * [x] In-memory Mod instrumentation foundation
   * [x] Configurable sliding-window execution, event, effect, and state metrics
-* [ ] Per-Player stats in the Browser UI
+* [x] Per-Player stats in the Browser UI
   * [ ] Memory utilization
   * [ ] Aggregate event/effect rates
 * [ ] Drop events for Players not online (configurable)

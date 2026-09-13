@@ -3,38 +3,62 @@ import * as Internal from '@cobbleware/core/internal';
 import type { AppConfig } from '../config.ts';
 import { requireModAuth, requireSameOrigin } from '../auth/middleware.ts';
 
-export const EXECUTION_STATS_CONTENT_TYPE = 'application/octet-stream';
-
-/** Retains the latest non-durable Mod report and the one permitted player stream. */
+/** Retains the latest non-durable raw tick per player and the one permitted player stream. */
 export class ExecutionStatsHub {
-  private readonly reports = new Map<string, Internal.ExecutionStats>();
+  private readonly reports = new Map<string, Internal.ExecutionStatsTick>();
   private readonly streams = new Map<string, WebSocket>();
+  private modStream: WebSocket | undefined;
+  private lastModTick = 0n;
 
-  accept(report: Internal.ExecutionStats): void {
-    validate(report);
-    const nextReports = new Map<string, Internal.ExecutionStats>();
-    for (const player of report.players) {
-      const playerId = uuidString(player.playerId!);
-      nextReports.set(playerId, playerSnapshot(report, player));
+  openMod(socket: WebSocket): void {
+    const previous = this.modStream;
+    this.modStream = socket;
+    this.lastModTick = 0n;
+    if (previous !== undefined && previous !== socket) {
+      try {
+        previous.close(1012, 'replaced by a newer Mod statistics stream');
+      } catch {
+        // The old connection is already closed.
+      }
     }
-    this.reports.clear();
-    nextReports.forEach((snapshot, playerId) => this.reports.set(playerId, snapshot));
-
-    nextReports.forEach((snapshot, playerId) => this.send(playerId, snapshot));
+    socket.binaryType = 'arraybuffer';
+    socket.onmessage = (event) => {
+      if (this.modStream !== socket || !(event.data instanceof ArrayBuffer)) {
+        rejectSocket(
+          socket,
+          'invalid-execution-stats-frame',
+          'Execution statistics must use binary frames.',
+        );
+        return;
+      }
+      try {
+        const report = fromBinary(Internal.ExecutionStatsTickSchema, new Uint8Array(event.data));
+        validate(report);
+        if (report.tickSequence <= this.lastModTick) {
+          throw new Error('tick sequence must increase within one Mod stream');
+        }
+        this.lastModTick = report.tickSequence;
+        this.accept(report);
+      } catch (error) {
+        rejectSocket(
+          socket,
+          'invalid-execution-stats-frame',
+          describeError(error, 'Invalid execution statistics.'),
+        );
+      }
+    };
+    socket.onclose = () => this.releaseMod(socket);
+    socket.onerror = () => this.releaseMod(socket);
   }
 
   open(playerId: string, socket: WebSocket): void {
     if (this.streams.has(playerId)) {
-      socket.onopen = () => {
-        try {
-          socket.send(JSON.stringify({
-            code: 'execution-stats-stream-already-open',
-            error: 'Execution statistics are already open in another browser window.',
-          }));
-        } finally {
-          socket.close(1008, 'execution-stats stream already open');
-        }
-      };
+      socket.onopen = () =>
+        rejectSocket(
+          socket,
+          'execution-stats-stream-already-open',
+          'Execution statistics are already open in another browser window.',
+        );
       return;
     }
     this.streams.set(playerId, socket);
@@ -42,7 +66,12 @@ export class ExecutionStatsHub {
       const cached = this.reports.get(playerId);
       if (cached !== undefined) this.send(playerId, cached);
     };
-    socket.onmessage = () => socket.close(1008, 'execution-stats streams are read-only');
+    socket.onmessage = () =>
+      rejectSocket(
+        socket,
+        'execution-stats-stream-read-only',
+        'Execution statistics streams are read-only.',
+      );
     socket.onclose = () => this.release(playerId, socket);
     socket.onerror = () => this.release(playerId, socket);
   }
@@ -58,11 +87,20 @@ export class ExecutionStatsHub {
     }
   }
 
-  private send(playerId: string, snapshot: Internal.ExecutionStats): void {
+  private accept(report: Internal.ExecutionStatsTick): void {
+    for (const player of report.players) {
+      const playerId = uuidString(player.playerId!);
+      const snapshot = playerSnapshot(report, player);
+      this.reports.set(playerId, snapshot);
+      this.send(playerId, snapshot);
+    }
+  }
+
+  private send(playerId: string, snapshot: Internal.ExecutionStatsTick): void {
     const socket = this.streams.get(playerId);
     if (socket === undefined || socket.readyState !== WebSocket.OPEN) return;
     try {
-      socket.send(toBinary(Internal.ExecutionStatsSchema, snapshot));
+      socket.send(toBinary(Internal.ExecutionStatsTickSchema, snapshot));
     } catch {
       this.release(playerId, socket);
     }
@@ -71,66 +109,95 @@ export class ExecutionStatsHub {
   private release(playerId: string, socket: WebSocket): void {
     if (this.streams.get(playerId) === socket) this.streams.delete(playerId);
   }
+
+  private releaseMod(socket: WebSocket): void {
+    if (this.modStream === socket) {
+      this.modStream = undefined;
+      this.lastModTick = 0n;
+    }
+  }
 }
 
-export async function handleExecutionStatsReport(
+export function handleModExecutionStats(
   request: Request,
   config: AppConfig,
-  hub: ExecutionStatsHub,
-): Promise<Response> {
-  if (request.method !== 'POST') return statsError('method must be POST', 405, { allow: 'POST' });
-  const authError = requireModAuth(request, config);
-  if (authError !== null) return statsErrorFromJson(authError);
-  if (mediaType(request.headers.get('content-type')) !== EXECUTION_STATS_CONTENT_TYPE) {
-    return statsError('content type must be application/octet-stream', 415);
-  }
-
-  let report: Internal.ExecutionStats;
-  try {
-    report = fromBinary(Internal.ExecutionStatsSchema, new Uint8Array(await request.arrayBuffer()));
-    hub.accept(report);
-  } catch (error) {
-    return statsError(describeError(error, 'invalid execution stats report'), 400);
-  }
-  return new Response(null, { status: 204 });
-}
-
-export function handlePlayerExecutionStats(
-  request: Request,
-  playerId: string,
   hub: ExecutionStatsHub,
 ): Response {
   if (request.method !== 'GET') {
     return new Response(null, { status: 405, headers: { allow: 'GET' } });
   }
-  if (request.headers.get('upgrade')?.toLowerCase() !== 'websocket') {
+  if (!isWebSocketUpgrade(request)) {
     return new Response(null, { status: 426, headers: { upgrade: 'websocket' } });
   }
-  const originError = requireSameOrigin(request);
-  if (originError !== null) return originError;
+  const authError = requireModAuth(request, config);
+  if (authError !== null) {
+    return rejectedUpgrade(
+      request,
+      authError.status === 401 ? 'unauthorized' : 'server-authentication-unavailable',
+      authError.status === 401
+        ? 'Mod authentication failed.'
+        : 'Server authentication is not configured.',
+    );
+  }
   const { response, socket } = Deno.upgradeWebSocket(request);
-  hub.open(playerId, socket);
+  hub.openMod(socket);
   return response;
 }
 
+export function handlePlayerExecutionStats(
+  request: Request,
+  playerId: string | undefined,
+  hub: ExecutionStatsHub,
+  rejection?: { code: string; error: string },
+): Response {
+  if (request.method !== 'GET') {
+    return new Response(null, { status: 405, headers: { allow: 'GET' } });
+  }
+  if (!isWebSocketUpgrade(request)) {
+    return new Response(null, { status: 426, headers: { upgrade: 'websocket' } });
+  }
+  if (rejection !== undefined) return rejectedUpgrade(request, rejection.code, rejection.error);
+  const originError = requireSameOrigin(request);
+  if (originError !== null) {
+    return rejectedUpgrade(
+      request,
+      'cross-origin-request-rejected',
+      'A same-origin request is required.',
+    );
+  }
+  const { response, socket } = Deno.upgradeWebSocket(request);
+  hub.open(playerId!, socket);
+  return response;
+}
+
+export function rejectedUpgrade(request: Request, code: string, error: string): Response {
+  const { response, socket } = Deno.upgradeWebSocket(request);
+  socket.onopen = () => rejectSocket(socket, code, error);
+  return response;
+}
+
+function rejectSocket(socket: WebSocket, code: string, error: string): void {
+  try {
+    socket.send(JSON.stringify({ code, error }));
+  } finally {
+    socket.close(1008, code);
+  }
+}
+
 function playerSnapshot(
-  report: Internal.ExecutionStats,
-  player: Internal.ExecutionStats_PlayerStats,
-): Internal.ExecutionStats {
-  return create(Internal.ExecutionStatsSchema, {
+  report: Internal.ExecutionStatsTick,
+  player: Internal.ExecutionStatsTick_PlayerStats,
+): Internal.ExecutionStatsTick {
+  return create(Internal.ExecutionStatsTickSchema, {
     sampledAtUnixMillis: report.sampledAtUnixMillis,
-    windowTicks: report.windowTicks,
-    retainedTickCount: report.retainedTickCount,
+    tickSequence: report.tickSequence,
     players: [player],
   });
 }
 
-function validate(report: Internal.ExecutionStats): void {
-  if (report.sampledAtUnixMillis === 0n || report.windowTicks === 0) {
-    throw new Error('sample time and window length must be nonzero');
-  }
-  if (report.retainedTickCount > report.windowTicks) {
-    throw new Error('retained tick count cannot exceed window length');
+function validate(report: Internal.ExecutionStatsTick): void {
+  if (report.sampledAtUnixMillis === 0n || report.tickSequence === 0n) {
+    throw new Error('sample time and tick sequence must be nonzero');
   }
   const players = new Set<string>();
   for (const player of report.players) {
@@ -138,21 +205,80 @@ function validate(report: Internal.ExecutionStats): void {
     const playerId = uuidString(player.playerId);
     if (players.has(playerId)) throw new Error('player ids must be unique');
     players.add(playerId);
-    if (player.effectsFailed > player.effectsAttempted) {
-      throw new Error('failed effects cannot exceed attempted effects');
-    }
-    validateEventsPerSync(player);
+    validatePlayer(player);
   }
 }
 
-function validateEventsPerSync(player: Internal.ExecutionStats_PlayerStats): void {
-  const { eventsPerSyncCount: count, eventsPerSyncTotal: total, eventsPerSyncMax: max } = player;
-  if (count === 0n && (total !== 0n || max !== 0n)) {
-    throw new Error('empty events-per-sync summaries must have zero total and maximum');
+function validatePlayer(player: Internal.ExecutionStatsTick_PlayerStats): void {
+  const events = new Set<string>();
+  for (const metric of player.events) {
+    const key = `${cobbleputerKey(metric.cobbleputer)}:${metric.type}`;
+    if (!validEventType(metric.type) || events.has(key)) {
+      throw new Error('event measurements must have unique valid keys');
+    }
+    events.add(key);
   }
-  if (max > total || (count !== 0n && total > count * max)) {
-    throw new Error('events-per-sync summary is inconsistent');
+  const syncs = new Set<string>();
+  for (const metric of player.eventsPerSync) {
+    const key = cobbleputerKey(metric.cobbleputer);
+    if (syncs.has(key)) {
+      throw new Error('events-per-sync measurements must have unique Cobbleputers');
+    }
+    syncs.add(key);
+    if (
+      (metric.count === 0n && (metric.total !== 0n || metric.max !== 0n)) ||
+      metric.max > metric.total || (metric.count !== 0n && metric.total > metric.count * metric.max)
+    ) {
+      throw new Error('events-per-sync summary is inconsistent');
+    }
   }
+  const effects = new Set<string>();
+  for (const metric of player.effects) {
+    const key = `${cobbleputerKey(metric.cobbleputer)}:${metric.type}`;
+    if (!validEffectType(metric.type) || effects.has(key)) {
+      throw new Error('effect measurements must have unique valid keys');
+    }
+    effects.add(key);
+    if (metric.failed > metric.attempted) {
+      throw new Error('failed effects cannot exceed attempted effects');
+    }
+  }
+  const states = new Set<string>();
+  for (const metric of player.cobbleputerStates) {
+    const key = cobbleputerKey(metric.cobbleputer);
+    if (!validLifecycleState(metric.state) || states.has(key)) {
+      throw new Error('Cobbleputer states must have unique valid Cobbleputers');
+    }
+    states.add(key);
+  }
+}
+
+function cobbleputerKey(value: Internal.ExecutionStatsTick_CobbleputerRef | undefined): string {
+  if (
+    value?.cobbleputerId === undefined || value.position?.dimension === undefined ||
+    value.position.position === undefined ||
+    value.position.dimension.ns === '' || value.position.dimension.path === ''
+  ) {
+    throw new Error('measurement must contain a Cobbleputer id and position');
+  }
+  return `${
+    uuidString(value.cobbleputerId)
+  }:${value.position.dimension.ns}:${value.position.dimension.path}:${value.position.position.x}:${value.position.position.y}:${value.position.position.z}`;
+}
+
+function validEventType(value: Internal.InstrumentationEventType): boolean {
+  return value >= Internal.InstrumentationEventType.STARTED &&
+    value <= Internal.InstrumentationEventType.WIRELESS_OBSERVER_UNPAIRED;
+}
+
+function validEffectType(value: Internal.InstrumentationEffectType): boolean {
+  return value >= Internal.InstrumentationEffectType.SEND_CHAT &&
+    value <= Internal.InstrumentationEffectType.SET_REDSTONE_POWER;
+}
+
+function validLifecycleState(value: Internal.InstrumentationLifecycleState): boolean {
+  return value === Internal.InstrumentationLifecycleState.RUNNING ||
+    value === Internal.InstrumentationLifecycleState.STOPPED;
 }
 
 function uuidString(value: { high: bigint; low: bigint }): string {
@@ -164,35 +290,8 @@ function uuidString(value: { high: bigint; low: bigint }): string {
   }`;
 }
 
-function statsError(message: string, status: number, headers?: HeadersInit): Response {
-  const responseHeaders = new Headers(headers);
-  responseHeaders.set('content-type', EXECUTION_STATS_CONTENT_TYPE);
-  return new Response(
-    new Blob([
-      toBinary(
-        Internal.ErrorResponseSchema,
-        create(Internal.ErrorResponseSchema, { error: message }),
-      ),
-    ]),
-    {
-      status,
-      headers: responseHeaders,
-    },
-  );
-}
-
-function statsErrorFromJson(response: Response): Response {
-  return statsError(
-    response.status === 401 ? 'unauthorized' : 'server authentication is not configured',
-    response.status,
-    response.headers.get('www-authenticate') === null
-      ? undefined
-      : { 'www-authenticate': response.headers.get('www-authenticate')! },
-  );
-}
-
-function mediaType(value: string | null): string | undefined {
-  return value?.split(';', 1)[0].trim().toLowerCase();
+function isWebSocketUpgrade(request: Request): boolean {
+  return request.headers.get('upgrade')?.toLowerCase() === 'websocket';
 }
 
 function describeError(error: unknown, fallback: string): string {

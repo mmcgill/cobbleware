@@ -15,6 +15,7 @@ Deno.test('Execution statistics flow from the Mod API to a Player WebSocket', as
   let runtime: Deno.ChildProcess | undefined;
   let stream: WebSocketConnection | undefined;
   let duplicateStream: WebSocketConnection | undefined;
+  let modStream: WebSocketConnection | undefined;
 
   try {
     runtime = await startRuntime(port, gameDir);
@@ -58,40 +59,36 @@ Deno.test('Execution statistics flow from the Mod API to a Player WebSocket', as
     );
 
     const report = executionStatsReport();
-    const response = await fetch(`${baseUrl}/modapi/v1/execution-stats`, {
-      method: 'POST',
-      headers: {
-        authorization: `Bearer ${API_KEY}`,
-        'content-type': 'application/octet-stream',
-      },
-      body: toBinary(Internal.ExecutionStatsSchema, report),
-    });
-    assertEquals(response.status, 204, `stats report was rejected: ${await response.text()}`);
+    modStream = await WebSocketConnection.open(
+      `127.0.0.1:${port}`,
+      '/modapi/v1/execution-stats',
+      { authorization: `Bearer ${API_KEY}` },
+    );
+    await modStream.sendBinary(toBinary(Internal.ExecutionStatsTickSchema, report));
 
     const snapshot = fromBinary(
-      Internal.ExecutionStatsSchema,
+      Internal.ExecutionStatsTickSchema,
       await within(5_000, stream.readBinaryFrame(), 'execution-stats WebSocket frame'),
     );
     assertEquals(snapshot.sampledAtUnixMillis, report.sampledAtUnixMillis, 'sample time changed');
-    assertEquals(snapshot.windowTicks, report.windowTicks, 'window length changed');
-    assertEquals(snapshot.retainedTickCount, report.retainedTickCount, 'retained ticks changed');
+    assertEquals(snapshot.tickSequence, report.tickSequence, 'tick sequence changed');
     assertEquals(snapshot.players.length, 1, 'player stream exposed more than one player');
 
     const player = snapshot.players[0];
     assertUuidEquals(player.playerId, PLAYER_ID, 'received the wrong player statistics');
-    assertEquals(player.eventsPerSyncCount, 2n, 'events-per-sync count changed');
-    assertEquals(player.eventsPerSyncTotal, 3n, 'events-per-sync total changed');
-    assertEquals(player.eventsPerSyncMax, 2n, 'events-per-sync maximum changed');
-    assertEquals(player.eventsAccepted, 4n, 'accepted-event count changed');
-    assertEquals(player.eventsDropped, 5n, 'dropped-event count changed');
-    assertEquals(player.effectsAttempted, 6n, 'effect-attempt count changed');
-    assertEquals(player.effectsFailed, 1n, 'failed-effect count changed');
-    assertEquals(player.effectsTotalNanos, 7n, 'effect-duration total changed');
-    assertEquals(player.effectsMaxNanos, 4n, 'effect-duration maximum changed');
-    assertEquals(player.runningCobbleputers, 1, 'running-cobbleputer count changed');
-    assertEquals(player.stoppedCobbleputers, 2, 'stopped-cobbleputer count changed');
+    assertEquals(player.events[0].accepted, 4n, 'accepted-event count changed');
+    assertEquals(player.events[0].dropped, 5n, 'dropped-event count changed');
+    assertEquals(player.eventsPerSync[0].count, 2n, 'events-per-sync count changed');
+    assertEquals(player.eventsPerSync[0].total, 3n, 'events-per-sync total changed');
+    assertEquals(player.eventsPerSync[0].max, 2n, 'events-per-sync maximum changed');
+    assertEquals(player.effects[0].attempted, 6n, 'effect-attempt count changed');
+    assertEquals(player.effects[0].failed, 1n, 'failed-effect count changed');
+    assertEquals(player.effects[0].totalNanos, 7n, 'effect-duration total changed');
+    assertEquals(player.effects[0].maxNanos, 4n, 'effect-duration maximum changed');
+    assertEquals(player.cobbleputerStates.length, 1, 'Cobbleputer state changed');
   } finally {
     duplicateStream?.close();
+    modStream?.close();
     stream?.close();
     if (runtime !== undefined) {
       try {
@@ -194,33 +191,52 @@ async function authenticatePlayer(baseUrl: string): Promise<string> {
   return cookie;
 }
 
-function executionStatsReport(): Internal.ExecutionStats {
-  return create(Internal.ExecutionStatsSchema, {
+function executionStatsReport(): Internal.ExecutionStatsTick {
+  const cobbleputer = create(Internal.ExecutionStatsTick_CobbleputerRefSchema, {
+    cobbleputerId: uuid(0n, 10n),
+    position: create(Common.GlobalPosSchema, {
+      dimension: create(Common.IdentifierSchema, { ns: 'minecraft', path: 'overworld' }),
+      position: create(Common.Vec3iSchema, { x: 1, y: 64, z: 2 }),
+    }),
+  });
+  return create(Internal.ExecutionStatsTickSchema, {
     sampledAtUnixMillis: 1_234_567_890n,
-    windowTicks: 600,
-    retainedTickCount: 20,
+    tickSequence: 1n,
     players: [
-      create(Internal.ExecutionStats_PlayerStatsSchema, {
+      create(Internal.ExecutionStatsTick_PlayerStatsSchema, {
         playerId: PLAYER_ID,
-        eventsPerSyncCount: 2n,
-        eventsPerSyncTotal: 3n,
-        eventsPerSyncMax: 2n,
-        eventsAccepted: 4n,
-        eventsDropped: 5n,
-        effectsAttempted: 6n,
-        effectsFailed: 1n,
-        effectsTotalNanos: 7n,
-        effectsMaxNanos: 4n,
-        runningCobbleputers: 1,
-        stoppedCobbleputers: 2,
+        events: [create(Internal.ExecutionStatsTick_EventMeasurementSchema, {
+          cobbleputer,
+          type: Internal.InstrumentationEventType.CHAT_MESSAGE,
+          accepted: 4n,
+          dropped: 5n,
+        })],
+        eventsPerSync: [create(Internal.ExecutionStatsTick_EventsPerSyncMeasurementSchema, {
+          cobbleputer,
+          count: 2n,
+          total: 3n,
+          max: 2n,
+        })],
+        effects: [create(Internal.ExecutionStatsTick_EffectMeasurementSchema, {
+          cobbleputer,
+          type: Internal.InstrumentationEffectType.SEND_CHAT,
+          attempted: 6n,
+          failed: 1n,
+          totalNanos: 7n,
+          maxNanos: 4n,
+        })],
+        cobbleputerStates: [create(Internal.ExecutionStatsTick_CobbleputerStateSchema, {
+          cobbleputer,
+          state: Internal.InstrumentationLifecycleState.RUNNING,
+        })],
       }),
-      create(Internal.ExecutionStats_PlayerStatsSchema, {
+      create(Internal.ExecutionStatsTick_PlayerStatsSchema, {
         playerId: OTHER_PLAYER_ID,
-        eventsPerSyncCount: 1n,
-        eventsPerSyncTotal: 1n,
-        eventsPerSyncMax: 1n,
-        eventsAccepted: 100n,
-        effectsAttempted: 100n,
+        events: [create(Internal.ExecutionStatsTick_EventMeasurementSchema, {
+          cobbleputer,
+          type: Internal.InstrumentationEventType.CHAT_MESSAGE,
+          accepted: 100n,
+        })],
       }),
     ],
   });
@@ -293,6 +309,25 @@ class WebSocketConnection {
       }
       if (opcode !== 9 && opcode !== 10) throw new Error(`unexpected WebSocket opcode ${opcode}`);
     }
+  }
+
+  async sendBinary(payload: Uint8Array): Promise<void> {
+    const mask = crypto.getRandomValues(new Uint8Array(4));
+    let header: Uint8Array;
+    if (payload.length < 126) {
+      header = new Uint8Array([0x82, 0x80 | payload.length]);
+    } else if (payload.length <= 0xffff) {
+      header = new Uint8Array([0x82, 0xfe, payload.length >> 8, payload.length & 0xff]);
+    } else {
+      throw new Error('test WebSocket client does not support frames larger than 65535 bytes');
+    }
+    const frame = new Uint8Array(header.length + mask.length + payload.length);
+    frame.set(header);
+    frame.set(mask, header.length);
+    for (let index = 0; index < payload.length; index += 1) {
+      frame[header.length + mask.length + index] = payload[index] ^ mask[index % mask.length];
+    }
+    await this.connection.write(frame);
   }
 
   close(): void {

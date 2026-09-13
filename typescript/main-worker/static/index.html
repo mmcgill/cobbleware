@@ -142,13 +142,16 @@
         dateStyle: 'medium',
         timeStyle: 'short',
       });
+      const STATS_RETENTION_TICKS = 600;
+      const DUPLICATE_STATS_STREAM_CODE = 'execution-stats-stream-already-open';
 
       let programList = null;
       let startStates = null;
       let selectedFile = null;
       let operation = 'idle';
       let statsSocket = null;
-      let statsSnapshot = null;
+      let statsTicks = [];
+      let statsGapObserved = false;
       let statsLastReceivedAt = 0;
       let statsClosingForLogout = false;
 
@@ -381,11 +384,11 @@
       }
 
       function renderStats() {
-        if (statsSnapshot === null) {
+        if (statsTicks.length === 0) {
           elements.statsDetails.hidden = true;
           return;
         }
-        const { sampledAt, windowTicks, retainedTicks, player } = statsSnapshot;
+        const { sampledAt, player } = aggregateStatsTicks();
         const sampledAtNumber = Number(sampledAt);
         const captured = new Date(sampledAtNumber);
         elements.statsSampledAt.textContent =
@@ -393,7 +396,9 @@
             ? dateFormatter.format(captured)
             : 'Invalid sample time';
         elements.statsWindow.textContent =
-          `${retainedTicks.toLocaleString()} of ${windowTicks.toLocaleString()} ticks`;
+          `${statsTicks.length.toLocaleString()} of ${STATS_RETENTION_TICKS.toLocaleString()} received ticks${
+            statsGapObserved ? ' (gaps observed)' : ''
+          }`;
         elements.statsEventsPerSync.textContent = `${
           formatBigInt(player.eventsPerSyncCount)
         } records; average ${
@@ -415,7 +420,7 @@
       }
 
       function updateStatsStaleness() {
-        if (statsSnapshot === null || statsLastReceivedAt === 0 || statsSocket === null) return;
+        if (statsTicks.length === 0 || statsLastReceivedAt === 0 || statsSocket === null) return;
         if (Date.now() - statsLastReceivedAt > 3000) {
           setStatsStatus('Statistics may be stale; no update has arrived recently.', 'error');
         } else {
@@ -445,7 +450,7 @@
         let rejectedByServer = false;
         socket.binaryType = 'arraybuffer';
         socket.onopen = () => {
-          if (statsSnapshot === null) setStatsStatus('No statistics are available yet.');
+          if (statsTicks.length === 0) setStatsStatus('No statistics are available yet.');
         };
         socket.onmessage = (event) => {
           try {
@@ -455,7 +460,7 @@
               statsConnectionError(error.error, false);
               return;
             }
-            statsSnapshot = decodeExecutionStats(new Uint8Array(event.data));
+            appendStatsTick(decodeExecutionStatsTick(new Uint8Array(event.data)));
             statsLastReceivedAt = Date.now();
             renderStats();
             updateStatsStaleness();
@@ -478,7 +483,7 @@
         const error = JSON.parse(message);
         if (
           !error ||
-          error.code !== 'execution-stats-stream-already-open' ||
+          (error.code !== DUPLICATE_STATS_STREAM_CODE && typeof error.code !== 'string') ||
           typeof error.error !== 'string'
         ) {
           throw new Error('invalid execution-stats stream error');
@@ -486,42 +491,134 @@
         return error;
       }
 
-      function decodeExecutionStats(bytes) {
+      function decodeExecutionStatsTick(bytes) {
         const fields = readProtoFields(bytes);
-        const playerBytes = fields.get(4) || [];
+        const playerBytes = fields.get(3) || [];
         if (playerBytes.length !== 1) throw new Error('expected exactly one player stats record');
         const sampledAt = protoVarint(fields, 1);
-        const windowTicks = protoNumber(fields, 2);
-        const retainedTicks = protoNumber(fields, 3);
-        if (sampledAt === 0n || windowTicks === 0 || retainedTicks > windowTicks) {
+        const sequence = protoVarint(fields, 2);
+        if (sampledAt === 0n || sequence === 0n) {
           throw new Error('invalid stats snapshot');
         }
         const playerFields = readProtoFields(playerBytes[0]);
         if ((playerFields.get(1) || []).length !== 1) throw new Error('missing player identifier');
-        const player = {
-          eventsPerSyncCount: protoVarint(playerFields, 2),
-          eventsPerSyncTotal: protoVarint(playerFields, 3),
-          eventsPerSyncMax: protoVarint(playerFields, 4),
-          eventsAccepted: protoVarint(playerFields, 5),
-          eventsDropped: protoVarint(playerFields, 6),
-          effectsAttempted: protoVarint(playerFields, 7),
-          effectsFailed: protoVarint(playerFields, 8),
-          effectsTotalNanos: protoVarint(playerFields, 9),
-          effectsMaxNanos: protoVarint(playerFields, 10),
-          runningCobbleputers: protoNumber(playerFields, 11),
-          stoppedCobbleputers: protoNumber(playerFields, 12),
-        };
+        requiredMessage(playerFields, 1);
+        const events = (playerFields.get(2) || []).map(decodeEventMeasurement);
+        const syncs = (playerFields.get(3) || []).map(decodeEventsPerSyncMeasurement);
+        const effects = (playerFields.get(4) || []).map(decodeEffectMeasurement);
+        const states = (playerFields.get(5) || []).map(decodeCobbleputerState);
+        return { sampledAt, sequence, events, syncs, effects, states };
+      }
+
+      function decodeEventMeasurement(bytes) {
+        const fields = readProtoFields(bytes);
+        requiredMessage(fields, 1);
+        const type = protoNumber(fields, 2);
+        if (type < 1 || type > 6) throw new Error('invalid event type');
+        return { accepted: protoVarint(fields, 3), dropped: protoVarint(fields, 4) };
+      }
+
+      function decodeEventsPerSyncMeasurement(bytes) {
+        const fields = readProtoFields(bytes);
+        requiredMessage(fields, 1);
+        const count = protoVarint(fields, 2);
+        const total = protoVarint(fields, 3);
+        const max = protoVarint(fields, 4);
         if (
-          player.effectsFailed > player.effectsAttempted ||
-          (player.eventsPerSyncCount === 0n &&
-            (player.eventsPerSyncTotal !== 0n || player.eventsPerSyncMax !== 0n)) ||
-          player.eventsPerSyncMax > player.eventsPerSyncTotal ||
-          (player.eventsPerSyncCount !== 0n &&
-            player.eventsPerSyncTotal > player.eventsPerSyncCount * player.eventsPerSyncMax)
+          (count === 0n && (total !== 0n || max !== 0n)) || max > total ||
+          (count !== 0n && total > count * max)
         ) {
-          throw new Error('inconsistent stats snapshot');
+          throw new Error('inconsistent events-per-sync measurement');
         }
-        return { sampledAt, windowTicks, retainedTicks, player };
+        return { count, total, max };
+      }
+
+      function decodeEffectMeasurement(bytes) {
+        const fields = readProtoFields(bytes);
+        requiredMessage(fields, 1);
+        const type = protoNumber(fields, 2);
+        if (type < 1 || type > 3) throw new Error('invalid effect type');
+        const attempted = protoVarint(fields, 3);
+        const failed = protoVarint(fields, 4);
+        if (failed > attempted) throw new Error('inconsistent effect measurement');
+        return {
+          attempted,
+          failed,
+          totalNanos: protoVarint(fields, 5),
+          maxNanos: protoVarint(fields, 6),
+        };
+      }
+
+      function decodeCobbleputerState(bytes) {
+        const fields = readProtoFields(bytes);
+        requiredMessage(fields, 1);
+        const state = protoNumber(fields, 2);
+        if (state !== 1 && state !== 2) throw new Error('invalid Cobbleputer state');
+        return state;
+      }
+
+      function requiredMessage(fields, field) {
+        const values = fields.get(field) || [];
+        if (values.length !== 1 || !(values[0] instanceof Uint8Array)) {
+          throw new Error('missing protobuf message');
+        }
+        return values[0];
+      }
+
+      function appendStatsTick(tick) {
+        const last = statsTicks.at(-1);
+        if (last !== undefined && tick.sequence === last.sequence) return;
+        if (last !== undefined && tick.sequence < last.sequence) {
+          statsTicks = [tick];
+          statsGapObserved = false;
+          return;
+        }
+        if (last !== undefined && tick.sequence > last.sequence + 1n) statsGapObserved = true;
+        statsTicks.push(tick);
+        if (statsTicks.length > STATS_RETENTION_TICKS) statsTicks.shift();
+      }
+
+      function aggregateStatsTicks() {
+        const latest = statsTicks.at(-1);
+        const player = {
+          eventsPerSyncCount: 0n,
+          eventsPerSyncTotal: 0n,
+          eventsPerSyncMax: 0n,
+          eventsAccepted: 0n,
+          eventsDropped: 0n,
+          effectsAttempted: 0n,
+          effectsFailed: 0n,
+          effectsTotalNanos: 0n,
+          effectsMaxNanos: 0n,
+          runningCobbleputers: 0,
+          stoppedCobbleputers: 0,
+        };
+        for (const tick of statsTicks) {
+          for (const event of tick.events) {
+            player.eventsAccepted += event.accepted;
+            player.eventsDropped += event.dropped;
+          }
+          for (const sync of tick.syncs) {
+            player.eventsPerSyncCount += sync.count;
+            player.eventsPerSyncTotal += sync.total;
+            player.eventsPerSyncMax = player.eventsPerSyncMax > sync.max
+              ? player.eventsPerSyncMax
+              : sync.max;
+          }
+          for (const effect of tick.effects) {
+            player.effectsAttempted += effect.attempted;
+            player.effectsFailed += effect.failed;
+            player.effectsTotalNanos += effect.totalNanos;
+            player.effectsMaxNanos = player.effectsMaxNanos > effect.maxNanos
+              ? player.effectsMaxNanos
+              : effect.maxNanos;
+          }
+        }
+        for (const state of latest.states) {
+          if (state === 1) player.runningCobbleputers += 1;
+          else player.stoppedCobbleputers += 1;
+        }
+        return { sampledAt: latest.sampledAt, player };
       }
 
       function readProtoFields(bytes) {

@@ -35,6 +35,7 @@ import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ConcurrentLinkedQueue;
 import net.fabricmc.fabric.api.event.lifecycle.v1.ServerTickEvents;
 import net.fabricmc.fabric.api.message.v1.ServerMessageEvents;
 import net.minecraft.core.BlockPos;
@@ -71,6 +72,7 @@ public final class ExecutionDriver {
             Collections.newSetFromMap(new IdentityHashMap<>());
     private final Set<WirelessObserverBlockEntity> pendingObserverChanges =
             Collections.newSetFromMap(new IdentityHashMap<>());
+    private final ConcurrentLinkedQueue<SyncCompletion> completedSyncMeasurements = new ConcurrentLinkedQueue<>();
 
     private CompletableFuture<MainWorkerClient.ExecutionSyncResult> inFlight;
     private Flight flight;
@@ -263,9 +265,10 @@ public final class ExecutionDriver {
     private void tick(MinecraftServer server) {
         instrumentationTick += 1;
         instrumentation.advanceTick(instrumentationTick);
+        drainCompletedSyncMeasurements();
         if (inFlight != null) {
             if (!inFlight.isDone()) {
-                recordCobbleputerStateGaugeAndReport();
+                recordCobbleputerStateGaugeAndStream();
                 return;
             }
             MainWorkerClient.ExecutionSyncResult result;
@@ -293,7 +296,7 @@ public final class ExecutionDriver {
         drainObserverChanges(server);
         Flight nextFlight = buildFlight();
         if (!nextFlight.hadExecutions() && !runtimeMayHaveExecutions) {
-            recordCobbleputerStateGaugeAndReport();
+            recordCobbleputerStateGaugeAndStream();
             return;
         }
         if (nextFlight.hadExecutions()) {
@@ -304,9 +307,16 @@ public final class ExecutionDriver {
         flight = dispatchedFlight;
         recordEventsPerSync(dispatchedFlight);
         inFlight = mainWorkerClient.syncExecutions(nextFlight.request);
-        inFlight.whenComplete((result, failure) -> instrumentation.recordSyncCompletion(
-                System.nanoTime() - dispatchedFlight.dispatchNanos(), syncOutcome(result, failure)));
-        recordCobbleputerStateGaugeAndReport();
+        inFlight.whenComplete((result, failure) -> completedSyncMeasurements.add(new SyncCompletion(
+                System.nanoTime() - dispatchedFlight.dispatchNanos(), syncOutcome(result, failure))));
+        recordCobbleputerStateGaugeAndStream();
+    }
+
+    private void drainCompletedSyncMeasurements() {
+        SyncCompletion completion;
+        while ((completion = completedSyncMeasurements.poll()) != null) {
+            instrumentation.recordSyncCompletion(completion.elapsedNanos, completion.outcome);
+        }
     }
 
     private void drainObserverChanges(MinecraftServer server) {
@@ -823,12 +833,10 @@ public final class ExecutionDriver {
         instrumentation.recordCobbleputerStates(states);
     }
 
-    private void recordCobbleputerStateGaugeAndReport() {
+    private void recordCobbleputerStateGaugeAndStream() {
         recordCobbleputerStateGauge();
-        if (instrumentationTick % 20 == 0) {
-            mainWorkerClient.reportExecutionStats(ExecutionStatsReporter.report(
-                    instrumentation.snapshot(), System.currentTimeMillis()));
-        }
+        mainWorkerClient.reportExecutionStats(ExecutionStatsReporter.report(
+                instrumentation.currentTickSnapshot(), System.currentTimeMillis()));
     }
 
     private static String ownerName(CobbleputerBlockEntity blockEntity, UUID ownerId) {
@@ -849,6 +857,9 @@ public final class ExecutionDriver {
     }
 
     private record QueuedEvent(long sequenceNum, Event event) {
+    }
+
+    private record SyncCompletion(long elapsedNanos, Instrumentation.SyncOutcome outcome) {
     }
 
     private static final class ActiveExecution {

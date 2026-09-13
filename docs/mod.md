@@ -192,15 +192,18 @@ path throws. Metrics do not alter the existing best-effort event/effect
 semantics. The events-per-sync measurement is recorded when the Mod dispatches an
 execution-sync request, including zero-event execution records.
 
-Once per second, the Mod takes one snapshot and sends one fire-and-forget `ExecutionStats`
-protobuf report. Its `players` list contains an aggregate for every player represented by a current
-state gauge or by any measurement retained in the instrumentation window. Each entry aggregates
-that player's events-per-sync, accepted/dropped-event, effect-attempt/failure/duration, and loaded
-running/stopped-Cobbleputer values. The enclosing report includes the configured and currently
-retained window lengths, so consumers can distinguish a newly started collector from a full window.
-The Mod does not send the server-wide execution-sync duration/outcome metric because it cannot be
-attributed to an individual player. Reporting neither waits for a response nor changes execution,
-event, effect, or instrumentation behavior; an unavailable Main Worker simply loses that snapshot.
+At the end of every server tick, the Mod finalizes that tick's raw player-attributable instrumentation
+and offers one `ExecutionStatsTick` protobuf message to its long-lived Main Worker WebSocket. A player
+entry preserves the existing per-Cobbleputer and event/effect-type measurements and state gauge; it is
+not aggregated over players, Cobbleputers, types, or the Mod's retention window. The message has a
+process-local tick sequence number and capture time. The Mod does not send the server-wide
+execution-sync duration/outcome metric because it cannot be attributed to an individual player.
+
+Stats streaming is best-effort. The server tick never waits for a connection or a send; ticks produced
+while the Main Worker WebSocket is unavailable, or while its prior send is pending, are discarded. The
+client reconnects with backoff. This does not change execution, event, effect, or Mod instrumentation
+behavior. The configurable `instrumentationWindowTicks` continues to govern the Mod's retained data and
+the `/cobbleware stats` command only; Browser UIs retain their own fixed 600 received-tick window.
 
 ```
 /cobbleware stats

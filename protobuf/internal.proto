@@ -64,45 +64,85 @@ message ExecutionsResponse {
   repeated ExecutionResult results = 1;
 }
 
-// A complete, sliding-window execution-instrumentation snapshot for all represented players.
+// The types of events recorded by execution instrumentation.
+enum InstrumentationEventType {
+  INSTRUMENTATION_EVENT_TYPE_UNSPECIFIED = 0;
+  INSTRUMENTATION_EVENT_TYPE_STARTED = 1;
+  INSTRUMENTATION_EVENT_TYPE_RESUMED = 2;
+  INSTRUMENTATION_EVENT_TYPE_CHAT_MESSAGE = 3;
+  INSTRUMENTATION_EVENT_TYPE_BLOCK_STATE_CHANGE = 4;
+  INSTRUMENTATION_EVENT_TYPE_WIRELESS_OBSERVER_PAIRED = 5;
+  INSTRUMENTATION_EVENT_TYPE_WIRELESS_OBSERVER_UNPAIRED = 6;
+}
+
+// The types of effects recorded by execution instrumentation.
+enum InstrumentationEffectType {
+  INSTRUMENTATION_EFFECT_TYPE_UNSPECIFIED = 0;
+  INSTRUMENTATION_EFFECT_TYPE_SEND_CHAT = 1;
+  INSTRUMENTATION_EFFECT_TYPE_EMIT_BEEP = 2;
+  INSTRUMENTATION_EFFECT_TYPE_SET_REDSTONE_POWER = 3;
+}
+
+// The lifecycle states represented in an instrumentation state gauge.
+enum InstrumentationLifecycleState {
+  INSTRUMENTATION_LIFECYCLE_STATE_UNSPECIFIED = 0;
+  INSTRUMENTATION_LIFECYCLE_STATE_RUNNING = 1;
+  INSTRUMENTATION_LIFECYCLE_STATE_STOPPED = 2;
+}
+
+// One raw execution-instrumentation bucket finalized by the Mod at the end of a server tick.
 // It is sent by the Mod to the Main Worker and is not persisted.
-message ExecutionStats {
-  // Wall-clock time at which the Mod captured this snapshot, as milliseconds since the Unix epoch.
+message ExecutionStatsTick {
+  // Wall-clock time at which the Mod finalized this tick, as milliseconds since the Unix epoch.
   // Required by the application contract.
   uint64 sampled_at_unix_millis = 1;
-  // The configured number of server ticks in the instrumentation sliding window. Required by the application contract.
-  uint32 window_ticks = 2;
-  // The number of ticks currently represented in this snapshot. Required by the application contract.
-  uint32 retained_tick_count = 3;
-  // Required by the application contract. A snapshot contains at most one entry for each player.
-  repeated PlayerStats players = 4;
+  // Monotonically increasing, process-local Mod tick sequence number. Required by the application contract.
+  uint64 tick_sequence = 2;
+  // Contains at most one entry for each player. Entries are raw per-tick measurements, not window aggregates.
+  repeated PlayerStats players = 3;
 
-  // A player's aggregate execution instrumentation within the containing snapshot's window.
+  // Identifies the physical Cobbleputer to which a raw measurement belongs.
+  message CobbleputerRef {
+    cobbleware.common.Uuid cobbleputer_id = 1;
+    cobbleware.common.GlobalPos position = 2;
+  }
+
+  // A player's raw instrumentation for this tick.
   message PlayerStats {
-    // Identifies the player whose execution metrics are represented. Required by the application contract.
+    // Identifies the player whose metrics are represented. Required by the application contract.
     cobbleware.common.Uuid player_id = 1;
-    // Number of per-Cobbleputer execution-sync records included in the window. Zero-event records are included.
-    uint64 events_per_sync_count = 2;
-    // Sum of events included in those execution-sync records.
-    uint64 events_per_sync_total = 3;
-    // Largest number of events included in one execution-sync record.
-    uint64 events_per_sync_max = 4;
-    // Number of event admissions accepted by the Mod in the window, across all event types and Cobbleputers.
-    uint64 events_accepted = 5;
-    // Number of event admissions dropped by the Mod in the window, across all event types and Cobbleputers.
-    uint64 events_dropped = 6;
-    // Number of effect-application attempts in the window, across all effect types and Cobbleputers.
-    uint64 effects_attempted = 7;
-    // Number of effect-application attempts that threw in the window.
-    uint64 effects_failed = 8;
-    // Sum of the effect-application durations in nanoseconds.
-    uint64 effects_total_nanos = 9;
-    // Longest effect-application duration in nanoseconds.
-    uint64 effects_max_nanos = 10;
-    // Current number of loaded running Cobbleputers owned by the player.
-    uint32 running_cobbleputers = 11;
-    // Current number of loaded stopped Cobbleputers owned by the player.
-    uint32 stopped_cobbleputers = 12;
+    repeated EventMeasurement events = 2;
+    repeated EventsPerSyncMeasurement events_per_sync = 3;
+    repeated EffectMeasurement effects = 4;
+    repeated CobbleputerState cobbleputer_states = 5;
+  }
+
+  message EventMeasurement {
+    CobbleputerRef cobbleputer = 1;
+    InstrumentationEventType type = 2;
+    uint64 accepted = 3;
+    uint64 dropped = 4;
+  }
+
+  message EventsPerSyncMeasurement {
+    CobbleputerRef cobbleputer = 1;
+    uint64 count = 2;
+    uint64 total = 3;
+    uint64 max = 4;
+  }
+
+  message EffectMeasurement {
+    CobbleputerRef cobbleputer = 1;
+    InstrumentationEffectType type = 2;
+    uint64 attempted = 3;
+    uint64 failed = 4;
+    uint64 total_nanos = 5;
+    uint64 max_nanos = 6;
+  }
+
+  message CobbleputerState {
+    CobbleputerRef cobbleputer = 1;
+    InstrumentationLifecycleState state = 2;
   }
 }
 

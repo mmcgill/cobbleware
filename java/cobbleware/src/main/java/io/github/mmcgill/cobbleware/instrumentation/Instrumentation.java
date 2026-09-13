@@ -125,6 +125,17 @@ public final class Instrumentation {
                 latest.tick == currentTick ? latest.states : Map.of());
     }
 
+    /** Returns an immutable copy of the raw measurements recorded for the current server tick. */
+    public synchronized TickSnapshot currentTickSnapshot() {
+        TickBucket bucket = currentBucket();
+        return new TickSnapshot(
+                currentTick,
+                Map.copyOf(bucket.events),
+                Map.copyOf(bucket.eventsPerSync),
+                Map.copyOf(bucket.effects),
+                Map.copyOf(bucket.states));
+    }
+
     private TickBucket currentBucket() {
         int index = (int) Math.floorMod(currentTick, buckets.length);
         TickBucket bucket = buckets[index];
@@ -306,6 +317,21 @@ public final class Instrumentation {
             Map<PlayerCobbleputerKey, LifecycleState> cobbleputerStates) {
         public Snapshot {
             syncOutcomes = Map.copyOf(syncOutcomes);
+            events = Map.copyOf(events);
+            eventsPerSync = Map.copyOf(eventsPerSync);
+            effects = Map.copyOf(effects);
+            cobbleputerStates = Map.copyOf(cobbleputerStates);
+        }
+    }
+
+    /** Immutable raw measurements from one instrumentation tick. */
+    public record TickSnapshot(
+            long tick,
+            Map<EventMetricKey, EventCounts> events,
+            Map<PlayerCobbleputerKey, EventSyncSummary> eventsPerSync,
+            Map<EffectMetricKey, EffectCounts> effects,
+            Map<PlayerCobbleputerKey, LifecycleState> cobbleputerStates) {
+        public TickSnapshot {
             events = Map.copyOf(events);
             eventsPerSync = Map.copyOf(eventsPerSync);
             effects = Map.copyOf(effects);

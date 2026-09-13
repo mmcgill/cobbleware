@@ -4,7 +4,7 @@ import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
 import cobbleware.internal.ErrorResponse;
-import cobbleware.internal.ExecutionStats;
+import cobbleware.internal.ExecutionStatsTick;
 import cobbleware.internal.ExecutionsRequest;
 import cobbleware.internal.ExecutionsResponse;
 import io.github.mmcgill.cobbleware.config.CobblewareConfig;
@@ -13,6 +13,8 @@ import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
+import java.net.http.WebSocket;
+import java.nio.ByteBuffer;
 import java.time.Duration;
 import java.util.Arrays;
 import java.util.Collections;
@@ -23,6 +25,11 @@ import java.util.Optional;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionException;
+import java.util.concurrent.CompletionStage;
+import java.util.concurrent.Executors;
+import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.ScheduledFuture;
+import java.util.concurrent.TimeUnit;
 import org.slf4j.Logger;
 
 /** Asynchronous client for the Main Worker's Mod API. */
@@ -33,6 +40,7 @@ public final class MainWorkerClient {
     private final CobblewareConfig config;
     private final HttpClient httpClient;
     private final Logger logger;
+    private final ExecutionStatsStreamer executionStatsStreamer;
 
     public MainWorkerClient(CobblewareConfig config, Logger logger) {
         this(config, HttpClient.newBuilder()
@@ -44,6 +52,7 @@ public final class MainWorkerClient {
         this.config = config;
         this.httpClient = httpClient;
         this.logger = logger;
+        this.executionStatsStreamer = new ExecutionStatsStreamer(config, httpClient, logger);
     }
 
     /** Authenticates a player for a pending browser-generated code without blocking the server thread. */
@@ -126,32 +135,191 @@ public final class MainWorkerClient {
                 });
     }
 
-    /** Sends a complete instrumentation report without blocking or retrying the server tick. */
-    public CompletableFuture<Void> reportExecutionStats(ExecutionStats stats) {
+    /** Offers one raw instrumentation tick to the best-effort stats WebSocket without blocking the server tick. */
+    public void reportExecutionStats(ExecutionStatsTick stats) {
         if (stats == null) {
             throw new IllegalArgumentException("execution stats must not be null");
         }
-        if (!config.isEnabled()) {
+        executionStatsStreamer.offer(stats);
+    }
+
+    /** Stops the best-effort stats stream and prevents reconnects during server shutdown. */
+    public void close() {
+        executionStatsStreamer.close();
+    }
+
+    /** A single lossy, reconnecting WebSocket used only for execution instrumentation. */
+    private static final class ExecutionStatsStreamer implements WebSocket.Listener {
+        private static final long INITIAL_RECONNECT_MILLIS = 1_000;
+        private static final long MAX_RECONNECT_MILLIS = 30_000;
+
+        private final CobblewareConfig config;
+        private final HttpClient httpClient;
+        private final Logger logger;
+        private final Object lock = new Object();
+        private final ScheduledExecutorService reconnectExecutor = Executors.newSingleThreadScheduledExecutor(runnable -> {
+            Thread thread = new Thread(runnable, "cobbleware-execution-stats");
+            thread.setDaemon(true);
+            return thread;
+        });
+
+        private CompletableFuture<WebSocket> connecting;
+        private ScheduledFuture<?> reconnect;
+        private WebSocket socket;
+        private boolean sendPending;
+        private boolean closed;
+        private long nextReconnectMillis = INITIAL_RECONNECT_MILLIS;
+
+        private ExecutionStatsStreamer(CobblewareConfig config, HttpClient httpClient, Logger logger) {
+            this.config = config;
+            this.httpClient = httpClient;
+            this.logger = logger;
+        }
+
+        private void offer(ExecutionStatsTick tick) {
+            if (!config.isEnabled()) {
+                return;
+            }
+            byte[] bytes = tick.toByteArray();
+            WebSocket target;
+            synchronized (lock) {
+                if (closed) {
+                    return;
+                }
+                target = socket;
+                if (target == null || sendPending) {
+                    ensureConnectionLocked();
+                    return;
+                }
+                sendPending = true;
+            }
+            target.sendBinary(ByteBuffer.wrap(bytes), true).whenComplete((ignored, failure) -> {
+                synchronized (lock) {
+                    if (socket != target) {
+                        return;
+                    }
+                    sendPending = false;
+                    if (failure != null) {
+                        logger.debug("Main Worker execution-stats send failed: {}", unwrap(failure).toString());
+                        socket = null;
+                        target.abort();
+                        scheduleReconnectLocked();
+                    }
+                }
+            });
+        }
+
+        private void ensureConnectionLocked() {
+            if (closed || socket != null || connecting != null || (reconnect != null && !reconnect.isDone())) {
+                return;
+            }
+            URI endpoint = websocketUri(config.mainWorkerBaseUri().resolve("modapi/v1/execution-stats"));
+            connecting = httpClient.newWebSocketBuilder()
+                    .connectTimeout(CONNECT_TIMEOUT)
+                    .header("Authorization", "Bearer " + config.mainWorkerApiKey())
+                    .buildAsync(endpoint, this);
+            connecting.whenComplete((opened, failure) -> {
+                synchronized (lock) {
+                    connecting = null;
+                    if (closed) {
+                        if (opened != null) {
+                            opened.abort();
+                        }
+                        return;
+                    }
+                    if (failure != null) {
+                        logger.debug("Main Worker execution-stats connection failed: {}", unwrap(failure).toString());
+                        scheduleReconnectLocked();
+                        return;
+                    }
+                    socket = opened;
+                    sendPending = false;
+                    nextReconnectMillis = INITIAL_RECONNECT_MILLIS;
+                }
+            });
+        }
+
+        private void scheduleReconnectLocked() {
+            if (closed || reconnect != null && !reconnect.isDone()) {
+                return;
+            }
+            long delay = nextReconnectMillis;
+            nextReconnectMillis = Math.min(MAX_RECONNECT_MILLIS, nextReconnectMillis * 2);
+            reconnect = reconnectExecutor.schedule(() -> {
+                synchronized (lock) {
+                    reconnect = null;
+                    ensureConnectionLocked();
+                }
+            }, delay, TimeUnit.MILLISECONDS);
+        }
+
+        @Override
+        public void onOpen(WebSocket webSocket) {
+            webSocket.request(1);
+        }
+
+        @Override
+        public CompletionStage<?> onText(WebSocket webSocket, CharSequence data, boolean last) {
+            logger.debug("Main Worker execution-stats stream rejected a connection: {}", data);
+            webSocket.request(1);
             return CompletableFuture.completedFuture(null);
         }
 
-        URI endpoint = config.mainWorkerBaseUri().resolve("modapi/v1/execution-stats");
-        HttpRequest request = HttpRequest.newBuilder(endpoint)
-                .timeout(REQUEST_TIMEOUT)
-                .header("Authorization", "Bearer " + config.mainWorkerApiKey())
-                .header("Content-Type", "application/octet-stream")
-                .POST(HttpRequest.BodyPublishers.ofByteArray(stats.toByteArray()))
-                .build();
+        @Override
+        public CompletionStage<?> onClose(WebSocket webSocket, int statusCode, String reason) {
+            disconnected(webSocket, "closed with " + statusCode + " " + reason);
+            return CompletableFuture.completedFuture(null);
+        }
 
-        return httpClient.sendAsync(request, HttpResponse.BodyHandlers.discarding())
-                .handle((response, failure) -> {
-                    if (failure != null) {
-                        logger.debug("Main Worker execution-stats report failed: {}", unwrap(failure).toString());
-                    } else if (response.statusCode() != 204) {
-                        logger.debug("Main Worker execution-stats report returned HTTP {}", response.statusCode());
-                    }
+        @Override
+        public void onError(WebSocket webSocket, Throwable error) {
+            disconnected(webSocket, unwrap(error).toString());
+        }
+
+        private void disconnected(WebSocket webSocket, String detail) {
+            synchronized (lock) {
+                if (socket != webSocket) {
+                    return;
+                }
+                logger.debug("Main Worker execution-stats stream {}", detail);
+                socket = null;
+                sendPending = false;
+                scheduleReconnectLocked();
+            }
+        }
+
+        private void close() {
+            WebSocket target;
+            synchronized (lock) {
+                if (closed) {
+                    return;
+                }
+                closed = true;
+                target = socket;
+                socket = null;
+                if (reconnect != null) {
+                    reconnect.cancel(false);
+                }
+            }
+            if (target != null) {
+                target.sendClose(WebSocket.NORMAL_CLOSURE, "server stopping").exceptionally(ignored -> {
+                    target.abort();
                     return null;
                 });
+            }
+            reconnectExecutor.shutdownNow();
+        }
+
+        private static URI websocketUri(URI httpUri) {
+            String value = httpUri.toString();
+            if (value.startsWith("https:")) {
+                return URI.create("wss:" + value.substring("https:".length()));
+            }
+            if (value.startsWith("http:")) {
+                return URI.create("ws:" + value.substring("http:".length()));
+            }
+            throw new IllegalArgumentException("Main Worker URL must use http or https");
+        }
     }
 
     private AuthenticationResult responseResult(HttpResponse<String> response) {

@@ -22,10 +22,11 @@ as references to the Main Worker running in the Runtime, unless specifically not
 
 All communication between the Mod and the Runtime is initiated by the Mod, which makes requests
 to a API served by the Runtime. The Runtime never initiates connections in the opposite direction.
-Execution instrumentation follows that direction too: the Mod periodically pushes one snapshot that
-bundles every represented player's aggregate stats to the Main Worker. The Main Worker retains the
-latest per-player view in memory and may fan it out over a Player-initiated Browser UI WebSocket; it
-never polls or connects to the Mod.
+Execution instrumentation follows that direction too: the Mod opens one authenticated WebSocket to the
+Main Worker and pushes the raw player-attributable instrumentation bucket from every server tick. The
+Main Worker retains only each player's latest tick in memory and fans player-scoped ticks out over a
+Player-initiated Browser UI WebSocket; it never polls or connects to the Mod. The Browser UI performs
+its own aggregation and retention, independently of the Mod's in-memory instrumentation window.
 
 The Main Worker is written in Typescript; its code is located in [typescript/main-worker](../typescript/main-worker/).
 

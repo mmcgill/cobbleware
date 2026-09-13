@@ -14,6 +14,7 @@ import io.github.mmcgill.cobbleware.registry.CobblewareBlocks;
 import io.github.mmcgill.cobbleware.registry.CobblewareItems;
 import net.fabricmc.api.ModInitializer;
 import net.fabricmc.fabric.api.event.lifecycle.v1.ServerChunkEvents;
+import net.fabricmc.fabric.api.event.lifecycle.v1.ServerLifecycleEvents;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -54,6 +55,7 @@ public final class CobblewareMod implements ModInitializer {
             LOGGER.error("Cobbleware mainWorkerApiKey is empty; authentication commands are disabled until it is configured");
         }
         MainWorkerClient mainWorkerClient = new MainWorkerClient(config, LOGGER);
+        ServerLifecycleEvents.SERVER_STOPPING.register(server -> mainWorkerClient.close());
         executionDriver = new ExecutionDriver(
                 mainWorkerClient, new Instrumentation(config.instrumentationWindowTicks()), LOGGER);
         wirelessObserverNetwork = new WirelessObserverNetwork();

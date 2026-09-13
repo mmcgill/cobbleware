@@ -27,12 +27,13 @@ The UI does not provide a way to delete the active program; uploading a replacem
 operation.
 
 The page also has an execution-stats section. It opens one WebSocket to
-`/playerapi/v1/execution-stats` and renders the latest player-scoped `ExecutionStats` protobuf message for the
-logged-in Player: instrumentation-window coverage, offered events per execution sync, accepted/dropped events, effect
-attempts, failures and timing, and currently loaded running/stopped Cobbleputers. It displays when the sample was
-captured and marks the view stale when no update arrives for more than a few reporting intervals. The section initially
-indicates that no statistics are available if the Main Worker has not yet received a report for the Player. A rejected
-or closed connection is shown as a stats-connection error and may be retried without reloading the rest of the page.
+`/playerapi/v1/execution-stats` and receives player-scoped raw `ExecutionStatsTick` protobuf messages. It retains and
+aggregates up to 600 received ticks locally to render coverage, offered events per execution sync, accepted/dropped
+events, effect attempts, failures and timing, and currently loaded running/stopped Cobbleputers. It displays when the
+newest sample was captured, marks the view stale when no update arrives for more than a few reporting intervals, and
+marks coverage incomplete when tick-sequence gaps are observed. The section initially indicates that no statistics are
+available if the Main Worker has not yet received a report for the Player. A rejected or closed connection is shown as
+a stats-connection error and may be retried without reloading the rest of the page.
 When the server reports that an execution-stats stream is already open in another browser window, the UI shows that
 specific error and does not retry the connection. The UI never displays another Player's statistics.
 
