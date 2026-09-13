@@ -453,9 +453,10 @@ Mod accepts a consumed prefix and advances its in-memory queue, a later sync fil
 available window slots from the remaining suffix. The Mod must therefore retain the suffix until the
 Runtime reports it consumed.
 
-The Runtime also hard-codes an outbox limit of 50 unacknowledged effects per execution. When an
-invocation emits effects after its outbox has reached that limit, the Runtime drops those effects.
-Only retained effects receive sequence numbers, so the effects returned to the Mod remain contiguous.
+The Runtime also hard-codes an outbox limit of 50 unacknowledged effects per execution. For each invocation, it sends
+the remaining outbox capacity in `StepRequest.effect_limit`. The Runtime retains no more than that many effects from
+the invocation, even if acknowledgements received while it runs free more capacity. Only retained effects receive
+sequence numbers, so the effects returned to the Mod remain contiguous.
 
 #### Execution records
 

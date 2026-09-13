@@ -20,11 +20,19 @@ export type ProgramState = Uint8Array;
 export type Effect = GeneratedEffect;
 export type EffectT = GeneratedEffect;
 
+export interface StepContext {
+  /**
+   * The maximum number of effects the Runtime will accept in this step's output. Effects beyond this limit
+   * are dropped.
+   */
+  effectLimit: number;
+}
+
 /**
  * A Program is an event handler that is called with the current value of a Cobbleputer state
- * and an Event, and returns the updated Cobbleputer state and a sequence of effects.
+ * and an Event and context, and returns the updated Cobbleputer state and a sequence of effects.
  */
-export type Program = (state: ProgramState, event: Event) => StepResponse;
+export type Program = (state: ProgramState, event: Event, context: StepContext) => StepResponse;
 
 /** Named initial state values available when a Cobbleputer loads this program. */
 export type StartStates = Record<string, ProgramState>;
@@ -85,7 +93,10 @@ async function handleNextState(request: Request, program: Program): Promise<Resp
     }
 
     return binaryResponse(
-      toBinary(ProgramMessages.StepResponseSchema, program(stepRequest.state, stepRequest.event)),
+      toBinary(
+        ProgramMessages.StepResponseSchema,
+        program(stepRequest.state, stepRequest.event, { effectLimit: stepRequest.effectLimit }),
+      ),
       200,
     );
   } catch (error) {

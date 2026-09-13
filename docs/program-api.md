@@ -48,9 +48,10 @@ The program **must** respond to a `POST /nextState` request with a response
 that indicates, for the given program state, the subsequent state and associated
 effects.
 
-The request body is a `StepRequest` containing the simulated `execution_id`, the current `state`, and an `event` from
-the `Events.Event` message. The message's `event` `oneof` identifies the concrete event message.
-The program's transition function receives the state and event and returns a `Program.StepResponse` containing
-the subsequent state and effects.
+The request body is a `StepRequest` containing the simulated `execution_id`, the current `state`, an `event` from
+the `Events.Event` message, and `effect_limit`. The message's `event` `oneof` identifies the concrete event message.
+`effect_limit` is the maximum number of effects the Runtime will accept from that invocation. The program's transition
+function receives the state, event, and this limit as its context and returns a `Program.StepResponse` containing the
+subsequent state and effects. Effects beyond the supplied limit are dropped.
 On success, the response should have 200 status with a `StepResponse` body. On failure (e.g. due to an exception)
 the response should have a 500 response with an `ErrorResponse` body.

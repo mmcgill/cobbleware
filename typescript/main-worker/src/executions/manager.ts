@@ -119,7 +119,8 @@ export class ExecutionManager implements ExecutionCoordinator {
         throw new Error('player has no active program');
       }
 
-      const response = await this.runProgram(sourceRequest, entry, event, program);
+      const effectLimit = Math.max(0, MAX_EFFECTS_PER_EXECUTION - entry.outbox.length);
+      const response = await this.runProgram(sourceRequest, entry, event, program, effectLimit);
       const step = await decodeStepResponse(response);
       if (!this.isCurrent(entry, generation, eventSeqNum)) {
         return;
@@ -127,10 +128,7 @@ export class ExecutionManager implements ExecutionCoordinator {
 
       entry.currentState = step.state.slice();
       entry.lastConsumedEventSeqNum = eventSeqNum;
-      for (const effect of step.effects) {
-        if (entry.outbox.length === MAX_EFFECTS_PER_EXECUTION) {
-          break;
-        }
+      for (const effect of step.effects.slice(0, effectLimit)) {
         entry.outbox.push({
           sequence: entry.nextEffectSeqNum,
           effect: cloneEffect(effect),
@@ -162,11 +160,13 @@ export class ExecutionManager implements ExecutionCoordinator {
     entry: CachedExecution,
     event: Events.Event,
     program: ActiveProgram,
+    effectLimit: number,
   ): Promise<Response> {
     const request = create(Program.StepRequestSchema, {
       executionId: cloneUuid(entry.id),
       state: entry.currentState.slice(),
       event: cloneEvent(event),
+      effectLimit,
     });
     return await this.programRunner.step(
       sourceRequest,

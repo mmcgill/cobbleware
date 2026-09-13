@@ -16,7 +16,7 @@ import type { Message } from "@bufbuild/protobuf";
  * Describes the file program.proto.
  */
 export const file_program: GenFile = /*@__PURE__*/
-  fileDesc("Cg1wcm9ncmFtLnByb3RvEhJjb2JibGV3YXJlLnByb2dyYW0iLwoKU3RhcnRTdGF0ZRISCgpzdGF0ZV9uYW1lGAEgASgJEg0KBXN0YXRlGAIgASgMIksKE1N0YXJ0U3RhdGVzUmVzcG9uc2USNAoMc3RhcnRfc3RhdGVzGAEgAygLMh4uY29iYmxld2FyZS5wcm9ncmFtLlN0YXJ0U3RhdGUidAoLU3RlcFJlcXVlc3QSLQoMZXhlY3V0aW9uX2lkGAEgASgLMhcuY29iYmxld2FyZS5jb21tb24uVXVpZBINCgVzdGF0ZRgCIAEoDBInCgVldmVudBgDIAEoCzIYLmNvYmJsZXdhcmUuZXZlbnRzLkV2ZW50IkoKDFN0ZXBSZXNwb25zZRINCgVzdGF0ZRgBIAEoDBIrCgdlZmZlY3RzGAIgAygLMhouY29iYmxld2FyZS5lZmZlY3RzLkVmZmVjdCIeCg1FcnJvclJlc3BvbnNlEg0KBWVycm9yGAEgASgJYghlZGl0aW9uc3DpBw", [file_common, file_effects, file_events]);
+  fileDesc("Cg1wcm9ncmFtLnByb3RvEhJjb2JibGV3YXJlLnByb2dyYW0iLwoKU3RhcnRTdGF0ZRISCgpzdGF0ZV9uYW1lGAEgASgJEg0KBXN0YXRlGAIgASgMIksKE1N0YXJ0U3RhdGVzUmVzcG9uc2USNAoMc3RhcnRfc3RhdGVzGAEgAygLMh4uY29iYmxld2FyZS5wcm9ncmFtLlN0YXJ0U3RhdGUiigEKC1N0ZXBSZXF1ZXN0Ei0KDGV4ZWN1dGlvbl9pZBgBIAEoCzIXLmNvYmJsZXdhcmUuY29tbW9uLlV1aWQSDQoFc3RhdGUYAiABKAwSJwoFZXZlbnQYAyABKAsyGC5jb2JibGV3YXJlLmV2ZW50cy5FdmVudBIUCgxlZmZlY3RfbGltaXQYBCABKA0iSgoMU3RlcFJlc3BvbnNlEg0KBXN0YXRlGAEgASgMEisKB2VmZmVjdHMYAiADKAsyGi5jb2JibGV3YXJlLmVmZmVjdHMuRWZmZWN0Ih4KDUVycm9yUmVzcG9uc2USDQoFZXJyb3IYASABKAliCGVkaXRpb25zcOkH", [file_common, file_effects, file_events]);
 
 /**
  * @generated from message cobbleware.program.StartState
@@ -85,6 +85,13 @@ export type StepRequest = Message<"cobbleware.program.StepRequest"> & {
    * @generated from field: cobbleware.events.Event event = 3;
    */
   event?: Event | undefined;
+
+  /**
+   * The maximum number of effects the Runtime will accept from this step.
+   *
+   * @generated from field: uint32 effect_limit = 4;
+   */
+  effectLimit: number;
 };
 
 /**

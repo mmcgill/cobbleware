@@ -212,6 +212,7 @@ Deno.test('Execution sync asynchronously advances state and acknowledges effect 
     const step = fromBinary(Program.StepRequestSchema, receivedStep);
     assertEquals(step.executionId?.high, 1n, 'program should receive the execution id');
     assertEquals(step.event?.event.case, 'started', 'program should receive the queued event');
+    assertEquals(step.effectLimit, 50, 'program should receive the available effect capacity');
     assertEquals(
       receivedPlayer,
       '00000000-0000-0003-0000-000000000004',
@@ -410,6 +411,35 @@ Deno.test('Execution sync retains at most fifty unacknowledged effects', async (
       51n,
       'dropped effects must not leave a sequence gap',
     );
+  } finally {
+    await app.cleanup();
+  }
+});
+
+Deno.test('Execution sync advertises the remaining effect capacity for each step', async () => {
+  const effect = create(Effects.EffectSchema, {
+    effect: { case: 'emitBeep', value: create(Effects.EmitBeepSchema, {}) },
+  });
+  const effectLimits: number[] = [];
+  let calls = 0;
+  const app = await createTestApp((_request, _player, _program, body) => {
+    const step = fromBinary(Program.StepRequestSchema, body);
+    effectLimits.push(step.effectLimit);
+    const effectCount = calls++ === 0 ? 49 : 2;
+    return Promise.resolve(stepResponse(new Uint8Array([calls]), Array(effectCount).fill(effect)));
+  });
+  const initial = execution({ events: [startedEvent(1n), startedEvent(2n)] });
+  try {
+    let result: Internal.ExecutionResult | undefined;
+    for (let attempt = 0; attempt < 100; attempt += 1) {
+      result = (await decodeResponse(await app.handler(request([initial])))).results[0];
+      if (result?.eventSeqNum === 2n) break;
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    }
+
+    assertEquals(result?.eventSeqNum, 2n, 'both events should complete');
+    assertEquals(JSON.stringify(effectLimits), JSON.stringify([50, 1]), 'effect limits');
+    assertEquals(result?.effects.length, 50, 'only the advertised capacity should be retained');
   } finally {
     await app.cleanup();
   }
