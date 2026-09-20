@@ -2,7 +2,9 @@
 
 import { fromBinary, Program } from '@cobbleware/core';
 import { jsonResponse } from '../auth/http.ts';
+import { BYTES_PER_MEBIBYTE } from '../config.ts';
 import type { ActiveProgram } from './types.ts';
+import { workerServicePath } from './service-path.ts';
 
 export const PROGRAM_BINARY_CONTENT_TYPE = 'application/octet-stream';
 
@@ -23,16 +25,16 @@ export type ProgramRunner = {
 };
 
 export class RuntimeProgramRunner implements ProgramRunner {
+  constructor(private readonly playerMemoryQuotaBytes: number) {}
+
   async startStates(
     request: Request,
     playerUUID: string,
     program: ActiveProgram,
   ): Promise<StartStates> {
-    const worker = await EdgeRuntime.userWorkers.create({
-      servicePath: workerServicePath(playerUUID, program.metadata.id),
-      maybeEszip: program.content,
-      maybeEntrypoint: 'file:///src/index.ts',
-    });
+    const worker = await EdgeRuntime.userWorkers.create(
+      userWorkerOptions(playerUUID, program, this.playerMemoryQuotaBytes),
+    );
 
     const programRequest = new Request(START_STATES_PATH, { method: 'GET' });
     EdgeRuntime.applySupabaseTag(request, programRequest);
@@ -46,11 +48,9 @@ export class RuntimeProgramRunner implements ProgramRunner {
     program: ActiveProgram,
     body: Uint8Array,
   ): Promise<Response> {
-    const worker = await EdgeRuntime.userWorkers.create({
-      servicePath: workerServicePath(playerUUID, program.metadata.id),
-      maybeEszip: program.content,
-      maybeEntrypoint: 'file:///src/index.ts',
-    });
+    const worker = await EdgeRuntime.userWorkers.create(
+      userWorkerOptions(playerUUID, program, this.playerMemoryQuotaBytes),
+    );
 
     const programRequest = new Request(NEXT_STATE_PATH, {
       method: 'POST',
@@ -80,6 +80,19 @@ export function programErrorResponse(error: unknown): Response {
   return jsonResponse({ programError: describeProgramError(error) });
 }
 
+export function userWorkerOptions(
+  playerUUID: string,
+  program: ActiveProgram,
+  playerMemoryQuotaBytes: number,
+): CobblewareUserWorkerOptions {
+  return {
+    servicePath: workerServicePath(playerUUID, program.metadata.id),
+    maybeEszip: program.content,
+    maybeEntrypoint: 'file:///src/index.ts',
+    memoryLimitMb: playerMemoryQuotaBytes / BYTES_PER_MEBIBYTE,
+  };
+}
+
 export function unpackStartStates(content: Uint8Array): StartStates {
   try {
     const root = fromBinary(Program.StartStatesResponseSchema, content);
@@ -103,10 +116,6 @@ export function unpackStartStates(content: Uint8Array): StartStates {
       `program returned an invalid /startStates response: ${describeProgramError(error)}`,
     );
   }
-}
-
-function workerServicePath(playerUUID: string, programId: string): string {
-  return `cobbleware-${encodeURIComponent(playerUUID)}-${programId}`;
 }
 
 function describeProgramError(error: unknown): string {

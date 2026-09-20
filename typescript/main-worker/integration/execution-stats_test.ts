@@ -76,6 +76,8 @@ Deno.test('Execution statistics flow from the Mod API to a Player WebSocket', as
 
     const player = snapshot.players[0];
     assertUuidEquals(player.playerId, PLAYER_ID, 'received the wrong player statistics');
+    assertEquals(player.usedBytes, 0n, 'a player without a User Worker should use no memory');
+    assertEquals(player.maxBytes, 256n * 1024n * 1024n, 'memory quota changed');
     assertEquals(player.events[0].accepted, 4n, 'accepted-event count changed');
     assertEquals(player.events[0].dropped, 5n, 'dropped-event count changed');
     assertEquals(player.eventsPerSync[0].count, 2n, 'events-per-sync count changed');

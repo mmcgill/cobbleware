@@ -208,7 +208,8 @@ At the end of every server tick, the Mod finalizes that tick's raw player-attrib
 and offers one `ExecutionStatsTick` protobuf message to its long-lived Main Worker WebSocket. A player
 entry preserves the existing per-Cobbleputer and event/effect-type measurements and state gauge; it is
 not aggregated over players, Cobbleputers, types, or the Mod's retention window. The message has a
-process-local tick sequence number and capture time. The Mod does not send the server-wide
+process-local tick sequence number and capture time. Its `used_bytes` and `max_bytes` fields remain zero;
+the Main Worker sets those fields only in the player-scoped Browser WebSocket copy. The Mod does not send the server-wide
 execution-sync duration/outcome metric because it cannot be attributed to an individual player.
 
 Stats streaming is best-effort. The server tick never waits for a connection or a send; ticks produced

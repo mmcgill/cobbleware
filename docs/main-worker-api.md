@@ -104,10 +104,14 @@ same-origin `Origin` header.
 After a successful `101 Switching Protocols` handshake for an accepted stream, every server-to-client message is one
 binary WebSocket frame containing the binary protobuf wire representation of
 `cobbleware.internal.ExecutionStatsTick`. Each message contains exactly one entry, for the authenticated Player,
-and preserves that server tick's raw per-Cobbleputer/type measurements. The Main Worker sends its cached latest
-player-scoped tick immediately after connecting, when one exists, then sends subsequent ticks for that Player. The
-Mod normally supplies one tick per server tick; the Main Worker has no independent sampling timer. The connection is
-read-only: clients do not send application messages, and the endpoint defines no WebSocket subprotocol.
+and preserves that server tick's raw per-Cobbleputer/type measurements. The Main Worker sets the entry's
+`used_bytes` to its current sum of `usedHeapSize + externalMemory` across that Player's live User Workers, and sets
+`max_bytes` to the configured per-player memory limit. A Player without a live User Worker receives zero
+`used_bytes`; `max_bytes` remains the configured limit. The memory fields are instantaneous values, not aggregates.
+The Main Worker sends its cached latest player-scoped tick immediately after connecting, when one exists, then sends
+subsequent ticks for that Player. The Mod normally supplies one tick per server tick; the Main Worker has no
+independent sampling timer. The connection is read-only: clients do not send application messages, and the endpoint
+defines no WebSocket subprotocol.
 
 There may be only one open execution-stats WebSocket for a Player, regardless of browser session. A second upgrade
 attempt succeeds at the WebSocket handshake, then receives exactly one text WebSocket frame before the Main Worker

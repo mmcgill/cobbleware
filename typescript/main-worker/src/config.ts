@@ -4,6 +4,8 @@ export const SESSION_COOKIE_MAX_AGE_SECONDS = 30 * 24 * 60 * 60;
 export const DEFAULT_COOKIE_NAME = 'cobbleware_session';
 export const MAX_JSON_BODY_BYTES = 16 * 1024;
 export const DEFAULT_PLAYER_PROGRAM_QUOTA_BYTES = 10 * 1024 * 1024;
+export const BYTES_PER_MEBIBYTE = 1024 * 1024;
+export const DEFAULT_PLAYER_MEMORY_QUOTA_BYTES = 128 * BYTES_PER_MEBIBYTE;
 
 export type AppConfig = {
   apiKey: string | undefined;
@@ -14,6 +16,7 @@ export type AppConfig = {
   sessionCookieMaxAgeSeconds: number;
   maxJsonBodyBytes: number;
   playerProgramQuotaBytes: number;
+  playerMemoryQuotaBytes: number;
 };
 
 export type ConfigOverrides = Partial<AppConfig> & {
@@ -39,6 +42,9 @@ export function configFromEnv(overrides: ConfigOverrides = {}): AppConfig {
       SESSION_COOKIE_MAX_AGE_SECONDS,
     maxJsonBodyBytes: overrides.maxJsonBodyBytes ?? MAX_JSON_BODY_BYTES,
     playerProgramQuotaBytes: overrides.playerProgramQuotaBytes ?? readProgramQuotaFromEnv(),
+    playerMemoryQuotaBytes: readPlayerMemoryQuota(
+      overrides.playerMemoryQuotaBytes ?? Deno.env.get('COBBLEWARE_PLAYER_MEMORY_QUOTA_BYTES'),
+    ),
   };
 }
 
@@ -51,6 +57,22 @@ function readProgramQuotaFromEnv(): number {
   const quota = Number(value);
   if (!Number.isSafeInteger(quota) || quota < 0) {
     throw new Error('COBBLEWARE_PLAYER_PROGRAM_QUOTA_BYTES must be a non-negative integer');
+  }
+  return quota;
+}
+
+function readPlayerMemoryQuota(value: string | number | undefined): number {
+  if (value === undefined || (typeof value === 'string' && value.trim() === '')) {
+    return DEFAULT_PLAYER_MEMORY_QUOTA_BYTES;
+  }
+
+  const quota = typeof value === 'number' ? value : Number(value);
+  if (
+    !Number.isSafeInteger(quota) || quota <= 0 || quota % BYTES_PER_MEBIBYTE !== 0
+  ) {
+    throw new Error(
+      'COBBLEWARE_PLAYER_MEMORY_QUOTA_BYTES must be a positive whole number of MiB',
+    );
   }
   return quota;
 }

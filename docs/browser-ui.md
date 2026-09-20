@@ -27,13 +27,16 @@ The UI does not provide a way to delete the active program; uploading a replacem
 operation.
 
 The page also has an execution-stats section. It opens one WebSocket to
-`/playerapi/v1/execution-stats` and receives player-scoped raw `ExecutionStatsTick` protobuf messages. It retains and
+`/playerapi/v1/execution-stats` and receives player-scoped `ExecutionStatsTick` protobuf messages. It retains and
 aggregates up to 600 received ticks locally to render coverage, offered events per execution sync, accepted/dropped
-events, effect attempts, failures and timing, and currently loaded running/stopped Cobbleputers. It displays when the
-newest sample was captured, marks the view stale when no update arrives for more than a few reporting intervals, and
-marks coverage incomplete when tick-sequence gaps are observed. The section initially indicates that no statistics are
-available if the Main Worker has not yet received a report for the Player. A rejected or closed connection is shown as
-a stats-connection error and may be retried without reloading the rest of the page.
+events, effect attempts, failures and timing, and currently loaded running/stopped Cobbleputers. It also displays the
+newest tick's current User Worker memory usage as a progress bar, using `used_bytes` out of `max_bytes`; memory is
+instantaneous and is never aggregated over the retained window. A player without a live User Worker displays zero
+usage out of the configured limit. It displays when the newest sample was captured, marks the view stale when no
+update arrives for more than a few reporting intervals, and marks coverage incomplete when tick-sequence gaps are
+observed. The section initially indicates that no statistics are available if the Main Worker has not yet received a
+report for the Player. A rejected or closed connection is shown as a stats-connection error and may be retried without
+reloading the rest of the page.
 
 The section also displays one responsive 200-pixel-high canvas history. Each received tick occupies one right-aligned
 CSS-pixel column. The middle of the canvas divides the two metric families: event columns extend upward and effect

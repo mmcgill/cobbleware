@@ -111,6 +111,9 @@ message ExecutionStatsTick {
   message PlayerStats {
     // Identifies the player whose metrics are represented. Required by the application contract.
     cobbleware.common.Uuid player_id = 1;
+    // used_bytes and max_bytes are 0 in messages from the Mod; these fields are only used by the runtime.
+    uint64 used_bytes = 6;
+    uint64 max_bytes = 7;
     repeated EventMeasurement events = 2;
     repeated EventsPerSyncMeasurement events_per_sync = 3;
     repeated EffectMeasurement effects = 4;

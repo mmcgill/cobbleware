@@ -378,6 +378,21 @@ td code {
   margin: 0.35rem 0 0;
 }
 
+.stats-memory {
+  display: grid;
+  gap: 0.35rem;
+}
+
+.stats-memory progress {
+  width: 100%;
+  height: 0.8rem;
+  accent-color: var(--accent-strong);
+}
+
+.stats-memory progress.over-limit {
+  accent-color: var(--danger);
+}
+
 .visually-hidden {
   position: absolute;
   width: 1px;

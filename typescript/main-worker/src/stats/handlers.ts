@@ -2,18 +2,37 @@ import { create, fromBinary, toBinary } from '@cobbleware/core';
 import * as Internal from '@cobbleware/core/internal';
 import type { AppConfig } from '../config.ts';
 import { requireModAuth, requireSameOrigin } from '../auth/middleware.ts';
+import { playerWorkerServicePathPrefix } from '../programs/service-path.ts';
+
+type MemoryStats =
+  | Map<string, CobblewareWorkerHeapStatisticsWithServicePath>
+  | Record<string, CobblewareWorkerHeapStatisticsWithServicePath>;
+type MemoryStatsProvider = () => Promise<MemoryStats>;
+
+export type ExecutionStatsHubOptions = {
+  memoryQuotaBytes: number;
+  memoryStats?: MemoryStatsProvider;
+};
 
 /** Retains the latest non-durable raw tick per player and the one permitted player stream. */
 export class ExecutionStatsHub {
   private readonly reports = new Map<string, Internal.ExecutionStatsTick>();
   private readonly streams = new Map<string, WebSocket>();
+  private readonly memoryStats: MemoryStatsProvider;
   private modStream: WebSocket | undefined;
   private lastModTick = 0n;
+  private modGeneration = 0;
+  private modProcessing = Promise.resolve();
+
+  constructor(private readonly options: ExecutionStatsHubOptions) {
+    this.memoryStats = options.memoryStats ?? (() => EdgeRuntime.userWorkers.memStats());
+  }
 
   openMod(socket: WebSocket): void {
     const previous = this.modStream;
     this.modStream = socket;
     this.lastModTick = 0n;
+    const generation = ++this.modGeneration;
     if (previous !== undefined && previous !== socket) {
       try {
         previous.close(1012, 'replaced by a newer Mod statistics stream');
@@ -31,21 +50,7 @@ export class ExecutionStatsHub {
         );
         return;
       }
-      try {
-        const report = fromBinary(Internal.ExecutionStatsTickSchema, new Uint8Array(event.data));
-        validate(report);
-        if (report.tickSequence <= this.lastModTick) {
-          throw new Error('tick sequence must increase within one Mod stream');
-        }
-        this.lastModTick = report.tickSequence;
-        this.accept(report);
-      } catch (error) {
-        rejectSocket(
-          socket,
-          'invalid-execution-stats-frame',
-          describeError(error, 'Invalid execution statistics.'),
-        );
-      }
+      this.enqueueModReport(socket, generation, event.data);
     };
     socket.onclose = () => this.releaseMod(socket);
     socket.onerror = () => this.releaseMod(socket);
@@ -87,10 +92,53 @@ export class ExecutionStatsHub {
     }
   }
 
-  private accept(report: Internal.ExecutionStatsTick): void {
+  private enqueueModReport(socket: WebSocket, generation: number, data: ArrayBuffer): void {
+    this.modProcessing = this.modProcessing.then(async () => {
+      if (this.modStream !== socket || this.modGeneration !== generation) return;
+
+      let report: Internal.ExecutionStatsTick;
+      try {
+        report = fromBinary(Internal.ExecutionStatsTickSchema, new Uint8Array(data));
+        validate(report);
+        if (report.tickSequence <= this.lastModTick) {
+          throw new Error('tick sequence must increase within one Mod stream');
+        }
+        this.lastModTick = report.tickSequence;
+      } catch (error) {
+        rejectSocket(
+          socket,
+          'invalid-execution-stats-frame',
+          describeError(error, 'Invalid execution statistics.'),
+        );
+        return;
+      }
+
+      let memoryUsage = new Map<string, bigint>();
+      try {
+        memoryUsage = memoryUsageByPlayer(
+          await this.memoryStats(),
+          report.players.map((player) => uuidString(player.playerId!)),
+        );
+      } catch (error) {
+        console.error('Unable to collect user-worker memory statistics:', error);
+      }
+      if (this.modStream !== socket || this.modGeneration !== generation) return;
+      this.accept(report, memoryUsage);
+    });
+  }
+
+  private accept(
+    report: Internal.ExecutionStatsTick,
+    memoryUsage: ReadonlyMap<string, bigint>,
+  ): void {
     for (const player of report.players) {
       const playerId = uuidString(player.playerId!);
-      const snapshot = playerSnapshot(report, player);
+      const snapshot = playerSnapshot(
+        report,
+        player,
+        memoryUsage.get(playerId) ?? 0n,
+        BigInt(this.options.memoryQuotaBytes),
+      );
       this.reports.set(playerId, snapshot);
       this.send(playerId, snapshot);
     }
@@ -114,6 +162,7 @@ export class ExecutionStatsHub {
     if (this.modStream === socket) {
       this.modStream = undefined;
       this.lastModTick = 0n;
+      this.modGeneration += 1;
     }
   }
 }
@@ -187,12 +236,50 @@ function rejectSocket(socket: WebSocket, code: string, error: string): void {
 function playerSnapshot(
   report: Internal.ExecutionStatsTick,
   player: Internal.ExecutionStatsTick_PlayerStats,
+  usedBytes: bigint,
+  maxBytes: bigint,
 ): Internal.ExecutionStatsTick {
   return create(Internal.ExecutionStatsTickSchema, {
     sampledAtUnixMillis: report.sampledAtUnixMillis,
     tickSequence: report.tickSequence,
-    players: [player],
+    players: [create(Internal.ExecutionStatsTick_PlayerStatsSchema, {
+      ...player,
+      usedBytes,
+      maxBytes,
+    })],
   });
+}
+
+export function memoryUsageByPlayer(
+  memoryStats: MemoryStats,
+  playerIds: Iterable<string>,
+): Map<string, bigint> {
+  const usage = new Map<string, bigint>();
+  const playerPrefixes = [...playerIds].map((playerId) =>
+    [
+      playerId,
+      playerWorkerServicePathPrefix(playerId),
+    ] as const
+  );
+  const workers = memoryStats instanceof Map ? memoryStats.values() : Object.values(memoryStats);
+  for (const worker of workers) {
+    const usedHeapSize = validByteCount(worker.stats?.usedHeapSize);
+    const externalMemory = validByteCount(worker.stats?.externalMemory);
+    if (usedHeapSize === undefined || externalMemory === undefined) continue;
+
+    for (const [playerId, prefix] of playerPrefixes) {
+      if (!worker.servicePath.startsWith(prefix)) continue;
+      usage.set(playerId, (usage.get(playerId) ?? 0n) + usedHeapSize + externalMemory);
+      break;
+    }
+  }
+  return usage;
+}
+
+function validByteCount(value: number | undefined): bigint | undefined {
+  return value === undefined || !Number.isSafeInteger(value) || value < 0
+    ? undefined
+    : BigInt(value);
 }
 
 function validate(report: Internal.ExecutionStatsTick): void {

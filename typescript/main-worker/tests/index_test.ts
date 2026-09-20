@@ -52,6 +52,8 @@ Deno.test('/index.html contains the programs UI', async () => {
       'Events and effects per tick',
       'stats-activity-graph',
       'stats-graph-tooltip',
+      'stats-memory-progress',
+      'renderStatsMemory',
       'drawStatsGraphColumn',
       'updateStatsGraphTooltip',
     ]

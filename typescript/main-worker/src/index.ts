@@ -45,12 +45,15 @@ export async function createHandler(
   const config = options.config ?? configFromEnv();
   const store = options.store ?? await DurableAuthStore.open(config);
   const programStore = options.programStore ?? new DurableProgramStore(config);
-  const programRunner = options.programRunner ?? new RuntimeProgramRunner();
+  const programRunner = options.programRunner ??
+    new RuntimeProgramRunner(config.playerMemoryQuotaBytes);
   const executionCoordinator = options.executionCoordinator ?? new ExecutionManager(
     programStore,
     programRunner,
   );
-  const executionStatsHub = options.executionStatsHub ?? new ExecutionStatsHub();
+  const executionStatsHub = options.executionStatsHub ?? new ExecutionStatsHub({
+    memoryQuotaBytes: config.playerMemoryQuotaBytes,
+  });
 
   return async (request) => {
     try {

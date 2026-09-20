@@ -105,6 +105,14 @@
               <dd id="stats-window"></dd>
             </div>
             <div>
+              <dt>Memory</dt>
+              <dd class="stats-memory">
+                <progress id="stats-memory-progress" max="1" value="0"
+                  aria-label="Player memory usage"></progress>
+                <span id="stats-memory-text"></span>
+              </dd>
+            </div>
+            <div>
               <dt>Events per sync</dt>
               <dd id="stats-events-per-sync"></dd>
             </div>
@@ -153,6 +161,8 @@
         statsGraphTooltip: document.querySelector('#stats-graph-tooltip'),
         statsSampledAt: document.querySelector('#stats-sampled-at'),
         statsWindow: document.querySelector('#stats-window'),
+        statsMemoryProgress: document.querySelector('#stats-memory-progress'),
+        statsMemoryText: document.querySelector('#stats-memory-text'),
         statsEventsPerSync: document.querySelector('#stats-events-per-sync'),
         statsEvents: document.querySelector('#stats-events'),
         statsEffects: document.querySelector('#stats-effects'),
@@ -399,6 +409,12 @@
         return value.toLocaleString();
       }
 
+      function formatStatBytes(value) {
+        return value <= BigInt(Number.MAX_SAFE_INTEGER)
+          ? formatBytes(Number(value))
+          : `${formatBigInt(value)} B`;
+      }
+
       function formatAverage(total, count, suffix = '') {
         if (count === 0n) {
           return `0${suffix}`;
@@ -430,6 +446,7 @@
           `${statsTicks.length.toLocaleString()} of ${STATS_RETENTION_TICKS.toLocaleString()} received ticks${
             statsGapObserved ? ' (gaps observed)' : ''
           }`;
+        renderStatsMemory(statsTicks.at(-1));
         elements.statsEventsPerSync.textContent = `${
           formatBigInt(player.eventsPerSyncCount)
         } records; average ${
@@ -449,6 +466,26 @@
           `${player.runningCobbleputers.toLocaleString()} running; ${player.stoppedCobbleputers.toLocaleString()} stopped`;
         elements.statsDetails.hidden = false;
         renderStatsGraphs();
+      }
+
+      function renderStatsMemory(tick) {
+        const { usedBytes, maxBytes } = tick;
+        if (maxBytes === 0n) {
+          elements.statsMemoryProgress.max = 1;
+          elements.statsMemoryProgress.value = 0;
+          elements.statsMemoryProgress.classList.remove('over-limit');
+          elements.statsMemoryProgress.setAttribute('aria-label', 'Player memory usage is unavailable');
+          elements.statsMemoryText.textContent = 'Unavailable';
+          return;
+        }
+
+        const displayedValue = usedBytes > maxBytes ? maxBytes : usedBytes;
+        elements.statsMemoryProgress.max = Number(maxBytes);
+        elements.statsMemoryProgress.value = Number(displayedValue);
+        elements.statsMemoryProgress.classList.toggle('over-limit', usedBytes >= maxBytes);
+        const text = `${formatStatBytes(usedBytes)} of ${formatStatBytes(maxBytes)}`;
+        elements.statsMemoryProgress.setAttribute('aria-label', `Player memory usage: ${text}`);
+        elements.statsMemoryText.textContent = text;
       }
 
       function renderStatsGraphs() {
@@ -665,6 +702,8 @@
         const syncs = (playerFields.get(3) || []).map(decodeEventsPerSyncMeasurement);
         const effects = (playerFields.get(4) || []).map(decodeEffectMeasurement);
         const states = (playerFields.get(5) || []).map(decodeCobbleputerState);
+        const usedBytes = protoVarint(playerFields, 6);
+        const maxBytes = protoVarint(playerFields, 7);
         return {
           sampledAt,
           sequence,
@@ -672,6 +711,8 @@
           syncs,
           effects,
           states,
+          usedBytes,
+          maxBytes,
           graph: summarizeStatsTickGraph(events, effects),
         };
       }
