@@ -4,6 +4,7 @@ const defaultRuntimeBinary = Deno.build.os === 'windows'
 
 const runtimeBinary = Deno.env.get('EDGE_RUNTIME_BIN') ?? defaultRuntimeBinary;
 const programDirectory = await Deno.realPath(new URL('../', import.meta.url));
+const browserUiDirectory = await Deno.realPath(new URL('../../browser-ui/', import.meta.url));
 const temporaryDirectory = await Deno.makeTempDir({
   dir: programDirectory,
   prefix: '.cobbleware-eszip-',
@@ -11,6 +12,15 @@ const temporaryDirectory = await Deno.makeTempDir({
 const bundledProgramPath = `${temporaryDirectory}/program.js`;
 
 try {
+  const browserUiBuild = new Deno.Command(Deno.execPath(), {
+    args: ['task', 'build'],
+    cwd: browserUiDirectory,
+    stdout: 'inherit',
+    stderr: 'inherit',
+  });
+  const browserUiOutput = await browserUiBuild.output();
+  if (!browserUiOutput.success) Deno.exit(browserUiOutput.code);
+
   const treeShaker = new Deno.Command(Deno.execPath(), {
     args: [
       'bundle',

@@ -30,9 +30,10 @@ it as the maximum in the Player execution-statistics stream.
 
 See [Main Worker API](../../docs/api.md) for API documentation.
 
-The bundle task tree-shakes the Main Worker with Deno's esbuild-powered bundler
-before creating `main-worker.eszip`; it intentionally does not minify the
-resulting JavaScript.
+The bundle task first builds the Browser UI from `../browser-ui` into its
+generated `static/` staging directory, then tree-shakes the Main Worker with
+Deno's esbuild-powered bundler before creating `main-worker.eszip`. The
+Main Worker JavaScript is intentionally not minified.
 
 `deno task integrate` is separate from the unit-test task. It bundles the Main
 Worker, starts the local Edge Runtime, and verifies the execution-statistics

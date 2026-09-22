@@ -1,6 +1,7 @@
 {
   "workspace": [
     "./cobbleware",
+    "./browser-ui",
     "./event-worker",
     "./examples",
     "./main-worker"

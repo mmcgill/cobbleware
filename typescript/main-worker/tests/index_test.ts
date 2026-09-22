@@ -26,14 +26,8 @@ Deno.test('unknown API paths return 401 without a Player session', async () => {
   }
 });
 
-Deno.test('/index.html contains the programs UI', async () => {
-  const response = await serveStatic(new Request('http://localhost/index.html'));
-
-  if (response.status !== 200) {
-    throw new Error(`expected status 200, got ${response.status}`);
-  }
-
-  const body = await response.text();
+Deno.test('/index.html contains the generated programs UI', async () => {
+  const html = await staticText('/index.html');
   for (
     const landmark of [
       'Your active program',
@@ -45,42 +39,45 @@ Deno.test('/index.html contains the programs UI', async () => {
       'Size',
       'player-profile-name',
       'Log out',
-      '/playerapi/v1/whoami',
-      '/playerapi/v1/logout',
-      'execution-stats-stream-already-open',
-      'statsConnectionError(error.error, false)',
       'Events and effects per tick',
       'stats-activity-graph',
       'stats-graph-tooltip',
       'stats-memory-progress',
-      'renderStatsMemory',
-      'drawStatsGraphColumn',
-      'updateStatsGraphTooltip',
     ]
   ) {
-    if (!body.includes(landmark)) {
+    if (!html.includes(landmark)) {
       throw new Error(`expected index page to contain ${landmark}`);
     }
   }
-  if (body.includes('program management UI is not implemented yet')) {
-    throw new Error('index page still contains the placeholder UI');
+
+  for (const removedControl of ['Program storage', 'Program name', 'id="drop-zone"']) {
+    if (html.includes(removedControl)) {
+      throw new Error(`index page still contains removed UI: ${removedControl}`);
+    }
   }
+
+  const scripts = references(html).filter((path) => path.endsWith('.js'));
+  if (scripts.length === 0) {
+    throw new Error('expected the generated dashboard to have a module script');
+  }
+  const scriptBody = (await Promise.all(scripts.map((path) => staticText(`/${path}`)))).join('\n');
   for (
-    const removedControl of [
-      'Program storage',
-      'Program name',
-      'id="drop-zone"',
-      'id="upload-button"',
+    const behavior of [
+      '/playerapi/v1/whoami',
+      '/playerapi/v1/logout',
+      'execution-stats-stream-already-open',
+      '/playerapi/v1/execution-stats',
     ]
   ) {
-    if (body.includes(removedControl)) {
-      throw new Error(`index page still contains removed UI: ${removedControl}`);
+    if (!scriptBody.includes(behavior)) {
+      throw new Error(`expected generated dashboard JavaScript to contain ${behavior}`);
     }
   }
 });
 
-Deno.test('static assets are found by path and use their file type', async () => {
-  const response = await serveStatic(new Request('http://localhost/style.css'));
+Deno.test('generated styles are served with the CSS content type', async () => {
+  const stylePath = stylesheetReference(await staticText('/index.html'));
+  const response = await serveStatic(new Request(`http://localhost/${stylePath}`));
 
   if (response.status !== 200) {
     throw new Error(`expected status 200, got ${response.status}`);
@@ -89,29 +86,33 @@ Deno.test('static assets are found by path and use their file type', async () =>
     throw new Error('expected a CSS response');
   }
   if (!(await response.text()).includes('--surface')) {
-    throw new Error('expected the shared stylesheet to contain the UI theme');
+    throw new Error('expected the generated stylesheet to contain the UI theme');
   }
 });
 
-Deno.test('public static assets can be loaded without a Player session', async () => {
-  const response = await handleRequest(new Request('http://localhost/style.css'));
+Deno.test('generated public static assets can be loaded without a Player session', async () => {
+  const stylePath = stylesheetReference(await staticText('/index.html'));
+  const response = await handleRequest(new Request(`http://localhost/${stylePath}`));
 
   if (response.status !== 200) {
     throw new Error(`expected status 200, got ${response.status}`);
   }
 });
 
-Deno.test('/auth.html uses the shared stylesheet', async () => {
-  const response = await serveStatic(new Request('http://localhost/auth.html'));
-  const body = await response.text();
-
-  if (response.status !== 200) {
-    throw new Error(`expected status 200, got ${response.status}`);
-  }
-  for (const landmark of ['href="./style.css"', 'class="card auth-card"', 'class="command"']) {
-    if (!body.includes(landmark)) {
+Deno.test('/auth.html has generated assets', async () => {
+  const html = await staticText('/auth.html');
+  for (const landmark of ['class="card auth-card"', 'class="command"']) {
+    if (!html.includes(landmark)) {
       throw new Error(`expected auth page to contain ${landmark}`);
     }
+  }
+
+  const assets = references(html);
+  if (!assets.some((path) => path.endsWith('.css'))) {
+    throw new Error('expected auth page to reference generated CSS');
+  }
+  if (!assets.some((path) => path.endsWith('.js'))) {
+    throw new Error('expected auth page to reference generated JavaScript');
   }
 });
 
@@ -130,3 +131,21 @@ Deno.test('static path traversal is rejected', async () => {
     throw new Error(`expected status 404, got ${response.status}`);
   }
 });
+
+async function staticText(path: string): Promise<string> {
+  const response = await serveStatic(new Request(`http://localhost${path}`));
+  if (response.status !== 200) {
+    throw new Error(`expected ${path} to be served, got ${response.status}`);
+  }
+  return response.text();
+}
+
+function references(html: string): string[] {
+  return [...html.matchAll(/(?:href|src)="([^"]+)"/g)].map((match) => match[1]!);
+}
+
+function stylesheetReference(html: string): string {
+  const path = references(html).find((reference) => reference.endsWith('.css'));
+  if (path === undefined) throw new Error('expected an HTML stylesheet reference');
+  return path;
+}

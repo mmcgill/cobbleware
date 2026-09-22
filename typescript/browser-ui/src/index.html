@@ -1,0 +1,137 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Cobbleware Dashboard</title>
+    <link rel="icon" href="./favicon.svg" type="image/svg+xml">
+  </head>
+  <body>
+    <main>
+      <header class="page-header">
+        <div>
+          <h1>Cobbleware Dashboard</h1>
+          <p
+            class="intro">Upload and replace your active program on this server. Programs are private to your
+            Minecraft player and can be loaded onto Cobbleputers in game.</p>
+        </div>
+        <div class="account-controls" aria-label="Account controls">
+          <span class="visually-hidden">Logged in as </span>
+          <strong id="player-profile-name">Loading player...</strong>
+          <button id="logout-button" class="secondary" type="button">Log out</button>
+        </div>
+      </header>
+
+      <p id="page-status" class="status" role="status" aria-live="polite"></p>
+
+      <section id="active-program-section" class="card active-program-card"
+        aria-labelledby="programs-heading" aria-describedby="upload-hint">
+        <div class="table-header">
+          <h2 id="programs-heading">Your active program</h2>
+          <button id="refresh-button" class="secondary" type="button">Refresh</button>
+        </div>
+        <p id="programs-loading" class="muted">Loading programs...</p>
+        <p id="empty-state" class="empty-state" hidden>No active program has been uploaded yet.</p>
+        <div class="table-wrapper">
+          <table id="programs-table" hidden>
+            <caption>Your active Cobbleware program</caption>
+            <thead>
+              <tr>
+                <th scope="col">Program ID</th>
+                <th scope="col">Name</th>
+                <th scope="col">Uploaded</th>
+                <th scope="col">Size</th>
+              </tr>
+            </thead>
+            <tbody id="programs-body"></tbody>
+          </table>
+        </div>
+        <section class="start-states" aria-labelledby="start-states-heading">
+          <h3 id="start-states-heading">Start states</h3>
+          <p id="start-states-loading" class="muted" hidden>Loading start states...</p>
+          <p id="start-states-empty" class="empty-state"
+            hidden>This program has no start states.</p>
+          <ul id="start-states-list" class="start-states-list" hidden></ul>
+        </section>
+        <div class="upload-controls">
+          <p id="upload-hint"
+            class="hint">Drag an ESZip bundle anywhere in this section, or choose a file.</p>
+          <input id="file-input" class="visually-hidden" type="file"
+            accept=".eszip,application/octet-stream">
+          <p id="selected-file" class="selected-file" aria-live="polite"></p>
+          <div class="button-row">
+            <button id="browse-button" class="secondary" type="button">Choose a file</button>
+            <span id="upload-status" class="muted" role="status" aria-live="polite"></span>
+          </div>
+        </div>
+      </section>
+
+      <section id="execution-stats-section" class="card" aria-labelledby="execution-stats-heading">
+        <div class="table-header">
+          <h2 id="execution-stats-heading">Execution statistics</h2>
+          <button id="stats-retry-button" class="secondary" type="button" hidden>Retry</button>
+        </div>
+        <p id="stats-status" class="muted" role="status"
+          aria-live="polite">Connecting to statistics...</p>
+        <div id="stats-details" class="stats-details" hidden>
+          <figure class="stats-graph">
+            <figcaption>
+              <strong>Events and effects per tick</strong>
+              <span
+                class="stats-graph-scale">Each column is one received tick. Events extend upward from the middle;
+                effects extend downward. 1 px per operation, capped at 100 px per half.</span>
+            </figcaption>
+            <canvas id="stats-activity-graph" class="stats-graph-canvas" height="200" role="img"
+              aria-label="Events and effects per received tick. Events extend upward and effects downward from the middle.">
+              Events and effects per received tick.
+            </canvas>
+            <div id="stats-graph-tooltip" class="stats-graph-tooltip" role="tooltip" hidden></div>
+            <ul class="stats-graph-legend" aria-label="Events and effects graph legend">
+              <li><span class="stats-graph-swatch accepted" aria-hidden="true"></span>Accepted events</li>
+              <li><span class="stats-graph-swatch dropped" aria-hidden="true"></span>Dropped events</li>
+              <li><span class="stats-graph-swatch succeeded" aria-hidden="true"></span>Successful effects</li>
+              <li><span class="stats-graph-swatch failed" aria-hidden="true"></span>Failed effects</li>
+              <li><span class="stats-graph-swatch capped" aria-hidden="true"></span>Capped</li>
+            </ul>
+          </figure>
+          <dl>
+            <div>
+              <dt>Captured</dt>
+              <dd id="stats-sampled-at"></dd>
+            </div>
+            <div>
+              <dt>Window coverage</dt>
+              <dd id="stats-window"></dd>
+            </div>
+            <div>
+              <dt>Memory</dt>
+              <dd class="stats-memory">
+                <progress id="stats-memory-progress" max="1" value="0"
+                  aria-label="Player memory usage"></progress>
+                <span id="stats-memory-text"></span>
+              </dd>
+            </div>
+            <div>
+              <dt>Events per sync</dt>
+              <dd id="stats-events-per-sync"></dd>
+            </div>
+            <div>
+              <dt>Event admissions</dt>
+              <dd id="stats-events"></dd>
+            </div>
+            <div>
+              <dt>Effects</dt>
+              <dd id="stats-effects"></dd>
+            </div>
+            <div>
+              <dt>Loaded Cobbleputers</dt>
+              <dd id="stats-cobbleputers"></dd>
+            </div>
+          </dl>
+        </div>
+      </section>
+    </main>
+
+    <script type="module" src="./dashboard.ts"></script>
+  </body>
+</html>
