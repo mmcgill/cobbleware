@@ -27,6 +27,11 @@ import {
   handleModExecutionStats,
   handlePlayerExecutionStats,
 } from './stats/handlers.ts';
+import {
+  ExecutionLogHub,
+  handleModExecutionLogs,
+  handlePlayerExecutionLogs,
+} from './logs/handlers.ts';
 
 const HELLO_BODY = JSON.stringify({ message: 'hello' });
 
@@ -37,6 +42,7 @@ export type AppOptions = {
   programRunner?: ProgramRunner;
   executionCoordinator?: ExecutionCoordinator;
   executionStatsHub?: ExecutionStatsHub;
+  executionLogHub?: ExecutionLogHub;
 };
 
 export async function createHandler(
@@ -54,6 +60,7 @@ export async function createHandler(
   const executionStatsHub = options.executionStatsHub ?? new ExecutionStatsHub({
     memoryQuotaBytes: config.playerMemoryQuotaBytes,
   });
+  const executionLogHub = options.executionLogHub ?? new ExecutionLogHub();
 
   return async (request) => {
     try {
@@ -65,6 +72,7 @@ export async function createHandler(
         programRunner,
         executionCoordinator,
         executionStatsHub,
+        executionLogHub,
       );
     } catch {
       return jsonError('internal server error', 500);
@@ -80,6 +88,7 @@ async function routeRequest(
   programRunner: ProgramRunner,
   executionCoordinator: ExecutionCoordinator,
   executionStatsHub: ExecutionStatsHub,
+  executionLogHub: ExecutionLogHub,
 ): Promise<Response> {
   const { pathname } = new URL(request.url);
 
@@ -116,7 +125,10 @@ async function routeRequest(
     const authError = await requirePlayerAuth(request, config, store, context, 'api');
     if (authError !== null) return authError;
     const response = await handlePlayerLogout(request, config, store, context.sessionToken!);
-    if (response.status === 204) executionStatsHub.closePlayer(context.player!.playerUUID);
+    if (response.status === 204) {
+      executionStatsHub.closePlayer(context.player!.playerUUID);
+      executionLogHub.closePlayer(context.player!.playerUUID);
+    }
     return response;
   }
 
@@ -131,6 +143,19 @@ async function routeRequest(
       });
     }
     return handlePlayerExecutionStats(request, context.player!.playerUUID, executionStatsHub);
+  }
+
+  if (pathname === '/playerapi/v1/logs') {
+    const context: RequestContext = {};
+    const authError = await requirePlayerAuth(request, config, store, context, 'api');
+    if (authError !== null) {
+      if (request.headers.get('upgrade')?.toLowerCase() !== 'websocket') return authError;
+      return handlePlayerExecutionLogs(request, undefined, executionLogHub, {
+        code: 'unauthorized',
+        error: 'Player authentication failed.',
+      });
+    }
+    return handlePlayerExecutionLogs(request, context.player!.playerUUID, executionLogHub);
   }
 
   if (pathname === '/playerapi/v1/programs') {
@@ -202,6 +227,9 @@ async function routeRequest(
     }
     if (pathname === '/modapi/v1/execution-stats') {
       return handleModExecutionStats(request, config, executionStatsHub);
+    }
+    if (pathname === '/modapi/v1/logs') {
+      return handleModExecutionLogs(request, config, executionLogHub);
     }
     const programMatch = /^\/modapi\/v1\/players\/([^/]+)\/program$/.exec(pathname);
     if (programMatch !== null) {

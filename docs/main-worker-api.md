@@ -335,6 +335,36 @@ Because this operation is authenticated with a cookie and is intended for browse
 `Origin` check used by upload and logout. Although a step does not mutate persistent Cobbleputer state, running a
 program can consume runtime resources, so the check is still required.
 
+### Execution Logs Stream
+
+The authenticated `GET /playerapi/v1/logs` operation upgrades to a WebSocket that streams execution logs
+to the player. Each player receives only execution logs from executions they have started. Players cannot
+see one anothers' execution logs.
+
+Each log entry is delivered as a single WebSocket message represented as a binary protobuf
+`cobbleware.internal.ExecutionLogEntry` message.
+
+The stream requires the same-origin `Origin` header as the execution-statistics stream. It is
+read-only: client application messages cause the Main Worker to send a UTF-8 JSON error frame and
+close the socket with `1008` (`Policy Violation`). There may be only one open execution-logs WebSocket
+per Player, regardless of browser session. A second upgrade succeeds at the WebSocket handshake, then
+receives exactly one text WebSocket frame before closing with `1008`; the text frame is UTF-8 JSON:
+
+```json
+{
+  "code": "execution-logs-stream-already-open",
+  "error": "Execution logs are already open in another browser window."
+}
+```
+
+As with execution statistics, missing/invalid Player authentication and same-origin failures on an
+upgrade complete the upgrade, send one UTF-8 JSON error frame containing `code` and `error`, then
+close with `1008`. A non-upgrade `GET` receives `426` with `Upgrade: websocket`; other methods receive
+`405` with `Allow: GET`. Closing an accepted socket releases the Player's stream slot. If the session
+that opened the stream is logged out or otherwise invalidated, the Main Worker closes that stream and
+stops sending it data. Execution logs are non-durable: a newly connected Player receives no historical
+entries.
+
 ## Mod API
 
 ### Player Authentication
@@ -381,6 +411,33 @@ them. A malformed frame closes the socket with `1008`. Authentication/configurat
 also complete the upgrade, send one UTF-8 JSON error frame containing `code` and `error`, then close with `1008`;
 this avoids Edge Runtime's erroneous `502` conversion for pre-upgrade error bodies. A non-upgrade `GET` receives
 `426` with `Upgrade: websocket`; other methods receive `405` with `Allow: GET`.
+
+### Execution Logs
+
+The authenticated `GET /modapi/v1/logs` operation upgrades to a WebSocket that the
+Mod and Event Worker use to stream execution-related log entries of various kinds to the Main Worker,
+which in turn routes them to connected players.
+The caller supplies the usual Bearer authorization header in the handshake. Once the connection has
+been successfully upgraded, the caller sends one message per log entry as a binary protobuf
+`cobbleware.internal.ExecutionLogEntry` message.
+
+The Mod uses that Bearer header directly. The bundled Edge Runtime WebSocket client cannot add
+request headers, so the Event Worker instead supplies the same API key as the reserved
+`cobbleware.bearer.<base64url-key>` WebSocket subprotocol. The Main Worker accepts that reserved
+subprotocol only for this endpoint; it does not select an application subprotocol. Both forms have
+the same authorization scope and are intended only for the local Runtime-to-Main-Worker connection.
+
+When a log entry is received, the Main Worker checks for an active Player API Execution Logs WebSocket
+for the relevant player. If there is one, the event is forwarded as-is. If there is not, the
+event is immediately dropped. The Main Worker does not buffer or persist log entries.
+
+Any number of authenticated producer sockets may be open concurrently. Producer frames must be binary,
+parse as an `ExecutionLogEntry`, and contain both `player_id` and an entry variant. The Main Worker uses
+the decoded player id only for routing and forwards the original binary frame unchanged. A malformed or
+text frame closes only its producer socket with `1008` (`Policy Violation`). Authentication/configuration
+failures on an attempted upgrade complete the upgrade, send one UTF-8 JSON error frame containing `code`
+and `error`, then close with `1008`; a non-upgrade `GET` receives `426` with `Upgrade: websocket`; other
+methods receive `405` with `Allow: GET`.
 
 ### Program Query
 

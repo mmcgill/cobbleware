@@ -16,7 +16,7 @@ import type { Message } from "@bufbuild/protobuf";
  * Describes the file internal.proto.
  */
 export const file_internal: GenFile = /*@__PURE__*/
-  fileDesc("Cg5pbnRlcm5hbC5wcm90bxITY29iYmxld2FyZS5pbnRlcm5hbCKQAgoORXhlY3V0aW9uU3RhdGUSLQoMZXhlY3V0aW9uX2lkGAEgASgLMhcuY29iYmxld2FyZS5jb21tb24uVXVpZBIVCg1pbml0aWFsX3N0YXRlGAIgASgMEigKBmV2ZW50cxgDIAMoCzIYLmNvYmJsZXdhcmUuZXZlbnRzLkV2ZW50EhUKDWV2ZW50X3NlcV9udW0YBCABKAQSFgoOZWZmZWN0X3NlcV9udW0YBSABKAQSKgoJcGxheWVyX2lkGAYgASgLMhcuY29iYmxld2FyZS5jb21tb24uVXVpZBIzCgVzdGF0ZRgHIAEoDjIkLmNvYmJsZXdhcmUuaW50ZXJuYWwuRXhlY3V0aW9uU3RhdHVzIuYBCg9FeGVjdXRpb25SZXN1bHQSLQoMZXhlY3V0aW9uX2lkGAEgASgLMhcuY29iYmxld2FyZS5jb21tb24uVXVpZBITCgtmaW5hbF9zdGF0ZRgCIAEoDBIrCgdlZmZlY3RzGAMgAygLMhouY29iYmxld2FyZS5lZmZlY3RzLkVmZmVjdBIVCg1ldmVudF9zZXFfbnVtGAQgASgEEhYKDmVmZmVjdF9zZXFfbnVtGAUgASgEEjMKBXN0YXRlGAYgASgOMiQuY29iYmxld2FyZS5pbnRlcm5hbC5FeGVjdXRpb25TdGF0dXMiTAoRRXhlY3V0aW9uc1JlcXVlc3QSNwoKZXhlY3V0aW9ucxgBIAMoCzIjLmNvYmJsZXdhcmUuaW50ZXJuYWwuRXhlY3V0aW9uU3RhdGUiSwoSRXhlY3V0aW9uc1Jlc3BvbnNlEjUKB3Jlc3VsdHMYASADKAsyJC5jb2JibGV3YXJlLmludGVybmFsLkV4ZWN1dGlvblJlc3VsdCKWCwoSRXhlY3V0aW9uU3RhdHNUaWNrEh4KFnNhbXBsZWRfYXRfdW5peF9taWxsaXMYASABKAQSFQoNdGlja19zZXF1ZW5jZRgCIAEoBBJECgdwbGF5ZXJzGAMgAygLMjMuY29iYmxld2FyZS5pbnRlcm5hbC5FeGVjdXRpb25TdGF0c1RpY2suUGxheWVyU3RhdHMacQoOQ29iYmxlcHV0ZXJSZWYSLwoOY29iYmxlcHV0ZXJfaWQYASABKAsyFy5jb2JibGV3YXJlLmNvbW1vbi5VdWlkEi4KCHBvc2l0aW9uGAIgASgLMhwuY29iYmxld2FyZS5jb21tb24uR2xvYmFsUG9zGqcDCgtQbGF5ZXJTdGF0cxIqCglwbGF5ZXJfaWQYASABKAsyFy5jb2JibGV3YXJlLmNvbW1vbi5VdWlkEhIKCnVzZWRfYnl0ZXMYBiABKAQSEQoJbWF4X2J5dGVzGAcgASgEEkgKBmV2ZW50cxgCIAMoCzI4LmNvYmJsZXdhcmUuaW50ZXJuYWwuRXhlY3V0aW9uU3RhdHNUaWNrLkV2ZW50TWVhc3VyZW1lbnQSWQoPZXZlbnRzX3Blcl9zeW5jGAMgAygLMkAuY29iYmxld2FyZS5pbnRlcm5hbC5FeGVjdXRpb25TdGF0c1RpY2suRXZlbnRzUGVyU3luY01lYXN1cmVtZW50EkoKB2VmZmVjdHMYBCADKAsyOS5jb2JibGV3YXJlLmludGVybmFsLkV4ZWN1dGlvblN0YXRzVGljay5FZmZlY3RNZWFzdXJlbWVudBJUChJjb2JibGVwdXRlcl9zdGF0ZXMYBSADKAsyOC5jb2JibGV3YXJlLmludGVybmFsLkV4ZWN1dGlvblN0YXRzVGljay5Db2JibGVwdXRlclN0YXRlGr8BChBFdmVudE1lYXN1cmVtZW50EksKC2NvYmJsZXB1dGVyGAEgASgLMjYuY29iYmxld2FyZS5pbnRlcm5hbC5FeGVjdXRpb25TdGF0c1RpY2suQ29iYmxlcHV0ZXJSZWYSOwoEdHlwZRgCIAEoDjItLmNvYmJsZXdhcmUuaW50ZXJuYWwuSW5zdHJ1bWVudGF0aW9uRXZlbnRUeXBlEhAKCGFjY2VwdGVkGAMgASgEEg8KB2Ryb3BwZWQYBCABKAQakgEKGEV2ZW50c1BlclN5bmNNZWFzdXJlbWVudBJLCgtjb2JibGVwdXRlchgBIAEoCzI2LmNvYmJsZXdhcmUuaW50ZXJuYWwuRXhlY3V0aW9uU3RhdHNUaWNrLkNvYmJsZXB1dGVyUmVmEg0KBWNvdW50GAIgASgEEg0KBXRvdGFsGAMgASgEEgsKA21heBgEIAEoBBrpAQoRRWZmZWN0TWVhc3VyZW1lbnQSSwoLY29iYmxlcHV0ZXIYASABKAsyNi5jb2JibGV3YXJlLmludGVybmFsLkV4ZWN1dGlvblN0YXRzVGljay5Db2JibGVwdXRlclJlZhI8CgR0eXBlGAIgASgOMi4uY29iYmxld2FyZS5pbnRlcm5hbC5JbnN0cnVtZW50YXRpb25FZmZlY3RUeXBlEhEKCWF0dGVtcHRlZBgDIAEoBBIOCgZmYWlsZWQYBCABKAQSEwoLdG90YWxfbmFub3MYBSABKAQSEQoJbWF4X25hbm9zGAYgASgEGqIBChBDb2JibGVwdXRlclN0YXRlEksKC2NvYmJsZXB1dGVyGAEgASgLMjYuY29iYmxld2FyZS5pbnRlcm5hbC5FeGVjdXRpb25TdGF0c1RpY2suQ29iYmxlcHV0ZXJSZWYSQQoFc3RhdGUYAiABKA4yMi5jb2JibGV3YXJlLmludGVybmFsLkluc3RydW1lbnRhdGlvbkxpZmVjeWNsZVN0YXRlIh4KDUVycm9yUmVzcG9uc2USDQoFZXJyb3IYASABKAkqjQEKD0V4ZWN1dGlvblN0YXR1cxIgChxFWEVDVVRJT05fU1RBVFVTX1VOU1BFQ0lGSUVEEAASHAoYRVhFQ1VUSU9OX1NUQVRVU19SVU5OSU5HEAESHAoYRVhFQ1VUSU9OX1NUQVRVU19TVE9QUEVEEAISHAoYRVhFQ1VUSU9OX1NUQVRVU19DUkFTSEVEEAMq6gIKGEluc3RydW1lbnRhdGlvbkV2ZW50VHlwZRIqCiZJTlNUUlVNRU5UQVRJT05fRVZFTlRfVFlQRV9VTlNQRUNJRklFRBAAEiYKIklOU1RSVU1FTlRBVElPTl9FVkVOVF9UWVBFX1NUQVJURUQQARImCiJJTlNUUlVNRU5UQVRJT05fRVZFTlRfVFlQRV9SRVNVTUVEEAISKwonSU5TVFJVTUVOVEFUSU9OX0VWRU5UX1RZUEVfQ0hBVF9NRVNTQUdFEAMSMQotSU5TVFJVTUVOVEFUSU9OX0VWRU5UX1RZUEVfQkxPQ0tfU1RBVEVfQ0hBTkdFEAQSNwozSU5TVFJVTUVOVEFUSU9OX0VWRU5UX1RZUEVfV0lSRUxFU1NfT0JTRVJWRVJfUEFJUkVEEAUSOQo1SU5TVFJVTUVOVEFUSU9OX0VWRU5UX1RZUEVfV0lSRUxFU1NfT0JTRVJWRVJfVU5QQUlSRUQQBirSAQoZSW5zdHJ1bWVudGF0aW9uRWZmZWN0VHlwZRIrCidJTlNUUlVNRU5UQVRJT05fRUZGRUNUX1RZUEVfVU5TUEVDSUZJRUQQABIpCiVJTlNUUlVNRU5UQVRJT05fRUZGRUNUX1RZUEVfU0VORF9DSEFUEAESKQolSU5TVFJVTUVOVEFUSU9OX0VGRkVDVF9UWVBFX0VNSVRfQkVFUBACEjIKLklOU1RSVU1FTlRBVElPTl9FRkZFQ1RfVFlQRV9TRVRfUkVEU1RPTkVfUE9XRVIQAyqqAQodSW5zdHJ1bWVudGF0aW9uTGlmZWN5Y2xlU3RhdGUSLworSU5TVFJVTUVOVEFUSU9OX0xJRkVDWUNMRV9TVEFURV9VTlNQRUNJRklFRBAAEisKJ0lOU1RSVU1FTlRBVElPTl9MSUZFQ1lDTEVfU1RBVEVfUlVOTklORxABEisKJ0lOU1RSVU1FTlRBVElPTl9MSUZFQ1lDTEVfU1RBVEVfU1RPUFBFRBACYghlZGl0aW9uc3DpBw", [file_common, file_effects, file_events]);
+  fileDesc("Cg5pbnRlcm5hbC5wcm90bxITY29iYmxld2FyZS5pbnRlcm5hbCKQAgoORXhlY3V0aW9uU3RhdGUSLQoMZXhlY3V0aW9uX2lkGAEgASgLMhcuY29iYmxld2FyZS5jb21tb24uVXVpZBIVCg1pbml0aWFsX3N0YXRlGAIgASgMEigKBmV2ZW50cxgDIAMoCzIYLmNvYmJsZXdhcmUuZXZlbnRzLkV2ZW50EhUKDWV2ZW50X3NlcV9udW0YBCABKAQSFgoOZWZmZWN0X3NlcV9udW0YBSABKAQSKgoJcGxheWVyX2lkGAYgASgLMhcuY29iYmxld2FyZS5jb21tb24uVXVpZBIzCgVzdGF0ZRgHIAEoDjIkLmNvYmJsZXdhcmUuaW50ZXJuYWwuRXhlY3V0aW9uU3RhdHVzIuYBCg9FeGVjdXRpb25SZXN1bHQSLQoMZXhlY3V0aW9uX2lkGAEgASgLMhcuY29iYmxld2FyZS5jb21tb24uVXVpZBITCgtmaW5hbF9zdGF0ZRgCIAEoDBIrCgdlZmZlY3RzGAMgAygLMhouY29iYmxld2FyZS5lZmZlY3RzLkVmZmVjdBIVCg1ldmVudF9zZXFfbnVtGAQgASgEEhYKDmVmZmVjdF9zZXFfbnVtGAUgASgEEjMKBXN0YXRlGAYgASgOMiQuY29iYmxld2FyZS5pbnRlcm5hbC5FeGVjdXRpb25TdGF0dXMiTAoRRXhlY3V0aW9uc1JlcXVlc3QSNwoKZXhlY3V0aW9ucxgBIAMoCzIjLmNvYmJsZXdhcmUuaW50ZXJuYWwuRXhlY3V0aW9uU3RhdGUiSwoSRXhlY3V0aW9uc1Jlc3BvbnNlEjUKB3Jlc3VsdHMYASADKAsyJC5jb2JibGV3YXJlLmludGVybmFsLkV4ZWN1dGlvblJlc3VsdCKWCwoSRXhlY3V0aW9uU3RhdHNUaWNrEh4KFnNhbXBsZWRfYXRfdW5peF9taWxsaXMYASABKAQSFQoNdGlja19zZXF1ZW5jZRgCIAEoBBJECgdwbGF5ZXJzGAMgAygLMjMuY29iYmxld2FyZS5pbnRlcm5hbC5FeGVjdXRpb25TdGF0c1RpY2suUGxheWVyU3RhdHMacQoOQ29iYmxlcHV0ZXJSZWYSLwoOY29iYmxlcHV0ZXJfaWQYASABKAsyFy5jb2JibGV3YXJlLmNvbW1vbi5VdWlkEi4KCHBvc2l0aW9uGAIgASgLMhwuY29iYmxld2FyZS5jb21tb24uR2xvYmFsUG9zGqcDCgtQbGF5ZXJTdGF0cxIqCglwbGF5ZXJfaWQYASABKAsyFy5jb2JibGV3YXJlLmNvbW1vbi5VdWlkEhIKCnVzZWRfYnl0ZXMYBiABKAQSEQoJbWF4X2J5dGVzGAcgASgEEkgKBmV2ZW50cxgCIAMoCzI4LmNvYmJsZXdhcmUuaW50ZXJuYWwuRXhlY3V0aW9uU3RhdHNUaWNrLkV2ZW50TWVhc3VyZW1lbnQSWQoPZXZlbnRzX3Blcl9zeW5jGAMgAygLMkAuY29iYmxld2FyZS5pbnRlcm5hbC5FeGVjdXRpb25TdGF0c1RpY2suRXZlbnRzUGVyU3luY01lYXN1cmVtZW50EkoKB2VmZmVjdHMYBCADKAsyOS5jb2JibGV3YXJlLmludGVybmFsLkV4ZWN1dGlvblN0YXRzVGljay5FZmZlY3RNZWFzdXJlbWVudBJUChJjb2JibGVwdXRlcl9zdGF0ZXMYBSADKAsyOC5jb2JibGV3YXJlLmludGVybmFsLkV4ZWN1dGlvblN0YXRzVGljay5Db2JibGVwdXRlclN0YXRlGr8BChBFdmVudE1lYXN1cmVtZW50EksKC2NvYmJsZXB1dGVyGAEgASgLMjYuY29iYmxld2FyZS5pbnRlcm5hbC5FeGVjdXRpb25TdGF0c1RpY2suQ29iYmxlcHV0ZXJSZWYSOwoEdHlwZRgCIAEoDjItLmNvYmJsZXdhcmUuaW50ZXJuYWwuSW5zdHJ1bWVudGF0aW9uRXZlbnRUeXBlEhAKCGFjY2VwdGVkGAMgASgEEg8KB2Ryb3BwZWQYBCABKAQakgEKGEV2ZW50c1BlclN5bmNNZWFzdXJlbWVudBJLCgtjb2JibGVwdXRlchgBIAEoCzI2LmNvYmJsZXdhcmUuaW50ZXJuYWwuRXhlY3V0aW9uU3RhdHNUaWNrLkNvYmJsZXB1dGVyUmVmEg0KBWNvdW50GAIgASgEEg0KBXRvdGFsGAMgASgEEgsKA21heBgEIAEoBBrpAQoRRWZmZWN0TWVhc3VyZW1lbnQSSwoLY29iYmxlcHV0ZXIYASABKAsyNi5jb2JibGV3YXJlLmludGVybmFsLkV4ZWN1dGlvblN0YXRzVGljay5Db2JibGVwdXRlclJlZhI8CgR0eXBlGAIgASgOMi4uY29iYmxld2FyZS5pbnRlcm5hbC5JbnN0cnVtZW50YXRpb25FZmZlY3RUeXBlEhEKCWF0dGVtcHRlZBgDIAEoBBIOCgZmYWlsZWQYBCABKAQSEwoLdG90YWxfbmFub3MYBSABKAQSEQoJbWF4X25hbm9zGAYgASgEGqIBChBDb2JibGVwdXRlclN0YXRlEksKC2NvYmJsZXB1dGVyGAEgASgLMjYuY29iYmxld2FyZS5pbnRlcm5hbC5FeGVjdXRpb25TdGF0c1RpY2suQ29iYmxlcHV0ZXJSZWYSQQoFc3RhdGUYAiABKA4yMi5jb2JibGV3YXJlLmludGVybmFsLkluc3RydW1lbnRhdGlvbkxpZmVjeWNsZVN0YXRlIh4KDUVycm9yUmVzcG9uc2USDQoFZXJyb3IYASABKAkiNwoRRXhjZXB0aW9uTG9nRW50cnkSCwoDbXNnGAEgASgJEhUKDWNwdV90aW1lX3VzZWQYAiABKAQiVgoVTGltaXRFeGNlZWRlZExvZ0VudHJ5Eg4KBnJlYXNvbhgBIAEoCRIVCg1jcHVfdGltZV91c2VkGAIgASgEEhYKDnRvdGFsX21lbV91c2VkGAMgASgEIkwKD1Byb2dyYW1Mb2dFbnRyeRIsCgVsZXZlbBgBIAEoDjIdLmNvYmJsZXdhcmUuaW50ZXJuYWwuTG9nTGV2ZWwSCwoDbXNnGAIgASgJIvkBChFFeGVjdXRpb25Mb2dFbnRyeRIqCglwbGF5ZXJfaWQYASABKAsyFy5jb2JibGV3YXJlLmNvbW1vbi5VdWlkEjsKCWV4Y2VwdGlvbhgCIAEoCzImLmNvYmJsZXdhcmUuaW50ZXJuYWwuRXhjZXB0aW9uTG9nRW50cnlIABI9CgdsaW1pdGVkGAMgASgLMiouY29iYmxld2FyZS5pbnRlcm5hbC5MaW1pdEV4Y2VlZGVkTG9nRW50cnlIABIzCgNsb2cYBCABKAsyJC5jb2JibGV3YXJlLmludGVybmFsLlByb2dyYW1Mb2dFbnRyeUgAQgcKBWlubmVyKo0BCg9FeGVjdXRpb25TdGF0dXMSIAocRVhFQ1VUSU9OX1NUQVRVU19VTlNQRUNJRklFRBAAEhwKGEVYRUNVVElPTl9TVEFUVVNfUlVOTklORxABEhwKGEVYRUNVVElPTl9TVEFUVVNfU1RPUFBFRBACEhwKGEVYRUNVVElPTl9TVEFUVVNfQ1JBU0hFRBADKuoCChhJbnN0cnVtZW50YXRpb25FdmVudFR5cGUSKgomSU5TVFJVTUVOVEFUSU9OX0VWRU5UX1RZUEVfVU5TUEVDSUZJRUQQABImCiJJTlNUUlVNRU5UQVRJT05fRVZFTlRfVFlQRV9TVEFSVEVEEAESJgoiSU5TVFJVTUVOVEFUSU9OX0VWRU5UX1RZUEVfUkVTVU1FRBACEisKJ0lOU1RSVU1FTlRBVElPTl9FVkVOVF9UWVBFX0NIQVRfTUVTU0FHRRADEjEKLUlOU1RSVU1FTlRBVElPTl9FVkVOVF9UWVBFX0JMT0NLX1NUQVRFX0NIQU5HRRAEEjcKM0lOU1RSVU1FTlRBVElPTl9FVkVOVF9UWVBFX1dJUkVMRVNTX09CU0VSVkVSX1BBSVJFRBAFEjkKNUlOU1RSVU1FTlRBVElPTl9FVkVOVF9UWVBFX1dJUkVMRVNTX09CU0VSVkVSX1VOUEFJUkVEEAYq0gEKGUluc3RydW1lbnRhdGlvbkVmZmVjdFR5cGUSKwonSU5TVFJVTUVOVEFUSU9OX0VGRkVDVF9UWVBFX1VOU1BFQ0lGSUVEEAASKQolSU5TVFJVTUVOVEFUSU9OX0VGRkVDVF9UWVBFX1NFTkRfQ0hBVBABEikKJUlOU1RSVU1FTlRBVElPTl9FRkZFQ1RfVFlQRV9FTUlUX0JFRVAQAhIyCi5JTlNUUlVNRU5UQVRJT05fRUZGRUNUX1RZUEVfU0VUX1JFRFNUT05FX1BPV0VSEAMqqgEKHUluc3RydW1lbnRhdGlvbkxpZmVjeWNsZVN0YXRlEi8KK0lOU1RSVU1FTlRBVElPTl9MSUZFQ1lDTEVfU1RBVEVfVU5TUEVDSUZJRUQQABIrCidJTlNUUlVNRU5UQVRJT05fTElGRUNZQ0xFX1NUQVRFX1JVTk5JTkcQARIrCidJTlNUUlVNRU5UQVRJT05fTElGRUNZQ0xFX1NUQVRFX1NUT1BQRUQQAip3CghMb2dMZXZlbBIZChVMT0dfTEVWRUxfVU5TUEVDSUZJRUQQABITCg9MT0dfTEVWRUxfREVCVUcQBRISCg5MT0dfTEVWRUxfSU5GTxAKEhIKDkxPR19MRVZFTF9XQVJOEA8SEwoPTE9HX0xFVkVMX0VSUk9SEBRiCGVkaXRpb25zcOkH", [file_common, file_effects, file_events]);
 
 /**
  * @generated from message cobbleware.internal.ExecutionState
@@ -441,6 +441,124 @@ export const ErrorResponseSchema: GenMessage<ErrorResponse> = /*@__PURE__*/
   messageDesc(file_internal, 5);
 
 /**
+ * Maps to an UncaughtException event (as sent to an Edge Runtime event worker).
+ *
+ * @generated from message cobbleware.internal.ExceptionLogEntry
+ */
+export type ExceptionLogEntry = Message<"cobbleware.internal.ExceptionLogEntry"> & {
+  /**
+   * @generated from field: string msg = 1;
+   */
+  msg: string;
+
+  /**
+   * @generated from field: uint64 cpu_time_used = 2;
+   */
+  cpuTimeUsed: bigint;
+};
+
+/**
+ * Describes the message cobbleware.internal.ExceptionLogEntry.
+ * Use `create(ExceptionLogEntrySchema)` to create a new message.
+ */
+export const ExceptionLogEntrySchema: GenMessage<ExceptionLogEntry> = /*@__PURE__*/
+  messageDesc(file_internal, 6);
+
+/**
+ * Maps to a subset of ShutdownEvent (as sent to an Edge Runtime event worker)
+ * that applies when the ShutdownEvent's reason is CPUTime or Memory.
+ *
+ * @generated from message cobbleware.internal.LimitExceededLogEntry
+ */
+export type LimitExceededLogEntry = Message<"cobbleware.internal.LimitExceededLogEntry"> & {
+  /**
+   * @generated from field: string reason = 1;
+   */
+  reason: string;
+
+  /**
+   * @generated from field: uint64 cpu_time_used = 2;
+   */
+  cpuTimeUsed: bigint;
+
+  /**
+   * @generated from field: uint64 total_mem_used = 3;
+   */
+  totalMemUsed: bigint;
+};
+
+/**
+ * Describes the message cobbleware.internal.LimitExceededLogEntry.
+ * Use `create(LimitExceededLogEntrySchema)` to create a new message.
+ */
+export const LimitExceededLogEntrySchema: GenMessage<LimitExceededLogEntry> = /*@__PURE__*/
+  messageDesc(file_internal, 7);
+
+/**
+ * Maps to a Log event (as sent to an Edge Runtime event worker).
+ *
+ * @generated from message cobbleware.internal.ProgramLogEntry
+ */
+export type ProgramLogEntry = Message<"cobbleware.internal.ProgramLogEntry"> & {
+  /**
+   * @generated from field: cobbleware.internal.LogLevel level = 1;
+   */
+  level: LogLevel;
+
+  /**
+   * @generated from field: string msg = 2;
+   */
+  msg: string;
+};
+
+/**
+ * Describes the message cobbleware.internal.ProgramLogEntry.
+ * Use `create(ProgramLogEntrySchema)` to create a new message.
+ */
+export const ProgramLogEntrySchema: GenMessage<ProgramLogEntry> = /*@__PURE__*/
+  messageDesc(file_internal, 8);
+
+/**
+ * @generated from message cobbleware.internal.ExecutionLogEntry
+ */
+export type ExecutionLogEntry = Message<"cobbleware.internal.ExecutionLogEntry"> & {
+  /**
+   * @generated from field: cobbleware.common.Uuid player_id = 1;
+   */
+  playerId?: Uuid | undefined;
+
+  /**
+   * @generated from oneof cobbleware.internal.ExecutionLogEntry.inner
+   */
+  inner: {
+    /**
+     * @generated from field: cobbleware.internal.ExceptionLogEntry exception = 2;
+     */
+    value: ExceptionLogEntry;
+    case: "exception";
+  } | {
+    /**
+     * @generated from field: cobbleware.internal.LimitExceededLogEntry limited = 3;
+     */
+    value: LimitExceededLogEntry;
+    case: "limited";
+  } | {
+    /**
+     * @generated from field: cobbleware.internal.ProgramLogEntry log = 4;
+     */
+    value: ProgramLogEntry;
+    case: "log";
+  } | { case: undefined; value?: undefined };
+};
+
+/**
+ * Describes the message cobbleware.internal.ExecutionLogEntry.
+ * Use `create(ExecutionLogEntrySchema)` to create a new message.
+ */
+export const ExecutionLogEntrySchema: GenMessage<ExecutionLogEntry> = /*@__PURE__*/
+  messageDesc(file_internal, 9);
+
+/**
  * The lifecycle state of an execution.
  *
  * @generated from enum cobbleware.internal.ExecutionStatus
@@ -581,4 +699,40 @@ export enum InstrumentationLifecycleState {
  */
 export const InstrumentationLifecycleStateSchema: GenEnum<InstrumentationLifecycleState> = /*@__PURE__*/
   enumDesc(file_internal, 3);
+
+/**
+ * @generated from enum cobbleware.internal.LogLevel
+ */
+export enum LogLevel {
+  /**
+   * @generated from enum value: LOG_LEVEL_UNSPECIFIED = 0;
+   */
+  UNSPECIFIED = 0,
+
+  /**
+   * @generated from enum value: LOG_LEVEL_DEBUG = 5;
+   */
+  DEBUG = 5,
+
+  /**
+   * @generated from enum value: LOG_LEVEL_INFO = 10;
+   */
+  INFO = 10,
+
+  /**
+   * @generated from enum value: LOG_LEVEL_WARN = 15;
+   */
+  WARN = 15,
+
+  /**
+   * @generated from enum value: LOG_LEVEL_ERROR = 20;
+   */
+  ERROR = 20,
+}
+
+/**
+ * Describes the enum cobbleware.internal.LogLevel.
+ */
+export const LogLevelSchema: GenEnum<LogLevel> = /*@__PURE__*/
+  enumDesc(file_internal, 4);
 

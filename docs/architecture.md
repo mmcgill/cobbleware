@@ -16,6 +16,8 @@ The Runtime is the [Edge Runtime](../mc-edge-runtime/) with minor modifications/
 (like native Windows support). The Runtime runs a Main Worker that serves APIs targetted
 at the Mod and at Players, and is responsible for managing the User Workers that run player-supplied
 programs.
+The Runtime also runs an Event Worker that receives various observability-related events from User Workers
+and forwards them to the Main Worker for dispatch.
 
 Throughout the documentation and code, references to "the Runtime" should understood
 as references to the Main Worker running in the Runtime, unless specifically noted otherwise.
@@ -31,6 +33,8 @@ Browser UI performs its own aggregation and retention, independently of the Mod'
 instrumentation window.
 
 The Main Worker is written in Typescript; its code is located in [typescript/main-worker](../typescript/main-worker/).
+
+The Event Worker is likewise written in Typescript; its code is located in [typescript/event-worker](../typescript/event-worker).
 
 The [cobbleware](../typescript/cobbleware/) Typescript library contains type definitions and code
 useful for implementing Cobbleputer Programs.

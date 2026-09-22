@@ -153,3 +153,43 @@ message ExecutionStatsTick {
 message ErrorResponse {
   string error = 1;
 }
+
+////////////// Execution Logs ///////////////
+
+// Maps to an UncaughtException event (as sent to an Edge Runtime event worker).
+message ExceptionLogEntry {
+  string msg = 1;
+  uint64 cpu_time_used = 2;
+}
+
+// Maps to a subset of ShutdownEvent (as sent to an Edge Runtime event worker)
+// that applies when the ShutdownEvent's reason is CPUTime or Memory.
+message LimitExceededLogEntry {
+  string reason = 1;
+  uint64 cpu_time_used = 2;
+  uint64 total_mem_used = 3;
+}
+
+enum LogLevel {
+  LOG_LEVEL_UNSPECIFIED = 0;
+  LOG_LEVEL_DEBUG = 5;
+  LOG_LEVEL_INFO = 10;
+  LOG_LEVEL_WARN = 15;
+  LOG_LEVEL_ERROR = 20;
+}
+
+// Maps to a Log event (as sent to an Edge Runtime event worker).
+message ProgramLogEntry {
+  LogLevel level = 1;
+  string msg = 2;
+}
+
+message ExecutionLogEntry {
+  cobbleware.common.Uuid player_id = 1;
+  oneof inner {
+    ExceptionLogEntry exception = 2;
+    LimitExceededLogEntry limited = 3;
+    ProgramLogEntry log = 4;
+  }
+}
+

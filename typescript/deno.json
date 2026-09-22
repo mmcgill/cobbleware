@@ -1,6 +1,7 @@
 {
   "workspace": [
     "./cobbleware",
+    "./event-worker",
     "./examples",
     "./main-worker"
   ],
