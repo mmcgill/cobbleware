@@ -54,6 +54,14 @@ Activating the logout control sends `POST /playerapi/v1/logout`. After a success
 `/auth.html`. A failed logout leaves the page and its current program list visible and shows the server or network
 error so the player can try again. An expired session redirects the player to `/auth.html`.
 
+For ease of troubleshooting, Execution statistics and Logs are alternative tabs in one execution-observability
+section. Logs displays a streaming, non-durable feed of events for the Player's program executions while retaining
+up to 10k received events locally, including while the Execution statistics tab is selected. The scrollable feed
+auto-scrolls by default, but the Player can toggle that behavior. It is filterable by program-log level
+(Debug, Info, Warn, Error) and event type (program log, exception, or CPU/memory limit exceeded). The logs stream
+has independent connection status and retry handling; the documented already-open-in-another-window error is shown
+without retrying automatically. Each feed row records the client-side time at which the Browser received that event.
+
 ## Authentication Page
 
 The `/auth.html` page serves a page that:

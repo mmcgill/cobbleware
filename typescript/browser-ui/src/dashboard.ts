@@ -2,6 +2,8 @@
 /// <reference lib="dom" />
 
 import './styles.css';
+import { fromBinary, isFieldSet } from '@bufbuild/protobuf';
+import * as Internal from '@cobbleware/core/internal';
 import { markBundledUi } from './build-metadata.ts';
 
 markBundledUi(document.documentElement);
@@ -39,6 +41,16 @@ markBundledUi(document.documentElement);
     statsEvents: document.querySelector('#stats-events'),
     statsEffects: document.querySelector('#stats-effects'),
     statsCobbleputers: document.querySelector('#stats-cobbleputers'),
+    statsTab: document.querySelector('#stats-tab'),
+    logsTab: document.querySelector('#logs-tab'),
+    statsPanel: document.querySelector('#stats-panel'),
+    logsPanel: document.querySelector('#logs-panel'),
+    logsStatus: document.querySelector('#logs-status'),
+    logsRetryButton: document.querySelector('#logs-retry-button'),
+    logsAutoScroll: document.querySelector('#logs-auto-scroll'),
+    logsEmpty: document.querySelector('#logs-empty'),
+    logsFeed: document.querySelector('#logs-feed'),
+    logsBody: document.querySelector('#logs-body'),
   };
 
   const byteFormatter = new Intl.NumberFormat(undefined, { maximumFractionDigits: 1 });
@@ -46,9 +58,14 @@ markBundledUi(document.documentElement);
     dateStyle: 'medium',
     timeStyle: 'short',
   });
+  const logTimestampFormatter = new Intl.DateTimeFormat(undefined, {
+    dateStyle: 'short',
+    timeStyle: 'medium',
+  });
   const STATS_RETENTION_TICKS = 600;
   const STATS_GRAPH_HEIGHT = 200;
   const DUPLICATE_STATS_STREAM_CODE = 'execution-stats-stream-already-open';
+  const LOG_RETENTION_EVENTS = 10000;
   const STATS_GRAPH_COLORS = {
     accepted: '#78c091',
     dropped: '#ff9c9c',
@@ -67,6 +84,10 @@ markBundledUi(document.documentElement);
   let statsGapObserved = false;
   let statsLastReceivedAt = 0;
   let statsClosingForLogout = false;
+  let activeObservabilityTab = 'stats';
+  let logsSocket = null;
+  let logsClosingForLogout = false;
+  let logEntries = [];
 
   function formatBytes(bytes) {
     if (bytes === 0) {
@@ -275,6 +296,95 @@ markBundledUi(document.documentElement);
   function setStatsStatus(message, kind = '') {
     elements.statsStatus.textContent = message;
     elements.statsStatus.className = `muted${kind ? ` ${kind}` : ''}`;
+  }
+
+  function setLogsStatus(message, kind = '') {
+    elements.logsStatus.textContent = message;
+    elements.logsStatus.className = `muted${kind ? ` ${kind}` : ''}`;
+  }
+
+  function selectObservabilityTab(tab, focus = false) {
+    activeObservabilityTab = tab;
+    const statsSelected = tab === 'stats';
+    elements.statsTab.setAttribute('aria-selected', String(statsSelected));
+    elements.statsTab.tabIndex = statsSelected ? 0 : -1;
+    elements.logsTab.setAttribute('aria-selected', String(!statsSelected));
+    elements.logsTab.tabIndex = statsSelected ? -1 : 0;
+    elements.statsPanel.hidden = !statsSelected;
+    elements.logsPanel.hidden = statsSelected;
+    if (!statsSelected) {
+      renderLogs();
+      if (elements.logsAutoScroll.checked) scrollLogsToBottom();
+    }
+    if (focus) (statsSelected ? elements.statsTab : elements.logsTab).focus();
+  }
+
+  function selectedLogLevels() {
+    return new Set(
+      [...document.querySelectorAll('[data-log-level]:checked')].map((input) =>
+        input.dataset.logLevel
+      ),
+    );
+  }
+
+  function selectedLogTypes() {
+    return new Set(
+      [...document.querySelectorAll('[data-log-type]:checked')].map((input) =>
+        input.dataset.logType
+      ),
+    );
+  }
+
+  function matchesLogFilters(entry, levels, types) {
+    if (!types.has(entry.type)) return false;
+    return entry.type !== 'log' || levels.has(entry.level);
+  }
+
+  function renderLogs() {
+    const levels = selectedLogLevels();
+    const types = selectedLogTypes();
+    const entries = logEntries.filter((entry) => matchesLogFilters(entry, levels, types));
+    elements.logsBody.replaceChildren(...entries.map(renderLogEntry));
+    elements.logsEmpty.hidden = entries.length !== 0;
+    elements.logsEmpty.textContent = logEntries.length === 0
+      ? 'No log events received yet.'
+      : 'No log events match the selected filters.';
+  }
+
+  function renderLogEntry(entry) {
+    const item = document.createElement('tr');
+    const timestamp = document.createElement('td');
+    const time = document.createElement('time');
+    const receivedAt = new Date(entry.receivedAt);
+    time.dateTime = receivedAt.toISOString();
+    time.textContent = logTimestampFormatter.format(receivedAt);
+    time.title = receivedAt.toISOString();
+    timestamp.append(time);
+    const type = document.createElement('td');
+    type.textContent = entry.typeLabel;
+    const level = document.createElement('td');
+    level.textContent = entry.level ? entry.level.toUpperCase() : '';
+    const messageCell = document.createElement('td');
+    const message = document.createElement('pre');
+    message.className = 'log-message';
+    message.textContent = entry.message;
+    messageCell.append(message);
+    const metadata = document.createElement('td');
+    metadata.className = 'log-metadata';
+    metadata.textContent = entry.metadata;
+    item.append(timestamp, type, level, messageCell, metadata);
+    return item;
+  }
+
+  function appendLogEntry(entry) {
+    logEntries.push({ ...entry, receivedAt: Date.now() });
+    if (logEntries.length > LOG_RETENTION_EVENTS) logEntries.shift();
+    renderLogs();
+    if (activeObservabilityTab === 'logs' && elements.logsAutoScroll.checked) scrollLogsToBottom();
+  }
+
+  function scrollLogsToBottom() {
+    elements.logsFeed.scrollTop = elements.logsFeed.scrollHeight;
   }
 
   function formatBigInt(value) {
@@ -556,6 +666,121 @@ markBundledUi(document.documentElement);
       throw new Error('invalid execution-stats stream error');
     }
     return error;
+  }
+
+  function logsConnectionError(message, canRetry = true) {
+    logsSocket = null;
+    setLogsStatus(message, 'error');
+    elements.logsRetryButton.hidden = !canRetry;
+  }
+
+  function connectLogs() {
+    if (logsSocket !== null) return;
+    logsClosingForLogout = false;
+    elements.logsRetryButton.hidden = true;
+    setLogsStatus('Connecting to logs...');
+    let socket;
+    try {
+      socket = new WebSocket('/playerapi/v1/logs');
+    } catch {
+      logsConnectionError('Could not open the logs connection.');
+      return;
+    }
+    logsSocket = socket;
+    let terminal = false;
+    socket.binaryType = 'arraybuffer';
+    socket.onopen = () => {
+      if (logEntries.length === 0) setLogsStatus('No log events received yet.');
+      else setLogsStatus('Live execution logs.');
+    };
+    socket.onmessage = (event) => {
+      try {
+        if (typeof event.data === 'string') {
+          const error = decodeLogsStreamError(event.data);
+          terminal = true;
+          logsConnectionError(error.error, false);
+          return;
+        }
+        if (!(event.data instanceof ArrayBuffer)) throw new Error('expected a binary log frame');
+        appendLogEntry(decodeExecutionLogEntry(new Uint8Array(event.data)));
+        setLogsStatus('Live execution logs.');
+      } catch {
+        terminal = true;
+        logsConnectionError('The server sent an invalid execution log.');
+        socket.close();
+      }
+    };
+    socket.onclose = () => {
+      if (!logsClosingForLogout && !terminal) {
+        logsConnectionError('The logs connection closed. Retry to reconnect.');
+      }
+    };
+  }
+
+  function decodeLogsStreamError(message) {
+    const error = JSON.parse(message);
+    if (!error || typeof error.code !== 'string' || typeof error.error !== 'string') {
+      throw new Error('invalid execution-logs stream error');
+    }
+    return error;
+  }
+
+  function decodeExecutionLogEntry(bytes) {
+    const entry = fromBinary(Internal.ExecutionLogEntrySchema, bytes);
+    if (!isFieldSet(entry, Internal.ExecutionLogEntrySchema.field.playerId)) {
+      throw new Error('missing player identifier');
+    }
+    switch (entry.inner.case) {
+      case 'log': {
+        const level = logLevelName(entry.inner.value.level);
+        return {
+          type: 'log',
+          typeLabel: 'Program log',
+          level,
+          message: entry.inner.value.msg,
+          metadata: '',
+        };
+      }
+      case 'exception':
+        return {
+          type: 'exception',
+          typeLabel: 'Exception',
+          message: entry.inner.value.msg,
+          metadata: entry.inner.value.cpuTimeUsed === 0n
+            ? ''
+            : `CPU time used: ${formatNanos(entry.inner.value.cpuTimeUsed)}`,
+        };
+      case 'limited': {
+        const { reason, cpuTimeUsed, totalMemUsed } = entry.inner.value;
+        if (reason !== 'CPUTime' && reason !== 'Memory') throw new Error('invalid limit reason');
+        const details = [];
+        if (cpuTimeUsed !== 0n) details.push(`CPU time used: ${formatNanos(cpuTimeUsed)}`);
+        if (totalMemUsed !== 0n) details.push(`Memory used: ${formatStatBytes(totalMemUsed)}`);
+        return {
+          type: 'limited',
+          typeLabel: 'Limit exceeded',
+          message: `${reason} limit exceeded.`,
+          metadata: details.join('; '),
+        };
+      }
+      default:
+        throw new Error('missing execution-log entry');
+    }
+  }
+
+  function logLevelName(level) {
+    switch (level) {
+      case Internal.LogLevel.DEBUG:
+        return 'debug';
+      case Internal.LogLevel.INFO:
+        return 'info';
+      case Internal.LogLevel.WARN:
+        return 'warn';
+      case Internal.LogLevel.ERROR:
+        return 'error';
+      default:
+        throw new Error('invalid log level');
+    }
   }
 
   function decodeExecutionStatsTick(bytes) {
@@ -922,7 +1147,9 @@ markBundledUi(document.documentElement);
         throw await errorFromResponse(response);
       }
       statsClosingForLogout = true;
+      logsClosingForLogout = true;
       statsSocket?.close();
+      logsSocket?.close();
       window.location.assign('/auth.html');
     } catch (error) {
       displayError(error);
@@ -953,6 +1180,28 @@ markBundledUi(document.documentElement);
   elements.refreshButton.addEventListener('click', () => loadPrograms());
   elements.logoutButton.addEventListener('click', () => logout());
   elements.statsRetryButton.addEventListener('click', () => connectStats());
+  elements.logsRetryButton.addEventListener('click', () => connectLogs());
+  elements.statsTab.addEventListener('click', () => selectObservabilityTab('stats'));
+  elements.logsTab.addEventListener('click', () => selectObservabilityTab('logs'));
+  for (const tab of [elements.statsTab, elements.logsTab]) {
+    tab.addEventListener('keydown', (event) => {
+      if (event.key === 'ArrowLeft' || event.key === 'ArrowRight') {
+        event.preventDefault();
+        selectObservabilityTab(activeObservabilityTab === 'stats' ? 'logs' : 'stats', true);
+      }
+    });
+  }
+  document.querySelectorAll('[data-log-level], [data-log-type]').forEach((input) => {
+    input.addEventListener('change', () => {
+      renderLogs();
+      if (activeObservabilityTab === 'logs' && elements.logsAutoScroll.checked) {
+        scrollLogsToBottom();
+      }
+    });
+  });
+  elements.logsAutoScroll.addEventListener('change', () => {
+    if (elements.logsAutoScroll.checked) scrollLogsToBottom();
+  });
   elements.statsActivityGraph.addEventListener('pointermove', updateStatsGraphTooltip);
   elements.statsActivityGraph.addEventListener('pointerleave', hideStatsGraphTooltip);
   window.addEventListener('resize', renderStatsGraphs);
@@ -961,6 +1210,7 @@ markBundledUi(document.documentElement);
     if (identityLoaded) {
       loadPrograms();
       connectStats();
+      connectLogs();
     }
   });
   setInterval(updateStatsStaleness, 1000);

@@ -158,6 +158,7 @@ function handleInit(
       event.event.value.observerColor === DyeColor.GREEN && isPowered(event.event.value, true)) ||
     (event.event.case === 'chatMessage' && event.event.value.message === 'sim')
   ) {
+    console.log('Entering sim state');
     const simulation = createSimulationState(state.observers, Math.random);
     simulation.pending.unshift(...state.pending, {
       type: 'chat',
@@ -179,6 +180,7 @@ function handleSimulation(
       event.event.value.observerColor === DyeColor.GREEN && isPowered(event.event.value, false)) ||
     (event.event.case === 'chatMessage' && event.event.value.message === 'init')
   ) {
+    console.log('Entering init state');
     return drainAndRespond({
       ...emptyInitState(),
       observers: state.observers,
@@ -190,14 +192,17 @@ function handleSimulation(
     event.event.value.observerColor === DyeColor.BLUE) ||
     (event.event.case === 'chatMessage' && event.event.value.message === 'step');
   if (!steps) {
+    console.log('manual step');
     return drainAndRespond(state, effectLimit);
   }
 
   const drained = drainPending(state, effectLimit);
   if (drained.state.pending.length !== 0) {
+    console.log(`drain pending: ${drained.state.pending.length}`);
     return response(drained.state, drained.effects);
   }
 
+  console.log(`tick`);
   const alive = nextGeneration(state.width, state.height, state.alive);
   const nextState: ConwaySimulationState = {
     ...drained.state,

@@ -66,68 +66,118 @@
         </div>
       </section>
 
-      <section id="execution-stats-section" class="card" aria-labelledby="execution-stats-heading">
-        <div class="table-header">
-          <h2 id="execution-stats-heading">Execution statistics</h2>
-          <button id="stats-retry-button" class="secondary" type="button" hidden>Retry</button>
+      <section class="card" aria-label="Execution observability">
+        <div class="tab-list" role="tablist" aria-label="Execution observability views">
+          <button id="stats-tab" class="tab" type="button" role="tab" aria-selected="true"
+            aria-controls="stats-panel">Execution statistics</button>
+          <button id="logs-tab" class="tab" type="button" role="tab" aria-selected="false"
+            aria-controls="logs-panel" tabindex="-1">Logs</button>
         </div>
-        <p id="stats-status" class="muted" role="status"
-          aria-live="polite">Connecting to statistics...</p>
-        <div id="stats-details" class="stats-details" hidden>
-          <figure class="stats-graph">
-            <figcaption>
-              <strong>Events and effects per tick</strong>
-              <span
-                class="stats-graph-scale">Each column is one received tick. Events extend upward from the middle;
+
+        <div id="stats-panel" role="tabpanel" aria-labelledby="stats-tab">
+          <div class="table-header">
+            <h2 id="execution-stats-heading">Execution statistics</h2>
+            <button id="stats-retry-button" class="secondary" type="button" hidden>Retry</button>
+          </div>
+          <p id="stats-status" class="muted" role="status"
+            aria-live="polite">Connecting to statistics...</p>
+          <div id="stats-details" class="stats-details" hidden>
+            <figure class="stats-graph">
+              <figcaption>
+                <strong>Events and effects per tick</strong>
+                <span
+                  class="stats-graph-scale">Each column is one received tick. Events extend upward from the middle;
                 effects extend downward. 1 px per operation, capped at 100 px per half.</span>
-            </figcaption>
-            <canvas id="stats-activity-graph" class="stats-graph-canvas" height="200" role="img"
-              aria-label="Events and effects per received tick. Events extend upward and effects downward from the middle.">
+              </figcaption>
+              <canvas id="stats-activity-graph" class="stats-graph-canvas" height="200" role="img"
+                aria-label="Events and effects per received tick. Events extend upward and effects downward from the middle.">
               Events and effects per received tick.
             </canvas>
-            <div id="stats-graph-tooltip" class="stats-graph-tooltip" role="tooltip" hidden></div>
-            <ul class="stats-graph-legend" aria-label="Events and effects graph legend">
-              <li><span class="stats-graph-swatch accepted" aria-hidden="true"></span>Accepted events</li>
-              <li><span class="stats-graph-swatch dropped" aria-hidden="true"></span>Dropped events</li>
-              <li><span class="stats-graph-swatch succeeded" aria-hidden="true"></span>Successful effects</li>
-              <li><span class="stats-graph-swatch failed" aria-hidden="true"></span>Failed effects</li>
-              <li><span class="stats-graph-swatch capped" aria-hidden="true"></span>Capped</li>
-            </ul>
-          </figure>
-          <dl>
-            <div>
-              <dt>Captured</dt>
-              <dd id="stats-sampled-at"></dd>
-            </div>
-            <div>
-              <dt>Window coverage</dt>
-              <dd id="stats-window"></dd>
-            </div>
-            <div>
-              <dt>Memory</dt>
-              <dd class="stats-memory">
-                <progress id="stats-memory-progress" max="1" value="0"
-                  aria-label="Player memory usage"></progress>
-                <span id="stats-memory-text"></span>
-              </dd>
-            </div>
-            <div>
-              <dt>Events per sync</dt>
-              <dd id="stats-events-per-sync"></dd>
-            </div>
-            <div>
-              <dt>Event admissions</dt>
-              <dd id="stats-events"></dd>
-            </div>
-            <div>
-              <dt>Effects</dt>
-              <dd id="stats-effects"></dd>
-            </div>
-            <div>
-              <dt>Loaded Cobbleputers</dt>
-              <dd id="stats-cobbleputers"></dd>
-            </div>
-          </dl>
+              <div id="stats-graph-tooltip" class="stats-graph-tooltip" role="tooltip" hidden></div>
+              <ul class="stats-graph-legend" aria-label="Events and effects graph legend">
+                <li><span class="stats-graph-swatch accepted" aria-hidden="true"></span>Accepted events</li>
+                <li><span class="stats-graph-swatch dropped" aria-hidden="true"></span>Dropped events</li>
+                <li><span class="stats-graph-swatch succeeded" aria-hidden="true"></span>Successful effects</li>
+                <li><span class="stats-graph-swatch failed" aria-hidden="true"></span>Failed effects</li>
+                <li><span class="stats-graph-swatch capped" aria-hidden="true"></span>Capped</li>
+              </ul>
+            </figure>
+            <dl>
+              <div>
+                <dt>Captured</dt>
+                <dd id="stats-sampled-at"></dd>
+              </div>
+              <div>
+                <dt>Window coverage</dt>
+                <dd id="stats-window"></dd>
+              </div>
+              <div>
+                <dt>Memory</dt>
+                <dd class="stats-memory">
+                  <progress id="stats-memory-progress" max="1" value="0"
+                    aria-label="Player memory usage"></progress>
+                  <span id="stats-memory-text"></span>
+                </dd>
+              </div>
+              <div>
+                <dt>Events per sync</dt>
+                <dd id="stats-events-per-sync"></dd>
+              </div>
+              <div>
+                <dt>Event admissions</dt>
+                <dd id="stats-events"></dd>
+              </div>
+              <div>
+                <dt>Effects</dt>
+                <dd id="stats-effects"></dd>
+              </div>
+              <div>
+                <dt>Loaded Cobbleputers</dt>
+                <dd id="stats-cobbleputers"></dd>
+              </div>
+            </dl>
+          </div>
+        </div>
+
+        <div id="logs-panel" role="tabpanel" aria-labelledby="logs-tab" hidden>
+          <div class="table-header">
+            <h2>Logs</h2>
+            <button id="logs-retry-button" class="secondary" type="button" hidden>Retry</button>
+          </div>
+          <p id="logs-status" class="muted" role="status"
+            aria-live="polite">Connecting to logs...</p>
+          <div class="log-controls">
+            <fieldset>
+              <legend>Levels</legend>
+              <label><input data-log-level="debug" type="checkbox" checked> Debug</label>
+              <label><input data-log-level="info" type="checkbox" checked> Info</label>
+              <label><input data-log-level="warn" type="checkbox" checked> Warn</label>
+              <label><input data-log-level="error" type="checkbox" checked> Error</label>
+            </fieldset>
+            <fieldset>
+              <legend>Event types</legend>
+              <label><input data-log-type="log" type="checkbox" checked> Program log</label>
+              <label><input data-log-type="exception" type="checkbox" checked> Exception</label>
+              <label><input data-log-type="limited" type="checkbox" checked> Limit exceeded</label>
+            </fieldset>
+            <label
+              class="auto-scroll-control"><input id="logs-auto-scroll" type="checkbox" checked> Auto-scroll</label>
+          </div>
+          <p id="logs-empty" class="empty-state">No log events received yet.</p>
+          <div id="logs-feed" class="logs-feed" aria-label="Execution log feed" tabindex="0">
+            <table class="logs-table">
+              <thead>
+                <tr>
+                  <th scope="col">Received</th>
+                  <th scope="col">Type</th>
+                  <th scope="col">Level</th>
+                  <th scope="col">Message</th>
+                  <th scope="col">Details</th>
+                </tr>
+              </thead>
+              <tbody id="logs-body"></tbody>
+            </table>
+          </div>
         </div>
       </section>
     </main>

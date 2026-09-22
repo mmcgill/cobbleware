@@ -57,3 +57,15 @@ available or the displayed report is stale. It includes one responsive 200-pixel
 received tick is a right-aligned pixel column, events extend upward from its middle, effects extend downward, and color
 distinguishes accepted from dropped events and successful from failed effects. Hovering the canvas shows the selected
 half's scale value at the pointer. It must not expose another Player's statistics.
+
+## Execution Logs
+
+### Live troubleshooting
+
+**EL01**: As a Player, I want to view my program execution logs live in the Browser UI so that I can troubleshoot
+exceptions, runtime limits, and program output.
+
+The Logs tab receives only the Player's non-durable execution-log stream and retains at most 10,000 received entries
+in a browser-local, scrollable feed. It starts with auto-scroll enabled, which the Player can turn off, and filters
+program logs by Debug, Info, Warn, or Error level and all entries by program-log, exception, or limit-exceeded type.
+Each displayed entry records its browser-receipt timestamp.
