@@ -48,9 +48,10 @@ A 'puter is either `UNINITIALIZED`, `RUNNING`, `STOPPED` or `CRASHED`. A newly p
 is in the `UNINITIALIZED` state. A User can load a program as described above for a 'puter in any
 state. On successful load, the 'puter state is set to `RUNNING`. Its associated
 player may pause a running 'puter with `/cobbleware pause` and resume a stopped
-'puter with `/cobbleware resume`; right-clicking the block does not change its
-lifecycle state. If an unhandled exception bubbles up out of a Program's event
-handler function, the 'puter enters the `CRASHED` state.
+or crashed 'puter with `/cobbleware resume`; right-clicking the block does not
+change its lifecycle state. If an unhandled exception bubbles up out of a
+Program's event handler function, the 'puter enters the `CRASHED` state. Resuming
+a crashed 'puter starts a new execution using its most recently stored state.
 
 Each 'puter has a state value that is provided as input to each event handler, and can
 be arbitrarily modified by that event handler. The state value has a maximum size in bytes
@@ -66,7 +67,10 @@ events already in its queue remain there until the 'puter resumes.
 ### State Durability
 
 The execution id, execution owner, current state, and sequence counters are durable across
-server restarts and chunk reloads while the Cobbleputer has not crashed or been broken.
+server restarts and chunk reloads while the Cobbleputer has not crashed or been broken. When a
+'puter crashes, its old execution id and sequence counters are discarded, but its execution owner
+and most recently stored state remain durable so that its owner can restart it. That restart gets a
+fresh execution id and sequence counters.
 Pending events and received effects are held only by the Mod while the Cobbleputer is active;
 they are best-effort and can be lost on server restart or chunk unload. A queued event can be
 dropped when the in-memory queue is full (currently 10 events) or when the Cobbleputer becomes

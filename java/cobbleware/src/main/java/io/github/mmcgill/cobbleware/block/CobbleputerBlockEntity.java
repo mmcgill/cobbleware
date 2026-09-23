@@ -145,6 +145,31 @@ public final class CobbleputerBlockEntity extends BlockEntity {
         return executionId != null && ownerPlayerId != null && executionState != null;
     }
 
+    /** Returns whether this block entity retains enough data to restart a crashed execution. */
+    public boolean hasRecoverableCrashedExecution() {
+        return isRecoverableCrashedExecution(executionId, ownerPlayerId, ownerPlayerName, executionState);
+    }
+
+    static boolean isRecoverableCrashedExecution(
+            UUID executionId,
+            UUID ownerPlayerId,
+            String ownerPlayerName,
+            byte[] executionState) {
+        return executionId == null
+                && ownerPlayerId != null
+                && ownerPlayerName != null
+                && !ownerPlayerName.isEmpty()
+                && executionState != null;
+    }
+
+    /** Starts a fresh execution using the owner and state retained from a crash. */
+    public void restartCrashedExecution() {
+        if (!hasRecoverableCrashedExecution()) {
+            throw new IllegalStateException("Cobbleputer has no recoverable crashed execution");
+        }
+        startExecution(ownerPlayerId, ownerPlayerName, executionState);
+    }
+
     /** Replaces the durable execution state received from the Runtime. */
     public void updateExecutionState(byte[] newState) {
         if (!hasExecution() || newState == null) {
@@ -182,9 +207,12 @@ public final class CobbleputerBlockEntity extends BlockEntity {
         return result;
     }
 
-    /** Clears a crashed execution record. */
+    /** Retires a crashed execution while retaining its owner and last successfully stored state. */
     public void crashExecution() {
-        clearExecution();
+        executionId = null;
+        nextEventSequenceNum = 1;
+        effectSequenceNum = 0;
+        stoppedAtTick = null;
         setChanged();
     }
 
@@ -226,8 +254,23 @@ public final class CobbleputerBlockEntity extends BlockEntity {
         long loadedStoppedAtTick = input.getLongOr(STOPPED_AT_TICK_TAG, -1);
         stoppedAtTick = loadedStoppedAtTick < 0 ? null : loadedStoppedAtTick;
 
-        if (executionId == null || ownerPlayerId == null || executionState == null || nextEventSequenceNum < 1
-                || effectSequenceNum < 0 || (stoppedAtTick != null && stoppedAtTick < 0)) {
+        CobbleputerState lifecycleState = getBlockState().getValue(CobbleputerBlock.STATE);
+        boolean validCrashedRecord = lifecycleState == CobbleputerState.CRASHED
+                && executionId == null
+                && ownerPlayerId != null
+                && !ownerPlayerName.isEmpty()
+                && executionState != null
+                && nextEventSequenceNum >= 1
+                && effectSequenceNum >= 0
+                && stoppedAtTick == null;
+        boolean validActiveRecord = lifecycleState != CobbleputerState.CRASHED
+                && executionId != null
+                && ownerPlayerId != null
+                && executionState != null
+                && nextEventSequenceNum >= 1
+                && effectSequenceNum >= 0
+                && (stoppedAtTick == null || stoppedAtTick >= 0);
+        if (!validCrashedRecord && !validActiveRecord) {
             clearExecution();
         }
     }

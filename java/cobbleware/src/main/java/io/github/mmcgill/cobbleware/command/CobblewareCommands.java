@@ -292,7 +292,45 @@ public final class CobblewareCommands {
     }
 
     private static int resume(CommandContext<CommandSourceStack> context, ExecutionDriver executionDriver) {
-        return changeExecutionState(context, executionDriver, CobbleputerState.STOPPED);
+        CommandSourceStack source = context.getSource();
+        ServerPlayer player;
+        try {
+            player = source.getPlayerOrException();
+        } catch (CommandSyntaxException exception) {
+            source.sendFailure(Component.literal("Only a player can change a Cobbleware execution's state."));
+            return 0;
+        }
+
+        Optional<CobbleputerTarget> target = findNearestCobbleputer(player);
+        if (target.isEmpty()) {
+            player.sendSystemMessage(Component.literal("No Cobbleputer is within 3m."));
+            return 0;
+        }
+
+        CobbleputerTarget resolvedTarget = target.orElseThrow();
+        CobbleputerState lifecycleState = resolvedTarget.state().getValue(CobbleputerBlock.STATE);
+        if (lifecycleState != CobbleputerState.STOPPED && lifecycleState != CobbleputerState.CRASHED) {
+            player.sendSystemMessage(Component.literal("The nearest Cobbleputer is not stopped or crashed."));
+            return 0;
+        }
+        if (!player.getUUID().equals(resolvedTarget.blockEntity().ownerPlayerId().orElse(null))) {
+            player.sendSystemMessage(Component.literal("You can only change the state of your own Cobbleputer execution."));
+            return 0;
+        }
+        if (!(resolvedTarget.level() instanceof ServerLevel serverLevel)) {
+            player.sendSystemMessage(Component.literal("Cobbleware executions can only change state on the server."));
+            return 0;
+        }
+
+        if (lifecycleState == CobbleputerState.STOPPED) {
+            executionDriver.resume(serverLevel, resolvedTarget.pos(), resolvedTarget.state(), resolvedTarget.blockEntity());
+            player.sendSystemMessage(Component.literal("Resumed your Cobbleputer execution."));
+        } else {
+            executionDriver.restartCrashedExecution(
+                    serverLevel, resolvedTarget.pos(), resolvedTarget.state(), resolvedTarget.blockEntity());
+            player.sendSystemMessage(Component.literal("Restarted your crashed Cobbleputer with its saved state."));
+        }
+        return 1;
     }
 
     private static int changeExecutionState(

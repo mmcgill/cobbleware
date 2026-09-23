@@ -46,7 +46,9 @@ Prints an appropriate error message if no program can be started because:
 ```
 
 `pause` stops the closest Running Cobbleputer within 3m, and `resume` restarts
-the closest Stopped Cobbleputer within 3m. Selection is identical to
+the closest Stopped or Crashed Cobbleputer within 3m. Resuming a Stopped
+Cobbleputer continues its existing execution; resuming a Crashed Cobbleputer starts a
+fresh execution with its stored state. Selection is identical to
 `/cobbleware exec`. Only the Player associated with that execution may use
 either command. Each command prints confirmation on success and an appropriate
 error message when there is no Cobbleputer within 3m, the nearest Cobbleputer is
@@ -61,17 +63,18 @@ A placed Cobbleputer block has an associated block entity that stores:
   until that block is broken. It identifies the physical Cobbleputer for
   instrumentation and administrative commands, independently of executions.
 * execution ID: `null` when the block state is `UNINITIALIZED` or `CRASHED`, and reset to a fresh UUID
-  whenever a program is started on the Cobbleputer from a start state; not reset when a `STOPPED`
+  whenever a program is started or a crashed Cobbleputer is restarted; not reset when a `STOPPED`
   Cobbleputer is resumed.
-* owner player ID: `null` when execution ID is null; otherwise the ID of the Player whose active program
-  owns the execution.
-* owner player name: `null` when execution ID is null; otherwise the name
+* owner player ID: `null` when the block state is `UNINITIALIZED`; otherwise the ID of the Player whose
+  active program owns the execution or, for a `CRASHED` Cobbleputer, the execution that can restart it.
+* owner player name: `null` when the block state is `UNINITIALIZED`; otherwise the name
   captured when the execution starts, which permits offline execution owners to
   be selected by the instrumentation command.
 * event sequence num: a `long` holding the next event sequence number. It starts at 1 and increments
   after each event is enqueued.
 * effect sequence num: a `long` that starts at 0 and advances for each effect processed.
-* state: `null` when execution ID is null, otherwise a byte array holding the current execution state
+* state: `null` when the block state is `UNINITIALIZED`, otherwise a byte array holding the current
+  execution state. A crashed Cobbleputer retains the state before its failing event.
 * stopped-at tick: `null` unless the Cobbleputer is `STOPPED`; when present, the game tick at
   which it was stopped, used to populate the next `Resumed` event.
 
@@ -84,13 +87,16 @@ Breaking the Cobbleputer block destroys the block entity; effectively terminatin
 It also immediately unpairs every loaded Wireless Observer paired to that Cobbleputer. Unloaded
 Observers retain their pairing until the next safe validation finds that the Cobbleputer no longer exists.
 
-Execution state is durable as long as the execution does not crash and the Cobbleputer block is not broken.
+Execution state is durable as long as the Cobbleputer block is not broken. When an execution crashes, its
+old execution ID and sequence counters are discarded, while its owner and state remain available to restart
+the Cobbleputer. That restart creates a fresh execution ID and resets its sequence counters.
 Events and Effects, on the other hand, are ephemeral and best-effort. There is no guarantee that every
 event will be processed, and there is no guarantee that every effect will be applied.
 
-The currently emitted lifecycle events are `Started` after `/cobbleware exec` and `Resumed` after its owner
-uses `/cobbleware resume`. The driver retains at most 10 pending events per active Cobbleputer and offers
-at most 10 to the Runtime in each execution-sync request. Currently `EmitBeep` sends nearby players a
+The currently emitted lifecycle events are `Started` after `/cobbleware exec` or after a crashed Cobbleputer
+is restarted with `/cobbleware resume`, and `Resumed` after its owner resumes a stopped Cobbleputer. The
+driver retains at most 10 pending events per active Cobbleputer and offers at most 10 to the Runtime in each
+execution-sync request. Currently `EmitBeep` sends nearby players a
 `beep` system-chat message and `SendChat` sends its message to those same nearby players; neither effect
 has audio or durable delivery semantics yet.
 

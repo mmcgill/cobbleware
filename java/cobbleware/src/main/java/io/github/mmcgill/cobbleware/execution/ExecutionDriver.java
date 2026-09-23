@@ -174,6 +174,7 @@ public final class ExecutionDriver {
             String ownerName,
             byte[] initialState) {
         activate(blockEntity);
+        activeExecutions.get(blockEntity).events.clear();
         blockEntity.startExecution(owner, ownerName, initialState);
         if (CobbleputerBlock.setLifecycleState(level, pos, state, CobbleputerState.RUNNING)) {
             enqueueEvent(blockEntity, Event.newBuilder()
@@ -204,6 +205,27 @@ public final class ExecutionDriver {
             long stopTick = blockEntity.takeStoppedAtTick().orElse(resumeTick);
             enqueueEvent(blockEntity, Event.newBuilder()
                     .setResumed(Resumed.newBuilder().setStopTick(stopTick).setResumeTick(resumeTick))
+                    .build());
+        }
+    }
+
+    /** Restarts a crashed execution with its retained state and queues a new start lifecycle event. */
+    public void restartCrashedExecution(
+            ServerLevel level,
+            BlockPos pos,
+            BlockState state,
+            CobbleputerBlockEntity blockEntity) {
+        if (!blockEntity.hasRecoverableCrashedExecution()
+                || state.getValue(CobbleputerBlock.STATE) != CobbleputerState.CRASHED) {
+            return;
+        }
+        activate(blockEntity);
+        ActiveExecution active = activeExecutions.get(blockEntity);
+        active.events.clear();
+        blockEntity.restartCrashedExecution();
+        if (CobbleputerBlock.setLifecycleState(level, pos, state, CobbleputerState.RUNNING)) {
+            enqueueEvent(blockEntity, Event.newBuilder()
+                    .setStarted(Started.newBuilder().setTick(level.getGameTime()))
                     .build());
         }
     }
