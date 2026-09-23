@@ -33,7 +33,7 @@ public final class WirelessObserverPolymerModels {
                     Rotation rotation = Rotation.forFacing(facing);
                     BlockState allocatedState = PolymerBlockResourceUtils.requestBlock(
                             BlockModelType.FULL_BLOCK,
-                            PolymerBlockModel.of(modelIdFor(color, powered), rotation.x(), rotation.y(), true));
+                            PolymerBlockModel.of(modelIdFor(color, powered), rotation.x(), rotation.y(), false));
                     if (allocatedState == null) {
                         throw new IllegalStateException(
                                 "Polymer could not allocate a FULL_BLOCK model for Wireless Observer "
