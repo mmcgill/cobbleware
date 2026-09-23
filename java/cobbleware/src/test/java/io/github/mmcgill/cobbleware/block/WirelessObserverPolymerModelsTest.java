@@ -14,7 +14,8 @@ class WirelessObserverPolymerModelsTest {
                     Identifier.fromNamespaceAndPath("cobbleware", "block/" + color.getName() + "_wireless_observer"),
                     WirelessObserverPolymerModels.modelIdFor(color, false));
             assertEquals(
-                    Identifier.fromNamespaceAndPath("cobbleware", "block/wireless_observer_powered"),
+                    Identifier.fromNamespaceAndPath(
+                            "cobbleware", "block/" + color.getName() + "_wireless_observer_powered"),
                     WirelessObserverPolymerModels.modelIdFor(color, true));
         }
     }

@@ -1,0 +1,8 @@
+{
+  "textures": {"particle": "#side", "face": "cobbleware:block/wireless_observer_powered_face", "side": "cobbleware:block/wireless_observer_powered_side"},
+  "elements": [{"from": [0, 0, 0], "to": [16, 16, 16], "faces": {
+    "down": {"uv": [8, 12, 12, 16], "texture": "#side"}, "up": {"uv": [8, 12, 12, 16], "texture": "#side"},
+    "north": {"uv": [8, 12, 12, 16], "texture": "#face"}, "south": {"uv": [8, 12, 12, 16], "texture": "#side"},
+    "west": {"uv": [8, 12, 12, 16], "texture": "#side"}, "east": {"uv": [8, 12, 12, 16], "texture": "#side"}
+  }}]
+}

@@ -60,7 +60,7 @@ public final class WirelessObserverPolymerModels {
     static Identifier modelIdFor(DyeColor color, boolean powered) {
         return Identifier.fromNamespaceAndPath(
                 CobblewareMod.MOD_ID,
-                "block/" + (powered ? "wireless_observer_powered" : color.getName() + "_wireless_observer"));
+                "block/" + color.getName() + "_wireless_observer" + (powered ? "_powered" : ""));
     }
 
     private record Rotation(int x, int y) {

@@ -1,5 +1,6 @@
 /cobbleware-data
 /java/cobbleware/.gradle/
+/java/cobbleware/.gradle-codex/
 /java/cobbleware/build/
 /java/cobbleware/run/
 /java/cobbleware/logs/
