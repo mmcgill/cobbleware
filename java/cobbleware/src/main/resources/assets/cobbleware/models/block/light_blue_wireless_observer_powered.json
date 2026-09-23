@@ -1,4 +1,5 @@
 {
+  "parent": "minecraft:block/cube",
   "textures": {"particle": "#side", "face": "cobbleware:block/wireless_observer_powered_face", "side": "cobbleware:block/wireless_observer_powered_side"},
   "elements": [{"from": [0, 0, 0], "to": [16, 16, 16], "faces": {
     "down": {"uv": [12, 0, 16, 4], "texture": "#side"}, "up": {"uv": [12, 0, 16, 4], "texture": "#side"},
