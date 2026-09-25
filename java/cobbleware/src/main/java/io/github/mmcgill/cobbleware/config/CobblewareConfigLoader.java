@@ -20,6 +20,7 @@ public final class CobblewareConfigLoader {
     public static final String FILE_NAME = "cobbleware.json";
     public static final String DEFAULT_MAIN_WORKER_URL = "http://localhost:9000";
     public static final int DEFAULT_INSTRUMENTATION_WINDOW_TICKS = 600;
+    public static final int DEFAULT_MAX_RUNNING_EXECUTIONS_PER_PLAYER = 10;
 
     private CobblewareConfigLoader() {
     }
@@ -70,8 +71,11 @@ public final class CobblewareConfigLoader {
         String mainWorkerApiKey = requiredString(object, "mainWorkerApiKey");
         int instrumentationWindowTicks = optionalPositiveInt(
                 object, "instrumentationWindowTicks", DEFAULT_INSTRUMENTATION_WINDOW_TICKS);
+        int maxRunningExecutionsPerPlayer = optionalPositiveInt(
+                object, "maxRunningExecutionsPerPlayer", DEFAULT_MAX_RUNNING_EXECUTIONS_PER_PLAYER);
         URI baseUri = normalizeBaseUri(mainWorkerUrl);
-        return new CobblewareConfig(baseUri, mainWorkerApiKey, instrumentationWindowTicks, null);
+        return new CobblewareConfig(
+                baseUri, mainWorkerApiKey, instrumentationWindowTicks, maxRunningExecutionsPerPlayer, null);
     }
 
     private static String requiredString(JsonObject object, String property) {
@@ -121,7 +125,9 @@ public final class CobblewareConfigLoader {
         return "{\n"
                 + "  \"mainWorkerUrl\": \"" + DEFAULT_MAIN_WORKER_URL + "\",\n"
                 + "  \"mainWorkerApiKey\": \"\",\n"
-                + "  \"instrumentationWindowTicks\": " + DEFAULT_INSTRUMENTATION_WINDOW_TICKS + "\n"
+                + "  \"instrumentationWindowTicks\": " + DEFAULT_INSTRUMENTATION_WINDOW_TICKS + ",\n"
+                + "  \"maxRunningExecutionsPerPlayer\": "
+                + DEFAULT_MAX_RUNNING_EXECUTIONS_PER_PLAYER + "\n"
                 + "}\n";
     }
 }

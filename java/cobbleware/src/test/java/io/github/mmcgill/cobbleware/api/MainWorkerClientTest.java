@@ -70,7 +70,7 @@ class MainWorkerClientTest {
     @Test
     void doesNotMakeRequestsWhenApiKeyIsEmpty() throws Exception {
         MainWorkerClient client = new MainWorkerClient(
-                new CobblewareConfig(URI.create("http://127.0.0.1:1/"), "", 600, null),
+                new CobblewareConfig(URI.create("http://127.0.0.1:1/"), "", 600, 10, null),
                 HttpClient.newHttpClient(),
                 LOGGER);
 
@@ -211,14 +211,14 @@ class MainWorkerClientTest {
     private MainWorkerClient client(String apiKey) {
         URI baseUri = URI.create("http://127.0.0.1:" + server.getAddress().getPort() + "/worker/");
         return new MainWorkerClient(
-                new CobblewareConfig(baseUri, apiKey, 600, null),
+                new CobblewareConfig(baseUri, apiKey, 600, 10, null),
                 HttpClient.newBuilder().connectTimeout(Duration.ofSeconds(1)).build(),
                 LOGGER);
     }
 
     private MainWorkerClient productionClient(String apiKey) {
         URI baseUri = URI.create("http://127.0.0.1:" + server.getAddress().getPort() + "/worker/");
-        return new MainWorkerClient(new CobblewareConfig(baseUri, apiKey, 600, null), LOGGER);
+        return new MainWorkerClient(new CobblewareConfig(baseUri, apiKey, 600, 10, null), LOGGER);
     }
 
     private static MainWorkerClient.AuthenticationRequest request() {

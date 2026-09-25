@@ -15,6 +15,7 @@ import io.github.mmcgill.cobbleware.registry.CobblewareItems;
 import net.fabricmc.api.ModInitializer;
 import net.fabricmc.fabric.api.event.lifecycle.v1.ServerChunkEvents;
 import net.fabricmc.fabric.api.event.lifecycle.v1.ServerLifecycleEvents;
+import net.minecraft.server.level.FullChunkStatus;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -57,18 +58,34 @@ public final class CobblewareMod implements ModInitializer {
         MainWorkerClient mainWorkerClient = new MainWorkerClient(config, LOGGER);
         ServerLifecycleEvents.SERVER_STOPPING.register(server -> mainWorkerClient.close());
         executionDriver = new ExecutionDriver(
-                mainWorkerClient, new Instrumentation(config.instrumentationWindowTicks()), LOGGER);
+                mainWorkerClient,
+                new Instrumentation(config.instrumentationWindowTicks()),
+                config.maxRunningExecutionsPerPlayer(),
+                LOGGER);
         wirelessObserverNetwork = new WirelessObserverNetwork();
-        ServerChunkEvents.CHUNK_LOAD.register((level, chunk, generated) -> {
-            chunk.getBlockEntities().values().forEach(blockEntity -> {
-                if (blockEntity instanceof io.github.mmcgill.cobbleware.block.CobbleputerBlockEntity cobbleputer) {
-                    executionDriver.activate(cobbleputer);
-                }
-                if (blockEntity instanceof WirelessObserverBlockEntity observer) {
-                    wirelessObserverNetwork.activate(observer);
-                }
-            });
-            wirelessObserverNetwork.targetChunkLoaded(level, chunk.getPos());
+        ServerChunkEvents.FULL_CHUNK_STATUS_CHANGE.register((level, chunk, previousStatus, nextStatus) -> {
+            boolean wasBlockTicking = previousStatus.isOrAfter(FullChunkStatus.BLOCK_TICKING);
+            boolean isBlockTicking = nextStatus.isOrAfter(FullChunkStatus.BLOCK_TICKING);
+            if (wasBlockTicking && !isBlockTicking) {
+                chunk.getBlockEntities().values().forEach(blockEntity -> {
+                    if (blockEntity instanceof io.github.mmcgill.cobbleware.block.CobbleputerBlockEntity cobbleputer) {
+                        executionDriver.deactivateForChunkBecameNonTicking(cobbleputer);
+                    }
+                    if (blockEntity instanceof WirelessObserverBlockEntity observer) {
+                        wirelessObserverNetwork.deactivate(observer);
+                    }
+                });
+            } else if (!wasBlockTicking && isBlockTicking) {
+                chunk.getBlockEntities().values().forEach(blockEntity -> {
+                    if (blockEntity instanceof io.github.mmcgill.cobbleware.block.CobbleputerBlockEntity cobbleputer) {
+                        executionDriver.activate(cobbleputer);
+                    }
+                    if (blockEntity instanceof WirelessObserverBlockEntity observer) {
+                        wirelessObserverNetwork.activate(observer);
+                    }
+                });
+                wirelessObserverNetwork.targetChunkLoaded(level, chunk.getPos());
+            }
         });
         ServerChunkEvents.CHUNK_UNLOAD.register((level, chunk) -> chunk.getBlockEntities().values().forEach(blockEntity -> {
             if (blockEntity instanceof io.github.mmcgill.cobbleware.block.CobbleputerBlockEntity cobbleputer) {

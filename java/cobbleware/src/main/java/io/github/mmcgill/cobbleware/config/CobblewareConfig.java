@@ -7,6 +7,7 @@ public record CobblewareConfig(
         URI mainWorkerBaseUri,
         String mainWorkerApiKey,
         int instrumentationWindowTicks,
+        int maxRunningExecutionsPerPlayer,
         String configurationError) {
     public CobblewareConfig {
         if (mainWorkerApiKey == null) {
@@ -14,6 +15,9 @@ public record CobblewareConfig(
         }
         if (instrumentationWindowTicks <= 0) {
             throw new IllegalArgumentException("instrumentationWindowTicks must be positive");
+        }
+        if (maxRunningExecutionsPerPlayer <= 0) {
+            throw new IllegalArgumentException("maxRunningExecutionsPerPlayer must be positive");
         }
     }
 
@@ -34,6 +38,11 @@ public record CobblewareConfig(
     }
 
     public static CobblewareConfig disabled(String reason) {
-        return new CobblewareConfig(null, "", CobblewareConfigLoader.DEFAULT_INSTRUMENTATION_WINDOW_TICKS, reason);
+        return new CobblewareConfig(
+                null,
+                "",
+                CobblewareConfigLoader.DEFAULT_INSTRUMENTATION_WINDOW_TICKS,
+                CobblewareConfigLoader.DEFAULT_MAX_RUNNING_EXECUTIONS_PER_PLAYER,
+                reason);
     }
 }

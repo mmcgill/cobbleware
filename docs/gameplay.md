@@ -71,6 +71,15 @@ server restarts and chunk reloads while the Cobbleputer has not crashed or been 
 'puter crashes, its old execution id and sequence counters are discarded, but its execution owner
 and most recently stored state remain durable so that its owner can restart it. That restart gets a
 fresh execution id and sequence counters.
+
+When a chunk falls below Minecraft's `BLOCK_TICKING` status, its running 'puter immediately stops
+counting toward the execution limit. On the next normal server tick, the Mod stops it and records that
+it should be resumed when that chunk becomes block-ticking again. The Mod resumes it only when its owner
+has room under the running execution limit; a successful automatic resume delivers the usual `Resumed`
+event to the Program. If there is no capacity, it remains stopped and its owner may later resume it
+normally. The chunk can remain loaded in memory or be sent to clients outside that status without changing
+this behavior.
+
 Pending events and received effects are held only by the Mod while the Cobbleputer is active;
 they are best-effort and can be lost on server restart or chunk unload. A queued event can be
 dropped when the in-memory queue is full (currently 10 events) or when the Cobbleputer becomes
@@ -78,6 +87,27 @@ inactive. An event produced while a Cobbleputer is stopped is not enqueued, rath
 dropped. Similarly, an effect is considered processed once the Mod attempts to apply it, but
 an attempt can be missed or repeated around failures. When a 'puter is reset or a new Program
 is loaded, its in-memory event queue is cleared.
+
+### Limits
+
+The Mod imposes limits on Cobbleputer executions to ensure fairness across the online player population
+and prevent one player's executions from monopolizing server resources or degrading
+server performance in ways that have a negative impact on gameplay, server stability, etc.
+
+All limits are "soft" limits configurable by the server admin.
+
+#### Running Executions Per Player
+
+Each player is limited to an admin-configurable maximum number of running executions.
+
+When attempting to start a new execution or resume a paused execution that would put the player
+over the limit, the player instead receives an error message via chat.
+
+When a chunk containing a Cobbleputer that was running falls below `BLOCK_TICKING`, that execution
+releases its slot. When the chunk becomes block-ticking again, the Mod considers its requested resume
+against the owner's current limit before it runs, so the returning Cobbleputer never temporarily exceeds
+that limit. If the limit is full, the Cobbleputer remains stopped and the player receives an error message
+via chat.
 
 ## Wireless Observer
 

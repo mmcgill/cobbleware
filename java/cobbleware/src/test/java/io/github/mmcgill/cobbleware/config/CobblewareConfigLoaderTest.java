@@ -27,12 +27,15 @@ class CobblewareConfigLoaderTest {
         assertEquals("http://localhost:9000/", config.mainWorkerBaseUri().toString());
         assertEquals("", config.mainWorkerApiKey());
         assertEquals(600, config.instrumentationWindowTicks());
+        assertEquals(10, config.maxRunningExecutionsPerPlayer());
         assertNull(config.configurationError());
         assertFalse(config.isEnabled());
         assertEquals("mainWorkerApiKey is empty", config.disabledReason());
         assertTrue(Files.exists(configPath));
         assertEquals(
-                "{\n  \"mainWorkerUrl\": \"http://localhost:9000\",\n  \"mainWorkerApiKey\": \"\",\n  \"instrumentationWindowTicks\": 600\n}\n",
+                "{\n  \"mainWorkerUrl\": \"http://localhost:9000\",\n  \"mainWorkerApiKey\": \"\",\n"
+                        + "  \"instrumentationWindowTicks\": 600,\n"
+                        + "  \"maxRunningExecutionsPerPlayer\": 10\n}\n",
                 Files.readString(configPath));
     }
 
@@ -43,7 +46,8 @@ class CobblewareConfigLoaderTest {
                 {
                   "mainWorkerUrl": "https://example.test/cobbleware",
                   "mainWorkerApiKey": "secret",
-                  "instrumentationWindowTicks": 42
+                  "instrumentationWindowTicks": 42,
+                  "maxRunningExecutionsPerPlayer": 7
                 }
                 """);
 
@@ -51,13 +55,15 @@ class CobblewareConfigLoaderTest {
 
         assertEquals("https://example.test/cobbleware/", configured.mainWorkerBaseUri().toString());
         assertEquals(42, configured.instrumentationWindowTicks());
+        assertEquals(7, configured.maxRunningExecutionsPerPlayer());
         assertTrue(configured.isEnabled());
 
         Files.writeString(configPath, """
                 {
                   "mainWorkerUrl": "ftp://example.test",
                   "mainWorkerApiKey": "secret",
-                  "instrumentationWindowTicks": 600
+                  "instrumentationWindowTicks": 600,
+                  "maxRunningExecutionsPerPlayer": 10
                 }
                 """);
         CobblewareConfig invalid = CobblewareConfigLoader.load(configPath, LOGGER);
@@ -107,6 +113,24 @@ class CobblewareConfigLoaderTest {
         CobblewareConfig config = CobblewareConfigLoader.load(configPath, LOGGER);
 
         assertEquals(600, config.instrumentationWindowTicks());
+        assertEquals(10, config.maxRunningExecutionsPerPlayer());
         assertTrue(config.isEnabled());
+    }
+
+    @Test
+    void rejectsInvalidRunningExecutionLimit() throws Exception {
+        Path configPath = tempDir.resolve(CobblewareConfigLoader.FILE_NAME);
+        Files.writeString(configPath, """
+                {
+                  "mainWorkerUrl": "http://localhost:9000",
+                  "mainWorkerApiKey": "secret",
+                  "maxRunningExecutionsPerPlayer": 0
+                }
+                """);
+
+        CobblewareConfig config = CobblewareConfigLoader.load(configPath, LOGGER);
+
+        assertFalse(config.isEnabled());
+        assertEquals("Cobbleware configuration could not be loaded", config.disabledReason());
     }
 }

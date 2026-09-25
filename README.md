@@ -37,17 +37,18 @@ hosting.
 
 ## Configuration
 
-Until Mod development progress farther, this section is aspirational rather than descriptive.
+The Fabric Mod currently creates `config/cobbleware.json` on first start.
 
-### Current Main Worker connection settings
+### Configuration reference
 
-The Fabric Mod currently creates `config/cobbleware.json` on first start. Set
-`mainWorkerApiKey` to the same value supplied to the already-running Main Worker as
-`COBBLEWARE_API_KEY`; leave `mainWorkerUrl` at its default `http://localhost:9000` or
-set it to that worker's HTTP/HTTPS base URL. The API key defaults to an empty string,
-which causes the Mod to log an error and disable authentication requests until an
-administrator sets it. `instrumentationWindowTicks` controls the in-memory
-instrumentation retention window in server ticks and defaults to 600 (30 seconds).
+| Setting | Default | Description |
+| --- | --- | --- |
+| `instrumentationWindowTicks` | `600` | Positive integer number of server ticks retained in the in-memory instrumentation window (30 seconds at 20 ticks per second). Existing configuration files may omit it. |
+| `mainWorkerApiKey` | Empty string | Required string shared with the Main Worker's `COBBLEWARE_API_KEY`. An empty value disables Mod requests to the Main Worker until configured. |
+| `mainWorkerUrl` | `http://localhost:9000` | Required absolute HTTP or HTTPS Main Worker base URL, without credentials, query, or fragment. A path is allowed. |
+| `maxRunningExecutionsPerPlayer` | `10` | Positive integer cap on each player's block-ticking `RUNNING` Cobbleputer executions across all dimensions. Starting or resuming beyond it is rejected; a running execution is stopped when its chunk stops block ticking and resumes when it starts block ticking again only when capacity permits. Existing configuration files may omit it. |
+
+Until Mod development progress farther, the following is aspirational rather than descriptive.
 
 The Mod will provide server admins with the following configuration options:
 
@@ -60,7 +61,6 @@ The Mod will provide server admins with the following configuration options:
 * A per-player limit on bytes sent over the network.
 * A per-player limit on bytes received over the network.
 * A per-player limit on the total size (in bytes) available for program storage, across all programs.
-* A per-player limit on the number of Cobbleputers.
 * A per-Cobbleputer limit on runtime state size.
 
 

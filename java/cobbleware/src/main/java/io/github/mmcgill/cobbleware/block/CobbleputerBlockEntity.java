@@ -13,7 +13,6 @@ import net.minecraft.core.GlobalPos;
 import net.minecraft.core.UUIDUtil;
 import net.minecraft.world.level.block.entity.BlockEntity;
 import net.minecraft.world.level.block.state.BlockState;
-import net.minecraft.world.level.Level;
 import net.minecraft.world.level.storage.ValueInput;
 import net.minecraft.world.level.storage.ValueOutput;
 
@@ -27,6 +26,7 @@ public final class CobbleputerBlockEntity extends BlockEntity {
     private static final String EFFECT_SEQUENCE_NUM_TAG = "effect_sequence_num";
     private static final String EXECUTION_STATE_TAG = "execution_state";
     private static final String STOPPED_AT_TICK_TAG = "stopped_at_tick";
+    private static final String WAS_RUNNING_WHEN_UNLOADED_TAG = "was_running_when_unloaded";
 
     private UUID cobbleputerId = UUID.randomUUID();
     private boolean cobbleputerIdNeedsPersistence = true;
@@ -37,18 +37,10 @@ public final class CobbleputerBlockEntity extends BlockEntity {
     private long effectSequenceNum;
     private byte[] executionState;
     private Long stoppedAtTick;
+    private boolean wasRunningWhenUnloaded;
 
     public CobbleputerBlockEntity(BlockPos pos, BlockState state) {
         super(CobblewareBlockEntities.COBBLEPUTER, pos, state);
-    }
-
-    @Override
-    public void setLevel(Level level) {
-        super.setLevel(level);
-        ExecutionDriver executionDriver = CobblewareMod.executionDriverOrNull();
-        if (executionDriver != null && !level.isClientSide()) {
-            executionDriver.activate(this);
-        }
     }
 
     @Override
@@ -84,6 +76,7 @@ public final class CobbleputerBlockEntity extends BlockEntity {
         effectSequenceNum = 0;
         executionState = Arrays.copyOf(initialState, initialState.length);
         stoppedAtTick = null;
+        wasRunningWhenUnloaded = false;
         setChanged();
         CobblewareMod.LOGGER.info(
                 "Started Cobbleputer execution {} at {} for player {}",
@@ -207,12 +200,37 @@ public final class CobbleputerBlockEntity extends BlockEntity {
         return result;
     }
 
+    /** Records whether this execution should be resumed after its containing chunk is next loaded. */
+    public void recordChunkUnloadResumeIntent(boolean wasRunning) {
+        if (wasRunningWhenUnloaded == wasRunning) {
+            return;
+        }
+        wasRunningWhenUnloaded = wasRunning;
+        setChanged();
+    }
+
+    /** Returns whether this loaded execution is awaiting one automatic resume attempt. */
+    public boolean shouldResumeAfterChunkLoad() {
+        return wasRunningWhenUnloaded;
+    }
+
+    /** Clears and returns the one-load automatic-resume intent. */
+    public boolean takeChunkUnloadResumeIntent() {
+        boolean result = wasRunningWhenUnloaded;
+        wasRunningWhenUnloaded = false;
+        if (result) {
+            setChanged();
+        }
+        return result;
+    }
+
     /** Retires a crashed execution while retaining its owner and last successfully stored state. */
     public void crashExecution() {
         executionId = null;
         nextEventSequenceNum = 1;
         effectSequenceNum = 0;
         stoppedAtTick = null;
+        wasRunningWhenUnloaded = false;
         setChanged();
     }
 
@@ -234,6 +252,7 @@ public final class CobbleputerBlockEntity extends BlockEntity {
         if (stoppedAtTick != null) {
             output.putLong(STOPPED_AT_TICK_TAG, stoppedAtTick);
         }
+        output.putBoolean(WAS_RUNNING_WHEN_UNLOADED_TAG, wasRunningWhenUnloaded);
     }
 
     @Override
@@ -255,6 +274,8 @@ public final class CobbleputerBlockEntity extends BlockEntity {
         stoppedAtTick = loadedStoppedAtTick < 0 ? null : loadedStoppedAtTick;
 
         CobbleputerState lifecycleState = getBlockState().getValue(CobbleputerBlock.STATE);
+        wasRunningWhenUnloaded = shouldResumeAfterChunkLoad(
+                lifecycleState, input.read(WAS_RUNNING_WHEN_UNLOADED_TAG, Codec.BOOL));
         boolean validCrashedRecord = lifecycleState == CobbleputerState.CRASHED
                 && executionId == null
                 && ownerPlayerId != null
@@ -272,7 +293,15 @@ public final class CobbleputerBlockEntity extends BlockEntity {
                 && (stoppedAtTick == null || stoppedAtTick >= 0);
         if (!validCrashedRecord && !validActiveRecord) {
             clearExecution();
+        } else if (lifecycleState == CobbleputerState.CRASHED) {
+            wasRunningWhenUnloaded = false;
         }
+    }
+
+    /** Maps both current data and legacy persisted RUNNING records to a deferred resume decision. */
+    static boolean shouldResumeAfterChunkLoad(
+            CobbleputerState lifecycleState, Optional<Boolean> storedWasRunningWhenUnloaded) {
+        return lifecycleState == CobbleputerState.RUNNING || storedWasRunningWhenUnloaded.orElse(false);
     }
 
     private void clearExecution() {
@@ -283,6 +312,7 @@ public final class CobbleputerBlockEntity extends BlockEntity {
         effectSequenceNum = 0;
         executionState = null;
         stoppedAtTick = null;
+        wasRunningWhenUnloaded = false;
     }
 
     /** Persists a Cobbleputer ID generated for new or legacy block-entity data after chunk attachment. */

@@ -3,6 +3,27 @@
 This document describes configuration and usage for the Cobbleware mod itself, together with
 design details for how the Mod facilitates program execution.
 
+## Configuration
+
+The Mod reads `config/cobbleware.json` when the server starts. In addition to its Main Worker
+connection settings, it accepts these positive integer settings:
+
+* `instrumentationWindowTicks`, which defaults to 600 and controls the number of server ticks
+  retained for the in-memory instrumentation window.
+* `maxRunningExecutionsPerPlayer`, which defaults to 10 and caps the number of a player's loaded
+  Cobbleputer executions that can be `RUNNING` across all dimensions. Existing configuration files
+  that omit either setting receive its default; zero, negative, fractional, or non-numeric values
+  make the configuration invalid.
+
+Starting or resuming an execution is rejected when it would exceed the running-execution cap. When a
+chunk falls below Minecraft's `BLOCK_TICKING` status, the Mod immediately removes a running execution
+in that chunk from the cap. On the next normal server tick, it stops the execution and records that it
+should be resumed when the chunk becomes block-ticking again. That later transition avoids persisting
+block-entity changes from the chunk-status callback. The Mod admits a later resume only if the owner has
+capacity, queues a `Resumed` event on success, and otherwise leaves the Cobbleputer stopped and sends its
+online owner a chat error. Non-ticking, stopped, and crashed executions do not count toward the cap;
+pausing or making a running execution non-ticking releases its slot.
+
 ## Slash Commands
 
 ### Authentication
@@ -77,6 +98,10 @@ A placed Cobbleputer block has an associated block entity that stores:
   execution state. A crashed Cobbleputer retains the state before its failing event.
 * stopped-at tick: `null` unless the Cobbleputer is `STOPPED`; when present, the game tick at
   which it was stopped, used to populate the next `Resumed` event.
+* was-running-when-unloaded: whether a `STOPPED` Cobbleputer should receive one automatic resume
+  attempt after its chunk becomes block-ticking again. A persisted `RUNNING` state is also always treated
+  as a pending automatic resume, which covers worlds that predate this field and server shutdown paths
+  that save before the chunk stops block ticking.
 
 Cobbleputers created before the durable Cobbleputer ID field receive an
 in-memory UUID while loading. The Mod marks that migration dirty during normal
@@ -94,9 +119,9 @@ Events and Effects, on the other hand, are ephemeral and best-effort. There is n
 event will be processed, and there is no guarantee that every effect will be applied.
 
 The currently emitted lifecycle events are `Started` after `/cobbleware exec` or after a crashed Cobbleputer
-is restarted with `/cobbleware resume`, and `Resumed` after its owner resumes a stopped Cobbleputer. The
-driver retains at most 10 pending events per active Cobbleputer and offers at most 10 to the Runtime in each
-execution-sync request. Currently `EmitBeep` sends nearby players a
+is restarted with `/cobbleware resume`, and `Resumed` after its owner resumes a stopped Cobbleputer or a
+Cobbleputer in a newly block-ticking chunk is successfully admitted back to running. The driver retains at most 10 pending events
+per active Cobbleputer and offers at most 10 to the Runtime in each execution-sync request. Currently `EmitBeep` sends nearby players a
 `beep` system-chat message and `SendChat` sends its message to those same nearby players; neither effect
 has audio or durable delivery semantics yet.
 
@@ -106,9 +131,9 @@ It presents an API for enqueueing events by cobbleputer block entity, assigning 
 and incrementing the block entity's sequence id in the process. Events produced while a Cobbleputer
 is `STOPPED` are not enqueued; its existing pending events remain queued for when it resumes.
 
-It presents an API for activating/deactivating Cobbleputer block entities. That API is used both by
-handlers for placing/breaking of Cobbleputer blocks and by handlers for chunk loading/unloading,
-to ensure that the `ExecutionDriver` has references to all active Cobbleputer block entities.
+It presents an API for activating/deactivating Cobbleputer block entities. That API is used by
+execution commands and by full-chunk block-ticking transitions, to ensure that the `ExecutionDriver`
+has references only to Cobbleputers in block-ticking chunks.
 
 It manages at most one in-flight async request to the `/modapi/v1/executions` endpoint.
 At most once per tick (via `ServerTickEvents.END_SERVER_TICK`), the `ExecutionDriver` does the following:

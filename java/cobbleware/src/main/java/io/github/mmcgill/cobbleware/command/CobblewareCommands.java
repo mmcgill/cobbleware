@@ -261,7 +261,7 @@ public final class CobblewareCommands {
             player.sendSystemMessage(Component.literal("Cobbleware execution can only run on the server."));
             return;
         }
-        executionDriver.startExecution(
+        ExecutionDriver.ActivationResult activation = executionDriver.startExecution(
                 serverLevel,
                 resolvedTarget.pos(),
                 resolvedTarget.state(),
@@ -269,6 +269,14 @@ public final class CobblewareCommands {
                 player.getUUID(),
                 player.getGameProfile().name(),
                 startState.orElseThrow());
+        if (activation == ExecutionDriver.ActivationResult.LIMIT_REACHED) {
+            sendRunningExecutionLimitReached(player, executionDriver.maxRunningExecutionsPerPlayer());
+            return;
+        }
+        if (activation != ExecutionDriver.ActivationResult.ACTIVATED) {
+            player.sendSystemMessage(Component.literal("The nearest Cobbleputer could not be started."));
+            return;
+        }
         player.sendSystemMessage(Component.literal(
                 "Started your Cobbleware program at start state '" + startStateName + "'."));
     }
@@ -322,12 +330,25 @@ public final class CobblewareCommands {
             return 0;
         }
 
+        ExecutionDriver.ActivationResult activation;
         if (lifecycleState == CobbleputerState.STOPPED) {
-            executionDriver.resume(serverLevel, resolvedTarget.pos(), resolvedTarget.state(), resolvedTarget.blockEntity());
+            activation = executionDriver.resume(
+                    serverLevel, resolvedTarget.pos(), resolvedTarget.state(), resolvedTarget.blockEntity());
+        } else {
+            activation = executionDriver.restartCrashedExecution(
+                    serverLevel, resolvedTarget.pos(), resolvedTarget.state(), resolvedTarget.blockEntity());
+        }
+        if (activation == ExecutionDriver.ActivationResult.LIMIT_REACHED) {
+            sendRunningExecutionLimitReached(player, executionDriver.maxRunningExecutionsPerPlayer());
+            return 0;
+        }
+        if (activation != ExecutionDriver.ActivationResult.ACTIVATED) {
+            player.sendSystemMessage(Component.literal("The nearest Cobbleputer could not be resumed."));
+            return 0;
+        }
+        if (lifecycleState == CobbleputerState.STOPPED) {
             player.sendSystemMessage(Component.literal("Resumed your Cobbleputer execution."));
         } else {
-            executionDriver.restartCrashedExecution(
-                    serverLevel, resolvedTarget.pos(), resolvedTarget.state(), resolvedTarget.blockEntity());
             player.sendSystemMessage(Component.literal("Restarted your crashed Cobbleputer with its saved state."));
         }
         return 1;
@@ -406,6 +427,11 @@ public final class CobblewareCommands {
             closestDistanceSquared = distanceSquared;
         }
         return Optional.ofNullable(closest);
+    }
+
+    private static void sendRunningExecutionLimitReached(ServerPlayer player, int limit) {
+        player.sendSystemMessage(Component.literal(
+                "You have reached the running-executions-per-player limit of " + limit + "."));
     }
 
     private static String formatProgram(MainWorkerClient.ProgramInfo program) {

@@ -21,11 +21,11 @@ Here's a rough sketch of the current plan to getting something working end-to-en
 * [x] In-memory Mod instrumentation foundation
   * [x] Configurable sliding-window execution, event, effect, and state metrics
 * [x] Per-Player stats in the Browser UI
-  * [ ] Memory utilization
+  * [x] Memory utilization
   * [x] Aggregate event/effect rates
 * [ ] Limits
+  * [x] Per-player active executions
   * [ ] Per-player effects per tick
-  * [ ] Per-player executions per tick
   * [ ] Per-player memory utilization (via runtime)
   * [ ] Per-player number of executions
   * [ ] Per-execution state size
