@@ -226,6 +226,38 @@ input:focus-visible {
   border-bottom: 1px solid var(--border);
 }
 
+.limits-details {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(14rem, 1fr));
+  gap: 1rem;
+  margin: 1rem 0 0;
+}
+
+.limits-details > div {
+  display: grid;
+  gap: 0.35rem;
+}
+
+.limits-details dt {
+  color: var(--muted);
+}
+
+.limits-details dd {
+  margin: 0;
+}
+
+.limits-usage {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.65rem;
+}
+
+.limits-usage progress {
+  width: min(100%, 16rem);
+  accent-color: var(--accent);
+}
+
 button.tab {
   margin-bottom: -1px;
   border: 1px solid transparent;

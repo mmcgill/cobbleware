@@ -24,6 +24,11 @@ capacity, queues a `Resumed` event on success, and otherwise leaves the Cobblepu
 online owner a chat error. Non-ticking, stopped, and crashed executions do not count toward the cap;
 pausing or making a running execution non-ticking releases its slot.
 
+The Mod publishes each execution lifecycle transition to the Main Worker through the existing execution-log
+publication connection. Every transition carries its owner's current running-execution usage and the configured cap,
+so the Browser UI can show a cached value and update it without polling. Publication is best-effort and happens only
+from normal server-tick processing; it does not alter the chunk-load persistence rule.
+
 ## Slash Commands
 
 ### Authentication

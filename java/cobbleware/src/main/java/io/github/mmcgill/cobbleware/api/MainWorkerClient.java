@@ -2,6 +2,7 @@ package io.github.mmcgill.cobbleware.api;
 
 import cobbleware.internal.ErrorResponse;
 import cobbleware.internal.ExecutionStatsTick;
+import cobbleware.internal.ExecutionTransition;
 import cobbleware.internal.ExecutionsRequest;
 import cobbleware.internal.ExecutionsResponse;
 import com.google.gson.JsonElement;
@@ -41,6 +42,7 @@ public final class MainWorkerClient {
     private final HttpClient httpClient;
     private final Logger logger;
     private final ExecutionStatsStreamer executionStatsStreamer;
+    private final ExecutionTransitionPublisher executionTransitionPublisher;
 
     public MainWorkerClient(CobblewareConfig config, Logger logger) {
         this(config, HttpClient.newBuilder().connectTimeout(CONNECT_TIMEOUT).build(), logger);
@@ -51,6 +53,7 @@ public final class MainWorkerClient {
         this.httpClient = httpClient;
         this.logger = logger;
         this.executionStatsStreamer = new ExecutionStatsStreamer(config, httpClient, logger);
+        this.executionTransitionPublisher = new ExecutionTransitionPublisher(config, httpClient, logger);
     }
 
     /** Authenticates a player for a pending browser-generated code without blocking the server thread. */
@@ -144,9 +147,16 @@ public final class MainWorkerClient {
         executionStatsStreamer.offer(stats);
     }
 
+    /** Publishes a non-durable execution lifecycle transition without blocking the server tick. */
+    public void reportExecutionTransition(
+            UUID playerId, UUID executionId, ExecutionTransition transition, int executionCount, int executionLimit) {
+        executionTransitionPublisher.offer(playerId, executionId, transition, executionCount, executionLimit);
+    }
+
     /** Stops the best-effort stats stream and prevents reconnects during server shutdown. */
     public void close() {
         executionStatsStreamer.close();
+        executionTransitionPublisher.close();
     }
 
     /** A single lossy, reconnecting WebSocket used only for execution instrumentation. */

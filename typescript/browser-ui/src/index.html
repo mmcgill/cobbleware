@@ -72,6 +72,8 @@
             aria-controls="stats-panel">Execution statistics</button>
           <button id="logs-tab" class="tab" type="button" role="tab" aria-selected="false"
             aria-controls="logs-panel" tabindex="-1">Logs</button>
+          <button id="limits-tab" class="tab" type="button" role="tab" aria-selected="false"
+            aria-controls="limits-panel" tabindex="-1">Limits</button>
         </div>
 
         <div id="stats-panel" role="tabpanel" aria-labelledby="stats-tab">
@@ -131,10 +133,6 @@
                 <dt>Effects</dt>
                 <dd id="stats-effects"></dd>
               </div>
-              <div>
-                <dt>Loaded Cobbleputers</dt>
-                <dd id="stats-cobbleputers"></dd>
-              </div>
             </dl>
           </div>
         </div>
@@ -159,6 +157,7 @@
               <label><input data-log-type="log" type="checkbox" checked> Program log</label>
               <label><input data-log-type="exception" type="checkbox" checked> Exception</label>
               <label><input data-log-type="limited" type="checkbox" checked> Limit exceeded</label>
+              <label><input data-log-type="transition" type="checkbox" checked> Execution transition</label>
             </fieldset>
             <label
               class="auto-scroll-control"><input id="logs-auto-scroll" type="checkbox" checked> Auto-scroll</label>
@@ -178,6 +177,28 @@
               <tbody id="logs-body"></tbody>
             </table>
           </div>
+        </div>
+
+        <div id="limits-panel" role="tabpanel" aria-labelledby="limits-tab" hidden>
+          <div class="table-header">
+            <h2>Limits</h2>
+            <button id="limits-retry-button" class="secondary" type="button" hidden>Retry</button>
+          </div>
+          <p id="limits-status" class="muted" role="status" aria-live="polite">Loading limits...</p>
+          <dl id="limits-details" class="limits-details" hidden>
+            <div>
+              <dt>Running executions</dt>
+              <dd class="limits-usage">
+                <progress id="limits-running-executions-progress" max="1" value="0"
+                  aria-label="Running executions used"></progress>
+                <span id="limits-running-executions-text"></span>
+              </dd>
+            </div>
+            <div>
+              <dt>Updated</dt>
+              <dd id="limits-updated-at"></dd>
+            </div>
+          </dl>
         </div>
       </section>
     </main>

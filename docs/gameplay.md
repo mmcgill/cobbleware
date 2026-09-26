@@ -100,6 +100,10 @@ All limits are "soft" limits configurable by the server admin.
 
 Each player is limited to an admin-configurable maximum number of running executions.
 
+The Browser UI's Limits tab shows a player's current count of loaded, running executions against this cap. The value
+is an operational view of the same accounting used for enforcement; it is near-real-time rather than a guarantee that
+a later start or resume will still have capacity.
+
 When attempting to start a new execution or resume a paused execution that would put the player
 over the limit, the player instead receives an error message via chat.
 

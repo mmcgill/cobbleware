@@ -40,17 +40,24 @@ markBundledUi(document.documentElement);
     statsEventsPerSync: document.querySelector('#stats-events-per-sync'),
     statsEvents: document.querySelector('#stats-events'),
     statsEffects: document.querySelector('#stats-effects'),
-    statsCobbleputers: document.querySelector('#stats-cobbleputers'),
     statsTab: document.querySelector('#stats-tab'),
     logsTab: document.querySelector('#logs-tab'),
+    limitsTab: document.querySelector('#limits-tab'),
     statsPanel: document.querySelector('#stats-panel'),
     logsPanel: document.querySelector('#logs-panel'),
+    limitsPanel: document.querySelector('#limits-panel'),
     logsStatus: document.querySelector('#logs-status'),
     logsRetryButton: document.querySelector('#logs-retry-button'),
     logsAutoScroll: document.querySelector('#logs-auto-scroll'),
     logsEmpty: document.querySelector('#logs-empty'),
     logsFeed: document.querySelector('#logs-feed'),
     logsBody: document.querySelector('#logs-body'),
+    limitsStatus: document.querySelector('#limits-status'),
+    limitsDetails: document.querySelector('#limits-details'),
+    limitsRetryButton: document.querySelector('#limits-retry-button'),
+    limitsRunningExecutionsProgress: document.querySelector('#limits-running-executions-progress'),
+    limitsRunningExecutionsText: document.querySelector('#limits-running-executions-text'),
+    limitsUpdatedAt: document.querySelector('#limits-updated-at'),
   };
 
   const byteFormatter = new Intl.NumberFormat(undefined, { maximumFractionDigits: 1 });
@@ -88,6 +95,10 @@ markBundledUi(document.documentElement);
   let logsSocket = null;
   let logsClosingForLogout = false;
   let logEntries = [];
+  let limits = null;
+  let limitsLoading = false;
+  let limitsReloadRequested = false;
+  let limitsGeneration = 0;
 
   function formatBytes(bytes) {
     if (bytes === 0) {
@@ -303,20 +314,87 @@ markBundledUi(document.documentElement);
     elements.logsStatus.className = `muted${kind ? ` ${kind}` : ''}`;
   }
 
+  function setLimitsStatus(message, kind = '') {
+    elements.limitsStatus.textContent = message;
+    elements.limitsStatus.className = `muted${kind ? ` ${kind}` : ''}`;
+  }
+
   function selectObservabilityTab(tab, focus = false) {
     activeObservabilityTab = tab;
     const statsSelected = tab === 'stats';
+    const logsSelected = tab === 'logs';
+    const limitsSelected = tab === 'limits';
     elements.statsTab.setAttribute('aria-selected', String(statsSelected));
     elements.statsTab.tabIndex = statsSelected ? 0 : -1;
-    elements.logsTab.setAttribute('aria-selected', String(!statsSelected));
-    elements.logsTab.tabIndex = statsSelected ? -1 : 0;
+    elements.logsTab.setAttribute('aria-selected', String(logsSelected));
+    elements.logsTab.tabIndex = logsSelected ? 0 : -1;
+    elements.limitsTab.setAttribute('aria-selected', String(limitsSelected));
+    elements.limitsTab.tabIndex = limitsSelected ? 0 : -1;
     elements.statsPanel.hidden = !statsSelected;
-    elements.logsPanel.hidden = statsSelected;
-    if (!statsSelected) {
+    elements.logsPanel.hidden = !logsSelected;
+    elements.limitsPanel.hidden = !limitsSelected;
+    if (logsSelected) {
       renderLogs();
       if (elements.logsAutoScroll.checked) scrollLogsToBottom();
     }
-    if (focus) (statsSelected ? elements.statsTab : elements.logsTab).focus();
+    if (focus) {
+      ({ stats: elements.statsTab, logs: elements.logsTab, limits: elements.limitsTab })[tab]
+        .focus();
+    }
+  }
+
+  function renderLimits() {
+    elements.limitsDetails.hidden = limits === null;
+    if (limits === null) return;
+    const { used, limit } = limits.runningExecutions;
+    elements.limitsRunningExecutionsProgress.max = limit;
+    elements.limitsRunningExecutionsProgress.value = used;
+    elements.limitsRunningExecutionsText.textContent =
+      `${used.toLocaleString()} of ${limit.toLocaleString()} running executions`;
+    elements.limitsUpdatedAt.textContent = formatDate(limits.updatedAt);
+    elements.limitsUpdatedAt.title = limits.updatedAt;
+  }
+
+  function parseLimits(body) {
+    const runningExecutions = body?.runningExecutions;
+    if (
+      !runningExecutions || !Number.isInteger(runningExecutions.used) ||
+      !Number.isInteger(runningExecutions.limit) || runningExecutions.used < 0 ||
+      runningExecutions.limit <= 0 || runningExecutions.used > runningExecutions.limit ||
+      typeof body.updatedAt !== 'string'
+    ) {
+      throw makeError('The server returned invalid limit data.');
+    }
+    return body;
+  }
+
+  async function loadLimits() {
+    if (limitsLoading) {
+      limitsReloadRequested = true;
+      return;
+    }
+    limitsLoading = true;
+    elements.limitsRetryButton.hidden = true;
+    setLimitsStatus(limits === null ? 'Loading limits...' : 'Refreshing limits...');
+    do {
+      limitsReloadRequested = false;
+      const generation = limitsGeneration;
+      try {
+        const response = await request('/playerapi/v1/limits');
+        const loadedLimits = parseLimits(await response.json());
+        if (generation === limitsGeneration) {
+          limits = loadedLimits;
+          setLimitsStatus('Current enforced limits.');
+        }
+      } catch (error) {
+        if (!error.redirected && generation === limitsGeneration) {
+          setLimitsStatus(error.message || 'Could not load limits.', 'error');
+          elements.limitsRetryButton.hidden = false;
+        }
+      }
+    } while (limitsReloadRequested);
+    limitsLoading = false;
+    renderLimits();
   }
 
   function selectedLogLevels() {
@@ -444,8 +522,6 @@ markBundledUi(document.documentElement);
         player.effectsAttempted === 0n ? 0n : player.effectsTotalNanos / player.effectsAttempted,
       )
     }; maximum ${formatNanos(player.effectsMaxNanos)}`;
-    elements.statsCobbleputers.textContent =
-      `${player.runningCobbleputers.toLocaleString()} running; ${player.stoppedCobbleputers.toLocaleString()} stopped`;
     elements.statsDetails.hidden = false;
     renderStatsGraphs();
   }
@@ -702,7 +778,9 @@ markBundledUi(document.documentElement);
           return;
         }
         if (!(event.data instanceof ArrayBuffer)) throw new Error('expected a binary log frame');
-        appendLogEntry(decodeExecutionLogEntry(new Uint8Array(event.data)));
+        const decoded = decodeExecutionLogEntry(new Uint8Array(event.data));
+        appendLogEntry(decoded);
+        if (decoded.type === 'transition') updateLimitsFromTransition(decoded);
         setLogsStatus('Live execution logs.');
       } catch {
         terminal = true;
@@ -763,6 +841,28 @@ markBundledUi(document.documentElement);
           metadata: details.join('; '),
         };
       }
+      case 'transition': {
+        const value = entry.inner.value;
+        if (
+          !isFieldSet(value, Internal.ExecutionTransitionLogEntrySchema.field.executionId) ||
+          value.executionId === undefined || !Number.isInteger(value.executionCount) ||
+          !Number.isInteger(value.executionLimit) || value.executionCount < 0 ||
+          value.executionLimit <= 0 || value.executionCount > value.executionLimit
+        ) {
+          throw new Error('invalid execution transition');
+        }
+        return {
+          type: 'transition',
+          typeLabel: 'Execution transition',
+          message: `Execution ${uuidString(value.executionId)} ${
+            executionTransitionName(value.transition)
+          }.`,
+          metadata:
+            `${value.executionCount.toLocaleString()} of ${value.executionLimit.toLocaleString()} running executions`,
+          executionCount: value.executionCount,
+          executionLimit: value.executionLimit,
+        };
+      }
       default:
         throw new Error('missing execution-log entry');
     }
@@ -783,6 +883,41 @@ markBundledUi(document.documentElement);
     }
   }
 
+  function executionTransitionName(transition) {
+    switch (transition) {
+      case Internal.ExecutionTransition.STARTED:
+        return 'started';
+      case Internal.ExecutionTransition.STOPPED:
+        return 'stopped';
+      case Internal.ExecutionTransition.RESUMED:
+        return 'resumed';
+      case Internal.ExecutionTransition.CRASHED:
+        return 'crashed';
+      default:
+        throw new Error('invalid execution transition');
+    }
+  }
+
+  function uuidString(value) {
+    const hex = `${value.high.toString(16).padStart(16, '0')}${
+      value.low.toString(16).padStart(16, '0')
+    }`;
+    return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${
+      hex.slice(20)
+    }`;
+  }
+
+  function updateLimitsFromTransition(entry) {
+    limitsGeneration += 1;
+    limits = {
+      runningExecutions: { used: entry.executionCount, limit: entry.executionLimit },
+      updatedAt: new Date().toISOString(),
+    };
+    elements.limitsRetryButton.hidden = true;
+    setLimitsStatus('Current enforced limits.');
+    renderLimits();
+  }
+
   function decodeExecutionStatsTick(bytes) {
     const fields = readProtoFields(bytes);
     const playerBytes = fields.get(3) || [];
@@ -798,7 +933,6 @@ markBundledUi(document.documentElement);
     const events = (playerFields.get(2) || []).map(decodeEventMeasurement);
     const syncs = (playerFields.get(3) || []).map(decodeEventsPerSyncMeasurement);
     const effects = (playerFields.get(4) || []).map(decodeEffectMeasurement);
-    const states = (playerFields.get(5) || []).map(decodeCobbleputerState);
     const usedBytes = protoVarint(playerFields, 6);
     const maxBytes = protoVarint(playerFields, 7);
     return {
@@ -807,7 +941,6 @@ markBundledUi(document.documentElement);
       events,
       syncs,
       effects,
-      states,
       usedBytes,
       maxBytes,
       graph: summarizeStatsTickGraph(events, effects),
@@ -851,14 +984,6 @@ markBundledUi(document.documentElement);
       totalNanos: protoVarint(fields, 5),
       maxNanos: protoVarint(fields, 6),
     };
-  }
-
-  function decodeCobbleputerState(bytes) {
-    const fields = readProtoFields(bytes);
-    requiredMessage(fields, 1);
-    const state = protoNumber(fields, 2);
-    if (state !== 1 && state !== 2) throw new Error('invalid Cobbleputer state');
-    return state;
   }
 
   function requiredMessage(fields, field) {
@@ -912,8 +1037,6 @@ markBundledUi(document.documentElement);
       effectsFailed: 0n,
       effectsTotalNanos: 0n,
       effectsMaxNanos: 0n,
-      runningCobbleputers: 0,
-      stoppedCobbleputers: 0,
     };
     for (const tick of statsTicks) {
       for (const event of tick.events) {
@@ -935,10 +1058,6 @@ markBundledUi(document.documentElement);
           ? player.effectsMaxNanos
           : effect.maxNanos;
       }
-    }
-    for (const state of latest.states) {
-      if (state === 1) player.runningCobbleputers += 1;
-      else player.stoppedCobbleputers += 1;
     }
     return { sampledAt: latest.sampledAt, player };
   }
@@ -1181,13 +1300,20 @@ markBundledUi(document.documentElement);
   elements.logoutButton.addEventListener('click', () => logout());
   elements.statsRetryButton.addEventListener('click', () => connectStats());
   elements.logsRetryButton.addEventListener('click', () => connectLogs());
+  elements.limitsRetryButton.addEventListener('click', () => loadLimits());
   elements.statsTab.addEventListener('click', () => selectObservabilityTab('stats'));
   elements.logsTab.addEventListener('click', () => selectObservabilityTab('logs'));
-  for (const tab of [elements.statsTab, elements.logsTab]) {
+  elements.limitsTab.addEventListener('click', () => selectObservabilityTab('limits'));
+  const observabilityTabs = ['stats', 'logs', 'limits'];
+  for (const tab of [elements.statsTab, elements.logsTab, elements.limitsTab]) {
     tab.addEventListener('keydown', (event) => {
       if (event.key === 'ArrowLeft' || event.key === 'ArrowRight') {
         event.preventDefault();
-        selectObservabilityTab(activeObservabilityTab === 'stats' ? 'logs' : 'stats', true);
+        const direction = event.key === 'ArrowLeft' ? -1 : 1;
+        const next = (observabilityTabs.indexOf(activeObservabilityTab) + direction +
+          observabilityTabs.length) %
+          observabilityTabs.length;
+        selectObservabilityTab(observabilityTabs[next], true);
       }
     });
   }
@@ -1209,6 +1335,7 @@ markBundledUi(document.documentElement);
   loadPlayerIdentity().then((identityLoaded) => {
     if (identityLoaded) {
       loadPrograms();
+      loadLimits();
       connectStats();
       connectLogs();
     }

@@ -94,6 +94,28 @@ authentication. Calls without a valid session cookie receive `401` with the Play
 Requests without the required same-origin `Origin` header, or with a different origin, receive `403` with a JSON
 error body. Other methods receive `405` with `Allow: POST`.
 
+### Enforced limits
+
+The authenticated `GET /playerapi/v1/limits` operation returns the Main Worker's latest player-scoped snapshot of
+enforced limits. Its initial response is JSON:
+
+```json
+{
+  "runningExecutions": {
+    "used": 2,
+    "limit": 10
+  },
+  "updatedAt": "2026-09-26T16:22:14.123Z"
+}
+```
+
+`used` counts exactly the Player's loaded Cobbleputers whose executions are running; `limit` is the Mod's configured
+running-executions-per-player cap. `updatedAt` is when the Main Worker received the transition that supplied the
+snapshot. The operation returns `503` with a JSON `error` when no transition has reached the Main Worker for that
+Player, for example shortly after a Main Worker restart. Clients must show that state as unavailable rather than
+assuming zero usage. It returns
+`401` for an invalid Player session and `405` with `Allow: GET` for another method.
+
 ### Execution stats stream
 
 The authenticated `GET /playerapi/v1/execution-stats` operation upgrades to a WebSocket that streams the
@@ -344,6 +366,11 @@ see one anothers' execution logs.
 Each log entry is delivered as a single WebSocket message represented as a binary protobuf
 `cobbleware.internal.ExecutionLogEntry` message.
 
+Every entry is displayable. An `ExecutionTransitionLogEntry` records an execution id, one of `STARTED`, `STOPPED`,
+`RESUMED`, or `CRASHED`, and the owning Player's current `execution_count` and `execution_limit`. The Main Worker
+updates its Limits cache before forwarding this ordinary log entry. The Browser displays and filters it like other log
+types, and uses its count and limit to update its visible Limits view without another HTTP request.
+
 The stream requires the same-origin `Origin` header as the execution-statistics stream. It is
 read-only: client application messages cause the Main Worker to send a UTF-8 JSON error frame and
 close the socket with `1008` (`Policy Violation`). There may be only one open execution-logs WebSocket
@@ -427,9 +454,11 @@ request headers, so the Event Worker instead supplies the same API key as the re
 subprotocol only for this endpoint; it does not select an application subprotocol. Both forms have
 the same authorization scope and are intended only for the local Runtime-to-Main-Worker connection.
 
-When a log entry is received, the Main Worker checks for an active Player API Execution Logs WebSocket
-for the relevant player. If there is one, the event is forwarded as-is. If there is not, the
-event is immediately dropped. The Main Worker does not buffer or persist log entries.
+When a log entry is received, the Main Worker checks for an active Player API Execution Logs WebSocket for the
+relevant player. If there is one, the event is forwarded as-is. If there is not, the event is immediately dropped.
+The Main Worker does not buffer or persist log entries. A valid `transition` entry also replaces the relevant Player's
+in-memory Limits snapshot before the forwarding decision. There are no publisher ids, sequence numbers, or stale-entry
+ordering rules for transitions.
 
 Any number of authenticated producer sockets may be open concurrently. Producer frames must be binary,
 parse as an `ExecutionLogEntry`, and contain both `player_id` and an entry variant. The Main Worker uses

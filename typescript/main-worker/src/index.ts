@@ -32,6 +32,7 @@ import {
   handleModExecutionLogs,
   handlePlayerExecutionLogs,
 } from './logs/handlers.ts';
+import { handlePlayerLimits } from './limits/handlers.ts';
 
 const HELLO_BODY = JSON.stringify({ message: 'hello' });
 
@@ -156,6 +157,12 @@ async function routeRequest(
       });
     }
     return handlePlayerExecutionLogs(request, context.player!.playerUUID, executionLogHub);
+  }
+
+  if (pathname === '/playerapi/v1/limits') {
+    const context: RequestContext = {};
+    const authError = await requirePlayerAuth(request, config, store, context, 'api');
+    return authError ?? handlePlayerLimits(request, context.player!.playerUUID, executionLogHub);
   }
 
   if (pathname === '/playerapi/v1/programs') {

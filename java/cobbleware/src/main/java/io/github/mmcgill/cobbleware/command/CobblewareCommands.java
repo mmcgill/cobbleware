@@ -45,7 +45,7 @@ public final class CobblewareCommands {
                 dispatcher.register(Commands.literal("cobbleware")
                         .then(Commands.literal("auth")
                                 .then(Commands.argument("code", StringArgumentType.word())
-                                        .executes(context -> authenticate(context, mainWorkerClient))))
+                                        .executes(context -> authenticate(context, mainWorkerClient, executionDriver))))
                         .then(Commands.literal("program").executes(context -> program(context, mainWorkerClient)))
                         .then(Commands.literal("exec")
                                 .then(Commands.argument("start-state", StringArgumentType.word())
@@ -119,7 +119,10 @@ public final class CobblewareCommands {
         }
     }
 
-    private static int authenticate(CommandContext<CommandSourceStack> context, MainWorkerClient mainWorkerClient) {
+    private static int authenticate(
+            CommandContext<CommandSourceStack> context,
+            MainWorkerClient mainWorkerClient,
+            ExecutionDriver executionDriver) {
         CommandSourceStack source = context.getSource();
         ServerPlayer player;
         try {

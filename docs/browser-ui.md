@@ -29,7 +29,7 @@ operation.
 The page also has an execution-stats section. It opens one WebSocket to
 `/playerapi/v1/execution-stats` and receives player-scoped `ExecutionStatsTick` protobuf messages. It retains and
 aggregates up to 600 received ticks locally to render coverage, offered events per execution sync, accepted/dropped
-events, effect attempts, failures and timing, and currently loaded running/stopped Cobbleputers. It also displays the
+events, and effect attempts, failures and timing. It also displays the
 newest tick's current User Worker memory usage as a progress bar, using `used_bytes` out of `max_bytes`; memory is
 instantaneous and is never aggregated over the retained window. A player without a live User Worker displays zero
 usage out of the configured limit. It displays when the newest sample was captured, marks the view stale when no
@@ -58,9 +58,17 @@ For ease of troubleshooting, Execution statistics and Logs are alternative tabs 
 section. Logs displays a streaming, non-durable feed of events for the Player's program executions while retaining
 up to 10k received events locally, including while the Execution statistics tab is selected. The scrollable feed
 auto-scrolls by default, but the Player can toggle that behavior. It is filterable by program-log level
-(Debug, Info, Warn, Error) and event type (program log, exception, or CPU/memory limit exceeded). The logs stream
+(Debug, Info, Warn, Error) and event type (program log, exception, CPU/memory limit exceeded, or execution
+transition). The logs stream
 has independent connection status and retry handling; the documented already-open-in-another-window error is shown
 without retrying automatically. Each feed row records the client-side time at which the Browser received that event.
+
+Limits is a third tab in that section. On page load it reads `/playerapi/v1/limits`, then shows the current loaded,
+running execution count against the enforced running-executions-per-player cap and the snapshot update time. While the
+page is open, each visible execution-transition log entry carries the new running-execution count and limit; the UI
+updates its Limits display directly from that entry rather than polling or issuing another limits read. Limits has
+independent unavailable/error and retry handling. A snapshot unavailable after a Main Worker restart or a temporary
+Mod connection failure is shown as unavailable, not as zero usage.
 
 ## Authentication Page
 

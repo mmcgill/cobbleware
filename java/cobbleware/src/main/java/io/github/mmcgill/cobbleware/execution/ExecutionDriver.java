@@ -13,6 +13,7 @@ import cobbleware.events.WirelessObserverUnpaired;
 import cobbleware.internal.ExecutionResult;
 import cobbleware.internal.ExecutionState;
 import cobbleware.internal.ExecutionStatus;
+import cobbleware.internal.ExecutionTransition;
 import cobbleware.internal.ExecutionsRequest;
 import cobbleware.internal.ExecutionsResponse;
 import io.github.mmcgill.cobbleware.CobblewareMod;
@@ -233,6 +234,7 @@ public final class ExecutionDriver {
                     Event.newBuilder()
                             .setStarted(Started.newBuilder().setTick(level.getGameTime()))
                             .build());
+            reportExecutionTransition(blockEntity, ExecutionTransition.EXECUTION_TRANSITION_STARTED);
             return ExecutionInitResult.SUCCESS;
         }
         return ExecutionInitResult.INVALID_STATE;
@@ -246,6 +248,7 @@ public final class ExecutionDriver {
         activate(blockEntity);
         if (CobbleputerBlock.setLifecycleState(level, pos, state, CobbleputerState.STOPPED)) {
             blockEntity.setStoppedAtTick(level.getGameTime());
+            reportExecutionTransition(blockEntity, ExecutionTransition.EXECUTION_TRANSITION_STOPPED);
         }
     }
 
@@ -282,6 +285,7 @@ public final class ExecutionDriver {
                     Event.newBuilder()
                             .setStarted(Started.newBuilder().setTick(level.getGameTime()))
                             .build());
+            reportExecutionTransition(blockEntity, ExecutionTransition.EXECUTION_TRANSITION_STARTED);
             return ExecutionInitResult.SUCCESS;
         }
         return ExecutionInitResult.INVALID_STATE;
@@ -352,7 +356,7 @@ public final class ExecutionDriver {
         drainCompletedSyncMeasurements();
         if (inFlight != null) {
             if (!inFlight.isDone()) {
-                recordCobbleputerStateGaugeAndStream();
+                recordCobbleputerStateGaugeAndStream(server);
                 return;
             }
             MainWorkerClient.ExecutionSyncResult result;
@@ -378,7 +382,7 @@ public final class ExecutionDriver {
         drainObserverChanges(server);
         Flight nextFlight = buildFlight();
         if (!nextFlight.hadExecutions() && !runtimeMayHaveExecutions) {
-            recordCobbleputerStateGaugeAndStream();
+            recordCobbleputerStateGaugeAndStream(server);
             return;
         }
         if (nextFlight.hadExecutions()) {
@@ -391,7 +395,7 @@ public final class ExecutionDriver {
         inFlight = mainWorkerClient.syncExecutions(nextFlight.request);
         inFlight.whenComplete((result, failure) -> completedSyncMeasurements.add(new SyncCompletion(
                 System.nanoTime() - dispatchedFlight.dispatchNanos(), syncOutcome(result, failure))));
-        recordCobbleputerStateGaugeAndStream();
+        recordCobbleputerStateGaugeAndStream(server);
     }
 
     private void drainCompletedSyncMeasurements() {
@@ -418,6 +422,7 @@ public final class ExecutionDriver {
                     && CobbleputerBlock.setLifecycleState(
                             level, cobbleputer.getBlockPos(), cobbleputer.getBlockState(), CobbleputerState.STOPPED)) {
                 cobbleputer.setStoppedAtTick(level.getGameTime());
+                reportExecutionTransition(cobbleputer, ExecutionTransition.EXECUTION_TRANSITION_STOPPED);
             }
         }
     }
@@ -497,6 +502,7 @@ public final class ExecutionDriver {
                 Event.newBuilder()
                         .setResumed(Resumed.newBuilder().setStopTick(stopTick).setResumeTick(resumeTick))
                         .build());
+        reportExecutionTransition(blockEntity, ExecutionTransition.EXECUTION_TRANSITION_RESUMED);
         return ExecutionInitResult.SUCCESS;
     }
 
@@ -779,16 +785,26 @@ public final class ExecutionDriver {
         applyEffects(offered.blockEntity, result);
         if (status == ExecutionStatus.EXECUTION_STATUS_CRASHED) {
             active.events.clear();
+            UUID owner = offered.blockEntity.ownerPlayerId().orElseThrow();
+            UUID executionId = offered.blockEntity.executionId().orElseThrow();
             offered.blockEntity.crashExecution();
             updateVisibleState(offered.blockEntity, CobbleputerState.CRASHED);
+            reportExecutionTransition(owner, executionId, ExecutionTransition.EXECUTION_TRANSITION_CRASHED);
             return;
         }
         offered.blockEntity.updateExecutionState(result.getFinalState().toByteArray());
-        updateVisibleState(
-                offered.blockEntity,
-                status == ExecutionStatus.EXECUTION_STATUS_RUNNING
-                        ? CobbleputerState.RUNNING
-                        : CobbleputerState.STOPPED);
+        CobbleputerState previousState = offered.blockEntity.getBlockState().getValue(CobbleputerBlock.STATE);
+        CobbleputerState nextState = status == ExecutionStatus.EXECUTION_STATUS_RUNNING
+                ? CobbleputerState.RUNNING
+                : CobbleputerState.STOPPED;
+        updateVisibleState(offered.blockEntity, nextState);
+        if (previousState != nextState) {
+            reportExecutionTransition(
+                    offered.blockEntity,
+                    nextState == CobbleputerState.RUNNING
+                            ? ExecutionTransition.EXECUTION_TRANSITION_RESUMED
+                            : ExecutionTransition.EXECUTION_TRANSITION_STOPPED);
+        }
     }
 
     private void applyEffects(CobbleputerBlockEntity blockEntity, ExecutionResult result) {
@@ -1067,10 +1083,26 @@ public final class ExecutionDriver {
         instrumentation.recordCobbleputerStates(states);
     }
 
-    private void recordCobbleputerStateGaugeAndStream() {
+    private void recordCobbleputerStateGaugeAndStream(MinecraftServer server) {
         recordCobbleputerStateGauge();
         mainWorkerClient.reportExecutionStats(
                 ExecutionStatsReporter.report(instrumentation.currentTickSnapshot(), System.currentTimeMillis()));
+    }
+
+    private void reportExecutionTransition(CobbleputerBlockEntity blockEntity, ExecutionTransition transition) {
+        reportExecutionTransition(
+                blockEntity.ownerPlayerId().orElseThrow(),
+                blockEntity.executionId().orElseThrow(),
+                transition);
+    }
+
+    private void reportExecutionTransition(UUID owner, UUID executionId, ExecutionTransition transition) {
+        mainWorkerClient.reportExecutionTransition(
+                owner,
+                executionId,
+                transition,
+                runningExecutionCount(owner, Collections.emptySet()),
+                maxRunningExecutionsPerPlayer);
     }
 
     private static String ownerName(CobbleputerBlockEntity blockEntity, UUID ownerId) {

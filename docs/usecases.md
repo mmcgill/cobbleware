@@ -50,8 +50,8 @@ failed replacement. The uploaded payload must fit within the player's program si
 how my program is behaving.
 
 The view receives only the Player's own raw per-tick instrumentation and aggregates it in a Browser-local
-sliding window of 600 received ticks: offered events per execution sync, accepted and dropped events, effect
-attempts, failures and timing, and the current number of loaded running and stopped Cobbleputers. It identifies
+sliding window of 600 received ticks: offered events per execution sync, accepted and dropped events, and effect
+attempts, failures and timing. It identifies
 the newest sampling time and local-window coverage, including observed gaps, and indicates when no report is
 available or the displayed report is stale. It includes one responsive 200-pixel-high canvas history, where each
 received tick is a right-aligned pixel column, events extend upward from its middle, effects extend downward, and color
@@ -67,5 +67,19 @@ exceptions, runtime limits, and program output.
 
 The Logs tab receives only the Player's non-durable execution-log stream and retains at most 10,000 received entries
 in a browser-local, scrollable feed. It starts with auto-scroll enabled, which the Player can turn off, and filters
-program logs by Debug, Info, Warn, or Error level and all entries by program-log, exception, or limit-exceeded type.
+program logs by Debug, Info, Warn, or Error level and all entries by program-log, exception, limit-exceeded, or
+execution-transition type.
 Each displayed entry records its browser-receipt timestamp.
+
+## Limits
+
+### Viewing enforced limits
+
+**LI01**: As a Player, I want to view my current usage against enforced Cobbleware limits in the Browser UI so that I
+know whether I can start or resume another execution.
+
+The Limits tab initially reads the Player's current limit snapshot. A received execution-transition log entry updates
+the displayed count and limit without polling or another limits request. It initially shows the enforced
+running-executions-per-player limit, including the Player's number of loaded, running executions. If the Main Worker
+has not yet received a transition after a restart or connection loss, it tells the Player that the value is temporarily
+unavailable rather than inventing usage.

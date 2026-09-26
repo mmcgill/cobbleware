@@ -6,10 +6,46 @@ import { constantTimeEqual } from '../auth/crypto.ts';
 
 const EVENT_WORKER_PROTOCOL_PREFIX = 'cobbleware.bearer.';
 
+export type RunningExecutionsSnapshot = {
+  used: number;
+  limit: number;
+  updatedAt: string;
+};
+
 /** Routes non-durable execution-log frames between authenticated producers and players. */
 export class ExecutionLogHub {
   private readonly playerStreams = new Map<string, WebSocket>();
   private readonly producerStreams = new Set<WebSocket>();
+  private readonly runningExecutionLimits = new Map<string, RunningExecutionsSnapshot>();
+
+  runningExecutions(playerId: string): RunningExecutionsSnapshot | undefined {
+    const snapshot = this.runningExecutionLimits.get(playerId);
+    return snapshot === undefined ? undefined : { ...snapshot };
+  }
+
+  /** Records a transition's current running-execution limits before forwarding the display log. */
+  recordExecutionTransition(
+    playerId: string,
+    transition: Internal.ExecutionTransitionLogEntry,
+  ): void {
+    if (
+      !isFieldSet(transition, Internal.ExecutionTransitionLogEntrySchema.field.executionId) ||
+      transition.executionId === undefined ||
+      !isExecutionTransition(transition.transition) ||
+      !Number.isInteger(transition.executionCount) ||
+      !Number.isInteger(transition.executionLimit) ||
+      transition.executionCount < 0 ||
+      transition.executionLimit <= 0 ||
+      transition.executionCount > transition.executionLimit
+    ) {
+      throw new Error('execution transition is invalid');
+    }
+    this.runningExecutionLimits.set(playerId, {
+      used: transition.executionCount,
+      limit: transition.executionLimit,
+      updatedAt: new Date().toISOString(),
+    });
+  }
 
   openPlayer(playerId: string, socket: WebSocket): void {
     if (this.playerStreams.has(playerId)) {
@@ -73,6 +109,9 @@ export class ExecutionLogHub {
         throw new Error('execution log entry must contain a player id and entry');
       }
       playerId = uuidString(entry.playerId);
+      if (entry.inner.case === 'transition') {
+        this.recordExecutionTransition(playerId, entry.inner.value);
+      }
     } catch (error) {
       rejectSocket(
         producer,
@@ -173,6 +212,13 @@ function uuidString(value: { high: bigint; low: bigint }): string {
   return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${
     hex.slice(20)
   }`;
+}
+
+function isExecutionTransition(value: Internal.ExecutionTransition): boolean {
+  return value === Internal.ExecutionTransition.STARTED ||
+    value === Internal.ExecutionTransition.STOPPED ||
+    value === Internal.ExecutionTransition.RESUMED ||
+    value === Internal.ExecutionTransition.CRASHED;
 }
 
 function isWebSocketUpgrade(request: Request): boolean {

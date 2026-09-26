@@ -184,12 +184,27 @@ message ProgramLogEntry {
   string msg = 2;
 }
 
+enum ExecutionTransition {
+  EXECUTION_TRANSITION_UNSPECIFIED = 0;
+  EXECUTION_TRANSITION_STARTED = 1;
+  EXECUTION_TRANSITION_STOPPED = 2;
+  EXECUTION_TRANSITION_RESUMED = 3;
+  EXECUTION_TRANSITION_CRASHED = 4;
+}
+
+message ExecutionTransitionLogEntry {
+  cobbleware.common.Uuid execution_id = 1;
+  ExecutionTransition transition = 2;
+  uint32 execution_count = 3;
+  uint32 execution_limit = 4;
+}
+
 message ExecutionLogEntry {
   cobbleware.common.Uuid player_id = 1;
   oneof inner {
     ExceptionLogEntry exception = 2;
     LimitExceededLogEntry limited = 3;
     ProgramLogEntry log = 4;
+    ExecutionTransitionLogEntry transition = 5;
   }
 }
-

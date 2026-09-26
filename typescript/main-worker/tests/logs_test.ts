@@ -41,6 +41,16 @@ Deno.test('Execution-log player endpoint requires a Player session', async () =>
   }
 });
 
+Deno.test('Limits endpoint requires a Player session', async () => {
+  const app = await createTestHandler();
+  try {
+    const response = await app.handler(new Request('http://localhost/playerapi/v1/limits'));
+    assertEquals(response.status, 401, 'limits endpoint should require a player session');
+  } finally {
+    await app.cleanup();
+  }
+});
+
 async function createTestHandler(): Promise<{
   handler: (request: Request) => Promise<Response>;
   cleanup: () => Promise<void>;

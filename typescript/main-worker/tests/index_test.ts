@@ -43,6 +43,8 @@ Deno.test('/index.html contains the generated programs UI', async () => {
       'stats-activity-graph',
       'stats-graph-tooltip',
       'stats-memory-progress',
+      'Limits',
+      'limits-running-executions-progress',
     ]
   ) {
     if (!html.includes(landmark)) {
@@ -67,6 +69,7 @@ Deno.test('/index.html contains the generated programs UI', async () => {
       '/playerapi/v1/logout',
       'execution-stats-stream-already-open',
       '/playerapi/v1/execution-stats',
+      '/playerapi/v1/limits',
     ]
   ) {
     if (!scriptBody.includes(behavior)) {

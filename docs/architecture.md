@@ -32,6 +32,12 @@ tick, the Main Worker enriches that player-only copy with the current User Worke
 Browser UI performs its own aggregation and retention, independently of the Mod's in-memory
 instrumentation window.
 
+The Mod publishes execution lifecycle transitions through the existing execution-log publication path. Each transition
+includes the Player's current running-execution count and configured limit. The Main Worker caches those values for
+the Browser Limits read API and forwards the same displayable transition on the existing player Logs WebSocket. The
+Browser reads the cache on page load and updates its visible Limits view directly from later transitions, without
+allowing the Runtime to poll or connect back to the Mod.
+
 The Main Worker is written in Typescript; its code is located in [typescript/main-worker](../typescript/main-worker/).
 
 The Event Worker is likewise written in Typescript; its code is located in [typescript/event-worker](../typescript/event-worker).
