@@ -1,13 +1,17 @@
 package io.github.mmcgill.cobbleware;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 import io.github.mmcgill.cobbleware.api.MainWorkerClient;
+import io.github.mmcgill.cobbleware.block.CobbleputerBlockEntity;
+import io.github.mmcgill.cobbleware.block.WirelessObserverBlockEntity;
+import io.github.mmcgill.cobbleware.block.WirelessObserverNetwork;
 import io.github.mmcgill.cobbleware.command.CobblewareCommands;
 import io.github.mmcgill.cobbleware.config.CobblewareConfig;
 import io.github.mmcgill.cobbleware.config.CobblewareConfigLoader;
 import io.github.mmcgill.cobbleware.execution.ExecutionDriver;
 import io.github.mmcgill.cobbleware.instrumentation.Instrumentation;
-import io.github.mmcgill.cobbleware.block.WirelessObserverBlockEntity;
-import io.github.mmcgill.cobbleware.block.WirelessObserverNetwork;
 import io.github.mmcgill.cobbleware.polymer.CobblewarePolymer;
 import io.github.mmcgill.cobbleware.registry.CobblewareBlockEntities;
 import io.github.mmcgill.cobbleware.registry.CobblewareBlocks;
@@ -16,8 +20,6 @@ import net.fabricmc.api.ModInitializer;
 import net.fabricmc.fabric.api.event.lifecycle.v1.ServerChunkEvents;
 import net.fabricmc.fabric.api.event.lifecycle.v1.ServerLifecycleEvents;
 import net.minecraft.server.level.FullChunkStatus;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 /** The common Fabric entrypoint for Cobbleware. */
 public final class CobblewareMod implements ModInitializer {
@@ -68,7 +70,7 @@ public final class CobblewareMod implements ModInitializer {
             boolean isBlockTicking = nextStatus.isOrAfter(FullChunkStatus.BLOCK_TICKING);
             if (wasBlockTicking && !isBlockTicking) {
                 chunk.getBlockEntities().values().forEach(blockEntity -> {
-                    if (blockEntity instanceof io.github.mmcgill.cobbleware.block.CobbleputerBlockEntity cobbleputer) {
+                    if (blockEntity instanceof CobbleputerBlockEntity cobbleputer) {
                         executionDriver.deactivateForChunkBecameNonTicking(cobbleputer);
                     }
                     if (blockEntity instanceof WirelessObserverBlockEntity observer) {
@@ -77,7 +79,7 @@ public final class CobblewareMod implements ModInitializer {
                 });
             } else if (!wasBlockTicking && isBlockTicking) {
                 chunk.getBlockEntities().values().forEach(blockEntity -> {
-                    if (blockEntity instanceof io.github.mmcgill.cobbleware.block.CobbleputerBlockEntity cobbleputer) {
+                    if (blockEntity instanceof CobbleputerBlockEntity cobbleputer) {
                         executionDriver.activate(cobbleputer);
                     }
                     if (blockEntity instanceof WirelessObserverBlockEntity observer) {
@@ -88,7 +90,7 @@ public final class CobblewareMod implements ModInitializer {
             }
         });
         ServerChunkEvents.CHUNK_UNLOAD.register((level, chunk) -> chunk.getBlockEntities().values().forEach(blockEntity -> {
-            if (blockEntity instanceof io.github.mmcgill.cobbleware.block.CobbleputerBlockEntity cobbleputer) {
+            if (blockEntity instanceof CobbleputerBlockEntity cobbleputer) {
                 executionDriver.deactivate(cobbleputer);
             }
             if (blockEntity instanceof WirelessObserverBlockEntity observer) {
