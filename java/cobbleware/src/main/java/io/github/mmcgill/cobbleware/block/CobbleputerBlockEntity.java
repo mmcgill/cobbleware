@@ -29,7 +29,6 @@ public final class CobbleputerBlockEntity extends BlockEntity {
     private static final String WAS_RUNNING_WHEN_UNLOADED_TAG = "was_running_when_unloaded";
 
     private UUID cobbleputerId = UUID.randomUUID();
-    private boolean cobbleputerIdNeedsPersistence = true;
     private UUID executionId;
     private UUID ownerPlayerId;
     private String ownerPlayerName;
@@ -93,11 +92,6 @@ public final class CobbleputerBlockEntity extends BlockEntity {
     /** Returns the durable identity of this placed Cobbleputer. */
     public UUID cobbleputerId() {
         return cobbleputerId;
-    }
-
-    /** Returns whether this generated ID still needs a normal-tick persistence pass. */
-    public boolean cobbleputerIdNeedsPersistence() {
-        return cobbleputerIdNeedsPersistence;
     }
 
     public Optional<UUID> ownerPlayerId() {
@@ -236,7 +230,6 @@ public final class CobbleputerBlockEntity extends BlockEntity {
     protected void saveAdditional(ValueOutput output) {
         super.saveAdditional(output);
         output.store(COBBLEPUTER_ID_TAG, UUIDUtil.CODEC, cobbleputerId);
-        cobbleputerIdNeedsPersistence = false;
         output.storeNullable(EXECUTION_ID_TAG, UUIDUtil.CODEC, executionId);
         output.storeNullable(OWNER_PLAYER_ID_TAG, UUIDUtil.CODEC, ownerPlayerId);
         if (ownerPlayerName != null) {
@@ -257,9 +250,8 @@ public final class CobbleputerBlockEntity extends BlockEntity {
     protected void loadAdditional(ValueInput input) {
         super.loadAdditional(input);
 
-        Optional<UUID> loadedCobbleputerId = input.read(COBBLEPUTER_ID_TAG, UUIDUtil.CODEC);
-        cobbleputerId = loadedCobbleputerId.orElseGet(UUID::randomUUID);
-        cobbleputerIdNeedsPersistence = loadedCobbleputerId.isEmpty();
+        cobbleputerId = input.read(COBBLEPUTER_ID_TAG, UUIDUtil.CODEC)
+                .orElseThrow(() -> new IllegalStateException("Missing required cobbleputer_id"));
         executionId = input.read(EXECUTION_ID_TAG, UUIDUtil.CODEC).orElse(null);
         ownerPlayerId = input.read(OWNER_PLAYER_ID_TAG, UUIDUtil.CODEC).orElse(null);
         ownerPlayerName = input.getStringOr(OWNER_PLAYER_NAME_TAG, "");
@@ -311,15 +303,6 @@ public final class CobbleputerBlockEntity extends BlockEntity {
         executionState = null;
         stoppedAtTick = null;
         wasRunningWhenUnloaded = false;
-    }
-
-    /** Persists a Cobbleputer ID generated for new or legacy block-entity data after chunk attachment. */
-    public void persistMigratedCobbleputerId() {
-        if (!cobbleputerIdNeedsPersistence) {
-            return;
-        }
-        cobbleputerIdNeedsPersistence = false;
-        setChanged();
     }
 
     private static byte[] copyBytes(ByteBuffer source) {

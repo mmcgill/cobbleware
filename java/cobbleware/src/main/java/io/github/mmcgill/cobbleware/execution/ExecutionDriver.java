@@ -81,13 +81,9 @@ public final class ExecutionDriver {
     private final Map<CobbleputerBlockEntity, ActiveExecution> activeExecutions = new IdentityHashMap<>();
     private final Set<WirelessObserverBlockEntity> pendingObserverInitializations =
             Collections.newSetFromMap(new IdentityHashMap<>());
-    private final Set<CobbleputerBlockEntity> pendingCobbleputerIdMigrations =
-            Collections.newSetFromMap(new IdentityHashMap<>());
     private final Set<CobbleputerBlockEntity> pendingChunkLoadResumes =
             Collections.newSetFromMap(new IdentityHashMap<>());
     private final Set<CobbleputerBlockEntity> pendingChunkNonTickingTransitions =
-            Collections.newSetFromMap(new IdentityHashMap<>());
-    private final Set<WirelessObserverBlockEntity> pendingObserverIdMigrations =
             Collections.newSetFromMap(new IdentityHashMap<>());
     private final Set<WirelessObserverBlockEntity> pendingObserverChanges =
             Collections.newSetFromMap(new IdentityHashMap<>());
@@ -132,9 +128,6 @@ public final class ExecutionDriver {
                     blockEntity.getBlockState().getValue(CobbleputerBlock.STATE).getSerializedName(),
                     blockEntity.ownerPlayerId().map(UUID::toString).orElse("none"));
         }
-        if (blockEntity.cobbleputerIdNeedsPersistence()) {
-            pendingCobbleputerIdMigrations.add(blockEntity);
-        }
         if (newlyActive && isChunkLoadResumeCandidate(blockEntity)) {
             pendingChunkLoadResumes.add(blockEntity);
         }
@@ -143,7 +136,6 @@ public final class ExecutionDriver {
     /** Removes a Cobbleputer and intentionally drops its ephemeral pending events. */
     public void deactivate(CobbleputerBlockEntity blockEntity) {
         activeExecutions.remove(blockEntity);
-        pendingCobbleputerIdMigrations.remove(blockEntity);
         pendingChunkLoadResumes.remove(blockEntity);
         pendingChunkNonTickingTransitions.remove(blockEntity);
     }
@@ -159,7 +151,6 @@ public final class ExecutionDriver {
                 blockEntity.getBlockState().getValue(CobbleputerBlock.STATE).getSerializedName(),
                 blockEntity.ownerPlayerId().map(UUID::toString).orElse("none"));
         activeExecutions.remove(blockEntity);
-        pendingCobbleputerIdMigrations.remove(blockEntity);
         pendingChunkLoadResumes.remove(blockEntity);
         pendingChunkNonTickingTransitions.add(blockEntity);
     }
@@ -178,17 +169,9 @@ public final class ExecutionDriver {
         }
     }
 
-    /** Schedules post-load persistence of an observer UUID generated for legacy data. */
-    public void registerObserverIdMigration(WirelessObserverBlockEntity observer) {
-        if (observer != null) {
-            pendingObserverIdMigrations.add(observer);
-        }
-    }
-
     /** Removes an unloaded or broken observer from the ephemeral pending-change set. */
     public void deactivate(WirelessObserverBlockEntity observer) {
         pendingObserverInitializations.remove(observer);
-        pendingObserverIdMigrations.remove(observer);
         pendingObserverChanges.remove(observer);
     }
 
@@ -391,8 +374,6 @@ public final class ExecutionDriver {
             flight = null;
         }
 
-        drainCobbleputerIdMigrations();
-        drainObserverIdMigrations();
         drainObserverInitializations();
         drainObserverChanges(server);
         Flight nextFlight = buildFlight();
@@ -606,32 +587,6 @@ public final class ExecutionDriver {
             }
             if (!observer.initializeObservedState()) {
                 pendingObserverInitializations.add(observer);
-            }
-        }
-    }
-
-    private void drainObserverIdMigrations() {
-        if (pendingObserverIdMigrations.isEmpty()) {
-            return;
-        }
-        List<WirelessObserverBlockEntity> observers = List.copyOf(pendingObserverIdMigrations);
-        pendingObserverIdMigrations.clear();
-        for (WirelessObserverBlockEntity observer : observers) {
-            if (!observer.isRemoved() && observer.getLevel() instanceof ServerLevel) {
-                observer.persistMigratedObserverId();
-            }
-        }
-    }
-
-    private void drainCobbleputerIdMigrations() {
-        if (pendingCobbleputerIdMigrations.isEmpty()) {
-            return;
-        }
-        List<CobbleputerBlockEntity> cobbleputers = List.copyOf(pendingCobbleputerIdMigrations);
-        pendingCobbleputerIdMigrations.clear();
-        for (CobbleputerBlockEntity cobbleputer : cobbleputers) {
-            if (!cobbleputer.isRemoved() && cobbleputer.getLevel() instanceof ServerLevel) {
-                cobbleputer.persistMigratedCobbleputerId();
             }
         }
     }

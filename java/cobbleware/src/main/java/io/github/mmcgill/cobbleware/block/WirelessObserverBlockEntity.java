@@ -28,12 +28,10 @@ public final class WirelessObserverBlockEntity extends BlockEntity {
     private UUID observerId;
     private GlobalPos pairedCobbleputer;
     private BlockState observedState;
-    private boolean observerIdNeedsPersistence;
 
     public WirelessObserverBlockEntity(BlockPos pos, BlockState state) {
         super(CobblewareBlockEntities.WIRELESS_OBSERVER, pos, state);
         observerId = UUID.randomUUID();
-        observerIdNeedsPersistence = true;
     }
 
     @Override
@@ -43,9 +41,6 @@ public final class WirelessObserverBlockEntity extends BlockEntity {
             ExecutionDriver executionDriver = CobblewareMod.executionDriverOrNull();
             if (observedState == null && executionDriver != null) {
                 executionDriver.registerObserverInitialization(this);
-            }
-            if (observerIdNeedsPersistence && executionDriver != null) {
-                executionDriver.registerObserverIdMigration(this);
             }
             WirelessObserverNetwork network = CobblewareMod.wirelessObserverNetworkOrNull();
             if (network != null) {
@@ -171,7 +166,6 @@ public final class WirelessObserverBlockEntity extends BlockEntity {
     protected void saveAdditional(ValueOutput output) {
         super.saveAdditional(output);
         output.store(OBSERVER_ID_TAG, UUIDUtil.CODEC, observerId);
-        observerIdNeedsPersistence = false;
         if (pairedCobbleputer != null) {
             output.putString(
                     PAIRED_DIMENSION_TAG,
@@ -184,9 +178,8 @@ public final class WirelessObserverBlockEntity extends BlockEntity {
     @Override
     protected void loadAdditional(ValueInput input) {
         super.loadAdditional(input);
-        Optional<UUID> loadedObserverId = input.read(OBSERVER_ID_TAG, UUIDUtil.CODEC);
-        observerId = loadedObserverId.orElseGet(UUID::randomUUID);
-        observerIdNeedsPersistence = loadedObserverId.isEmpty();
+        observerId = input.read(OBSERVER_ID_TAG, UUIDUtil.CODEC)
+                .orElseThrow(() -> new IllegalStateException("Missing required observer_id"));
         pairedCobbleputer = readPairing(input).orElse(null);
         observedState = input.read(OBSERVED_STATE_TAG, BlockState.CODEC).orElse(null);
     }
@@ -220,15 +213,6 @@ public final class WirelessObserverBlockEntity extends BlockEntity {
         observedState = level.getBlockState(observedBlockPos());
         setChanged();
         return true;
-    }
-
-    /** Persists a UUID generated while loading legacy observer data after chunk attachment. */
-    public void persistMigratedObserverId() {
-        if (!observerIdNeedsPersistence) {
-            return;
-        }
-        observerIdNeedsPersistence = false;
-        setChanged();
     }
 
     /** A before/after snapshot captured while draining one dirty observer. */

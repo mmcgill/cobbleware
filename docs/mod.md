@@ -100,13 +100,7 @@ A placed Cobbleputer block has an associated block entity that stores:
   which it was stopped, used to populate the next `Resumed` event.
 * was-running-when-unloaded: whether a `STOPPED` Cobbleputer should receive one automatic resume
   attempt after its chunk becomes block-ticking again. A persisted `RUNNING` state is also always treated
-  as a pending automatic resume, which covers worlds that predate this field and server shutdown paths
-  that save before the chunk stops block ticking.
-
-Cobbleputers created before the durable Cobbleputer ID field receive an
-in-memory UUID while loading. The Mod marks that migration dirty during normal
-server-tick work after chunk attachment, never from a block-entity loading or
-attachment callback.
+  as a pending automatic resume.
 
 Breaking the Cobbleputer block destroys the block entity; effectively terminating the execution.
 It also immediately unpairs every loaded Wireless Observer paired to that Cobbleputer. Unloaded
@@ -152,9 +146,7 @@ At most once per tick (via `ServerTickEvents.END_SERVER_TICK`), the `ExecutionDr
 
 A placed Wireless Observer stores a randomly generated UUID in its block entity. The UUID is
 durable across chunk unloads, reloads, and server restarts, but a replacement observer block gets
-a fresh UUID. Observers created before this field existed receive an in-memory UUID while loading;
-the Mod marks that migration dirty during normal server-tick work after chunk attachment, never in
-the block entity loading callback.
+a fresh UUID.
 
 ### Pairing and Unpairing
 
