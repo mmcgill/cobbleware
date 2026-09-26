@@ -276,7 +276,7 @@ public final class CobblewareCommands {
             player.sendSystemMessage(Component.literal("Cobbleware execution can only run on the server."));
             return;
         }
-        ExecutionDriver.ActivationResult activation = executionDriver.startExecution(
+        ExecutionDriver.ExecutionInitResult activation = executionDriver.startExecution(
                 serverLevel,
                 resolvedTarget.pos(),
                 resolvedTarget.state(),
@@ -284,11 +284,11 @@ public final class CobblewareCommands {
                 player.getUUID(),
                 player.getGameProfile().name(),
                 startState.orElseThrow());
-        if (activation == ExecutionDriver.ActivationResult.LIMIT_REACHED) {
+        if (activation == ExecutionDriver.ExecutionInitResult.LIMIT_REACHED) {
             sendRunningExecutionLimitReached(player, executionDriver.maxRunningExecutionsPerPlayer());
             return;
         }
-        if (activation != ExecutionDriver.ActivationResult.ACTIVATED) {
+        if (activation != ExecutionDriver.ExecutionInitResult.SUCCESS) {
             player.sendSystemMessage(Component.literal("The nearest Cobbleputer could not be started."));
             return;
         }
@@ -351,7 +351,7 @@ public final class CobblewareCommands {
             return 0;
         }
 
-        ExecutionDriver.ActivationResult activation;
+        ExecutionDriver.ExecutionInitResult activation;
         if (lifecycleState == CobbleputerState.STOPPED) {
             activation = executionDriver.resume(
                     serverLevel, resolvedTarget.pos(), resolvedTarget.state(), resolvedTarget.blockEntity());
@@ -359,11 +359,11 @@ public final class CobblewareCommands {
             activation = executionDriver.restartCrashedExecution(
                     serverLevel, resolvedTarget.pos(), resolvedTarget.state(), resolvedTarget.blockEntity());
         }
-        if (activation == ExecutionDriver.ActivationResult.LIMIT_REACHED) {
+        if (activation == ExecutionDriver.ExecutionInitResult.LIMIT_REACHED) {
             sendRunningExecutionLimitReached(player, executionDriver.maxRunningExecutionsPerPlayer());
             return 0;
         }
-        if (activation != ExecutionDriver.ActivationResult.ACTIVATED) {
+        if (activation != ExecutionDriver.ExecutionInitResult.SUCCESS) {
             player.sendSystemMessage(Component.literal("The nearest Cobbleputer could not be resumed."));
             return 0;
         }

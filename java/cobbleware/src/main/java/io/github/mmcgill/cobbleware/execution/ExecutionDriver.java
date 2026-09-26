@@ -68,8 +68,8 @@ public final class ExecutionDriver {
             .thenComparing(CobbleputerBlockEntity::cobbleputerId);
 
     /** Outcome of an attempt to make a Cobbleputer execution running. */
-    public enum ActivationResult {
-        ACTIVATED,
+    public enum ExecutionInitResult {
+        SUCCESS,
         LIMIT_REACHED,
         INVALID_STATE
     }
@@ -78,7 +78,7 @@ public final class ExecutionDriver {
     private final Instrumentation instrumentation;
     private final int maxRunningExecutionsPerPlayer;
     private final Logger logger;
-    private final Map<CobbleputerBlockEntity, ActiveExecution> activeExecutions = new IdentityHashMap<>();
+    private final Map<CobbleputerBlockEntity, EphemeralCobbleputerState> loadedCobbleputers = new IdentityHashMap<>();
     private final Set<WirelessObserverBlockEntity> pendingObserverInitializations =
             Collections.newSetFromMap(new IdentityHashMap<>());
     private final Set<CobbleputerBlockEntity> pendingChunkLoadResumes =
@@ -115,11 +115,11 @@ public final class ExecutionDriver {
                 (message, sender, parameters) -> dispatchChatMessage(sender, message.signedContent()));
     }
 
-    /** Adds a loaded Cobbleputer to the driver's active set. */
+    /** Adds a loaded Cobbleputer to the driver's loaded set. */
     public void activate(CobbleputerBlockEntity blockEntity) {
         pendingChunkNonTickingTransitions.remove(blockEntity);
-        boolean newlyActive = activeExecutions.putIfAbsent(blockEntity, new ActiveExecution()) == null;
-        if (newlyActive) {
+        boolean newlyLoaded = loadedCobbleputers.putIfAbsent(blockEntity, new EphemeralCobbleputerState()) == null;
+        if (newlyLoaded) {
             logger.info(
                     "Loaded Cobbleputer {} at {} in {} (state={}, owner={})",
                     blockEntity.cobbleputerId(),
@@ -128,14 +128,14 @@ public final class ExecutionDriver {
                     blockEntity.getBlockState().getValue(CobbleputerBlock.STATE).getSerializedName(),
                     blockEntity.ownerPlayerId().map(UUID::toString).orElse("none"));
         }
-        if (newlyActive && isChunkLoadResumeCandidate(blockEntity)) {
+        if (newlyLoaded && isChunkLoadResumeCandidate(blockEntity)) {
             pendingChunkLoadResumes.add(blockEntity);
         }
     }
 
     /** Removes a Cobbleputer and intentionally drops its ephemeral pending events. */
     public void deactivate(CobbleputerBlockEntity blockEntity) {
-        activeExecutions.remove(blockEntity);
+        loadedCobbleputers.remove(blockEntity);
         pendingChunkLoadResumes.remove(blockEntity);
         pendingChunkNonTickingTransitions.remove(blockEntity);
     }
@@ -150,7 +150,7 @@ public final class ExecutionDriver {
                 dimensionKey(blockEntity),
                 blockEntity.getBlockState().getValue(CobbleputerBlock.STATE).getSerializedName(),
                 blockEntity.ownerPlayerId().map(UUID::toString).orElse("none"));
-        activeExecutions.remove(blockEntity);
+        loadedCobbleputers.remove(blockEntity);
         pendingChunkLoadResumes.remove(blockEntity);
         pendingChunkNonTickingTransitions.add(blockEntity);
     }
@@ -209,7 +209,7 @@ public final class ExecutionDriver {
     }
 
     /** Starts a fresh execution and queues its first lifecycle event when the owner has capacity. */
-    public ActivationResult startExecution(
+    public ExecutionInitResult startExecution(
             ServerLevel level,
             BlockPos pos,
             BlockState state,
@@ -223,9 +223,9 @@ public final class ExecutionDriver {
         }
         activate(blockEntity);
         if (!hasRunningExecutionCapacity(owner)) {
-            return ActivationResult.LIMIT_REACHED;
+            return ExecutionInitResult.LIMIT_REACHED;
         }
-        activeExecutions.get(blockEntity).events.clear();
+        loadedCobbleputers.get(blockEntity).events.clear();
         blockEntity.startExecution(owner, ownerName, initialState);
         if (CobbleputerBlock.setLifecycleState(level, pos, state, CobbleputerState.RUNNING)) {
             enqueueEvent(
@@ -233,9 +233,9 @@ public final class ExecutionDriver {
                     Event.newBuilder()
                             .setStarted(Started.newBuilder().setTick(level.getGameTime()))
                             .build());
-            return ActivationResult.ACTIVATED;
+            return ExecutionInitResult.SUCCESS;
         }
-        return ActivationResult.INVALID_STATE;
+        return ExecutionInitResult.INVALID_STATE;
     }
 
     /** Stops a running execution without discarding its execution record or queued events. */
@@ -250,30 +250,30 @@ public final class ExecutionDriver {
     }
 
     /** Resumes a stopped execution and queues its resume lifecycle event when the owner has capacity. */
-    public ActivationResult resume(
+    public ExecutionInitResult resume(
             ServerLevel level, BlockPos pos, BlockState state, CobbleputerBlockEntity blockEntity) {
         if (!blockEntity.hasExecution() || state.getValue(CobbleputerBlock.STATE) != CobbleputerState.STOPPED) {
-            return ActivationResult.INVALID_STATE;
+            return ExecutionInitResult.INVALID_STATE;
         }
         activate(blockEntity);
         if (!hasRunningExecutionCapacity(blockEntity.ownerPlayerId().orElseThrow())) {
-            return ActivationResult.LIMIT_REACHED;
+            return ExecutionInitResult.LIMIT_REACHED;
         }
         return transitionToRunningAndQueueResumed(level, pos, state, blockEntity);
     }
 
     /** Restarts a crashed execution with its retained state when the owner has capacity. */
-    public ActivationResult restartCrashedExecution(
+    public ExecutionInitResult restartCrashedExecution(
             ServerLevel level, BlockPos pos, BlockState state, CobbleputerBlockEntity blockEntity) {
         if (!blockEntity.hasRecoverableCrashedExecution()
                 || state.getValue(CobbleputerBlock.STATE) != CobbleputerState.CRASHED) {
-            return ActivationResult.INVALID_STATE;
+            return ExecutionInitResult.INVALID_STATE;
         }
         activate(blockEntity);
         if (!hasRunningExecutionCapacity(blockEntity.ownerPlayerId().orElseThrow())) {
-            return ActivationResult.LIMIT_REACHED;
+            return ExecutionInitResult.LIMIT_REACHED;
         }
-        ActiveExecution active = activeExecutions.get(blockEntity);
+        EphemeralCobbleputerState active = loadedCobbleputers.get(blockEntity);
         active.events.clear();
         blockEntity.restartCrashedExecution();
         if (CobbleputerBlock.setLifecycleState(level, pos, state, CobbleputerState.RUNNING)) {
@@ -282,9 +282,9 @@ public final class ExecutionDriver {
                     Event.newBuilder()
                             .setStarted(Started.newBuilder().setTick(level.getGameTime()))
                             .build());
-            return ActivationResult.ACTIVATED;
+            return ExecutionInitResult.SUCCESS;
         }
-        return ActivationResult.INVALID_STATE;
+        return ExecutionInitResult.INVALID_STATE;
     }
 
     /** Queues an event for a running active Cobbleputer when it can be accepted. */
@@ -292,9 +292,9 @@ public final class ExecutionDriver {
         if (blockEntity == null || event == null) {
             throw new IllegalArgumentException("Cobbleputer event arguments must not be null");
         }
-        ActiveExecution active = activeExecutions.get(blockEntity);
-        if (active != null) {
-            enqueueActiveEvent(blockEntity, active, event);
+        EphemeralCobbleputerState ephemeralState = loadedCobbleputers.get(blockEntity);
+        if (ephemeralState != null) {
+            enqueueActiveEvent(blockEntity, ephemeralState, event);
         } else {
             recordRejectedEvent(blockEntity, event);
         }
@@ -306,7 +306,7 @@ public final class ExecutionDriver {
                 .setChatMessage(ChatMessage.newBuilder().setMessage(message))
                 .build();
         Level senderLevel = sender.level();
-        for (Map.Entry<CobbleputerBlockEntity, ActiveExecution> entry : activeExecutions.entrySet()) {
+        for (Map.Entry<CobbleputerBlockEntity, EphemeralCobbleputerState> entry : loadedCobbleputers.entrySet()) {
             CobbleputerBlockEntity blockEntity = entry.getKey();
             if (blockEntity.getLevel() != senderLevel
                     || sender.distanceToSqr(Vec3.atCenterOf(blockEntity.getBlockPos())) > CHAT_RADIUS_SQUARED) {
@@ -316,7 +316,7 @@ public final class ExecutionDriver {
         }
     }
 
-    private void enqueueActiveEvent(CobbleputerBlockEntity blockEntity, ActiveExecution active, Event event) {
+    private void enqueueActiveEvent(CobbleputerBlockEntity blockEntity, EphemeralCobbleputerState active, Event event) {
         if (active == null || !blockEntity.hasExecution()) {
             recordRejectedEvent(blockEntity, event);
             return;
@@ -434,7 +434,7 @@ public final class ExecutionDriver {
 
         List<CobbleputerBlockEntity> candidates = new ArrayList<>();
         for (CobbleputerBlockEntity blockEntity : pendingChunkLoadResumes) {
-            if (activeExecutions.containsKey(blockEntity)
+            if (loadedCobbleputers.containsKey(blockEntity)
                     && isChunkLoadResumeCandidate(blockEntity)
                     && blockEntity.getLevel() instanceof ServerLevel) {
                 candidates.add(blockEntity);
@@ -456,7 +456,7 @@ public final class ExecutionDriver {
         for (Map.Entry<UUID, List<CobbleputerBlockEntity>> entry : candidatesByOwner.entrySet()) {
             int remainingCapacity = maxRunningExecutionsPerPlayer - runningExecutionCount(entry.getKey(), candidateSet);
             for (CobbleputerBlockEntity candidate : entry.getValue()) {
-                if (remainingCapacity > 0 && resumeAfterChunkLoad(candidate) == ActivationResult.ACTIVATED) {
+                if (remainingCapacity > 0 && resumeAfterChunkLoad(candidate) == ExecutionInitResult.SUCCESS) {
                     remainingCapacity -= 1;
                     continue;
                 }
@@ -465,29 +465,29 @@ public final class ExecutionDriver {
         }
     }
 
-    private ActivationResult resumeAfterChunkLoad(CobbleputerBlockEntity blockEntity) {
+    private ExecutionInitResult resumeAfterChunkLoad(CobbleputerBlockEntity blockEntity) {
         if (!(blockEntity.getLevel() instanceof ServerLevel level)
                 || !blockEntity.hasExecution()
                 || !blockEntity.shouldResumeAfterChunkLoad()) {
-            return ActivationResult.INVALID_STATE;
+            return ExecutionInitResult.INVALID_STATE;
         }
         CobbleputerState state = blockEntity.getBlockState().getValue(CobbleputerBlock.STATE);
         if (state != CobbleputerState.STOPPED && state != CobbleputerState.RUNNING) {
-            return ActivationResult.INVALID_STATE;
+            return ExecutionInitResult.INVALID_STATE;
         }
         return transitionToRunningAndQueueResumed(
                 level, blockEntity.getBlockPos(), blockEntity.getBlockState(), blockEntity);
     }
 
-    private ActivationResult transitionToRunningAndQueueResumed(
+    private ExecutionInitResult transitionToRunningAndQueueResumed(
             ServerLevel level, BlockPos pos, BlockState state, CobbleputerBlockEntity blockEntity) {
         CobbleputerState lifecycleState = state.getValue(CobbleputerBlock.STATE);
         if (lifecycleState == CobbleputerState.STOPPED) {
             if (!CobbleputerBlock.setLifecycleState(level, pos, state, CobbleputerState.RUNNING)) {
-                return ActivationResult.INVALID_STATE;
+                return ExecutionInitResult.INVALID_STATE;
             }
         } else if (lifecycleState != CobbleputerState.RUNNING) {
-            return ActivationResult.INVALID_STATE;
+            return ExecutionInitResult.INVALID_STATE;
         }
         long resumeTick = level.getGameTime();
         blockEntity.takeChunkUnloadResumeIntent();
@@ -497,7 +497,7 @@ public final class ExecutionDriver {
                 Event.newBuilder()
                         .setResumed(Resumed.newBuilder().setStopTick(stopTick).setResumeTick(resumeTick))
                         .build());
-        return ActivationResult.ACTIVATED;
+        return ExecutionInitResult.SUCCESS;
     }
 
     private void rejectChunkLoadResumeForRunningExecutionLimit(
@@ -531,7 +531,7 @@ public final class ExecutionDriver {
 
     private int runningExecutionCount(UUID owner, Set<CobbleputerBlockEntity> excluded) {
         int count = 0;
-        for (CobbleputerBlockEntity blockEntity : activeExecutions.keySet()) {
+        for (CobbleputerBlockEntity blockEntity : loadedCobbleputers.keySet()) {
             if (!excluded.contains(blockEntity)
                     && owner.equals(blockEntity.ownerPlayerId().orElse(null))
                     && isRunningExecution(blockEntity)) {
@@ -680,7 +680,7 @@ public final class ExecutionDriver {
     private Flight buildFlight() {
         List<ExecutionState> executions = new ArrayList<>();
         Map<String, OfferedExecution> offered = new HashMap<>();
-        for (Map.Entry<CobbleputerBlockEntity, ActiveExecution> entry : activeExecutions.entrySet()) {
+        for (Map.Entry<CobbleputerBlockEntity, EphemeralCobbleputerState> entry : loadedCobbleputers.entrySet()) {
             CobbleputerBlockEntity blockEntity = entry.getKey();
             if (!blockEntity.hasExecution()) {
                 continue;
@@ -728,7 +728,7 @@ public final class ExecutionDriver {
         for (ExecutionResult result : response.getResultsList()) {
             OfferedExecution offered = completedFlight.offered.get(uuidKey(result.getExecutionId()));
             if (offered == null
-                    || activeExecutions.get(offered.blockEntity) == null
+                    || loadedCobbleputers.get(offered.blockEntity) == null
                     || !sameExecutionId(offered.blockEntity, result.getExecutionId())
                     || executionStatus(offered.blockEntity.getBlockState()) != offered.lifecycleState) {
                 continue;
@@ -772,7 +772,7 @@ public final class ExecutionDriver {
             return;
         }
 
-        ActiveExecution active = activeExecutions.get(offered.blockEntity);
+        EphemeralCobbleputerState active = loadedCobbleputers.get(offered.blockEntity);
         while (!active.events.isEmpty() && active.events.getFirst().sequenceNum <= result.getEventSeqNum()) {
             active.events.removeFirst();
         }
@@ -1052,7 +1052,7 @@ public final class ExecutionDriver {
 
     private void recordCobbleputerStateGauge() {
         Map<Instrumentation.PlayerCobbleputerKey, Instrumentation.LifecycleState> states = new HashMap<>();
-        for (CobbleputerBlockEntity blockEntity : activeExecutions.keySet()) {
+        for (CobbleputerBlockEntity blockEntity : loadedCobbleputers.keySet()) {
             Instrumentation.LifecycleState lifecycle =
                     switch (blockEntity.getBlockState().getValue(CobbleputerBlock.STATE)) {
                         case RUNNING -> Instrumentation.LifecycleState.RUNNING;
@@ -1094,7 +1094,7 @@ public final class ExecutionDriver {
 
     private record SyncCompletion(long elapsedNanos, Instrumentation.SyncOutcome outcome) {}
 
-    private static final class ActiveExecution {
+    private static final class EphemeralCobbleputerState {
         private final ArrayDeque<QueuedEvent> events = new ArrayDeque<>();
     }
 
