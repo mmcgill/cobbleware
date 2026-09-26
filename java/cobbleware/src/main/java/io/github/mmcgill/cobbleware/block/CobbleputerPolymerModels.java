@@ -19,8 +19,7 @@ public final class CobbleputerPolymerModels {
 
     private static volatile Map<CobbleputerState, BlockState> states;
 
-    private CobbleputerPolymerModels() {
-    }
+    private CobbleputerPolymerModels() {}
 
     /** Allocates one Polymer full-block model state per visible Cobbleputer lifecycle state. */
     public static synchronized void initialize() {
@@ -31,8 +30,7 @@ public final class CobbleputerPolymerModels {
         Map<CobbleputerState, BlockState> allocatedStates = new EnumMap<>(CobbleputerState.class);
         for (CobbleputerState lifecycleState : CobbleputerState.values()) {
             BlockState allocatedState = PolymerBlockResourceUtils.requestBlock(
-                    BlockModelType.FULL_BLOCK,
-                    PolymerBlockModel.of(modelIdFor(lifecycleState)));
+                    BlockModelType.FULL_BLOCK, PolymerBlockModel.of(modelIdFor(lifecycleState)));
             if (allocatedState == null) {
                 throw new IllegalStateException(
                         "Polymer could not allocate a FULL_BLOCK model for Cobbleputer state " + lifecycleState);

@@ -12,6 +12,14 @@ introduced with Minecraft 26.1.
 The remapped mod JAR is written to `build/libs/`; use the JAR with the shortest filename outside the development
 environment.
 
+## Formatting
+
+After every change, run the Palantir Java Format through Spotless:
+
+```powershell
+.\gradlew.bat spotlessApply
+```
+
 ## Protocol Buffers
 
 The Java bindings are generated from the repository-wide schemas in [`../../protobuf`](../../protobuf). Generate them

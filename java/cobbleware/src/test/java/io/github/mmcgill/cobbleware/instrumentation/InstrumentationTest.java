@@ -35,23 +35,31 @@ class InstrumentationTest {
         instrumentation.recordCobbleputerStates(Map.of(TARGET, Instrumentation.LifecycleState.STOPPED));
 
         Instrumentation.Snapshot fullWindow = instrumentation.snapshot();
-        Instrumentation.EventMetricKey eventKey = new Instrumentation.EventMetricKey(TARGET, Event.EventCase.CHAT_MESSAGE);
-        Instrumentation.EffectMetricKey effectKey = new Instrumentation.EffectMetricKey(TARGET, Effect.EffectCase.SEND_CHAT);
+        Instrumentation.EventMetricKey eventKey =
+                new Instrumentation.EventMetricKey(TARGET, Event.EventCase.CHAT_MESSAGE);
+        Instrumentation.EffectMetricKey effectKey =
+                new Instrumentation.EffectMetricKey(TARGET, Effect.EffectCase.SEND_CHAT);
 
         assertEquals(2, fullWindow.windowTicks());
         assertEquals(1, fullWindow.firstTick());
         assertEquals(2, fullWindow.lastTick());
         assertEquals(2, fullWindow.retainedTickCount());
         assertEquals(new Instrumentation.TimingSummary(2, 10, 7), fullWindow.syncDurations());
-        assertEquals(Map.of(
-                Instrumentation.SyncOutcome.SUCCESS, 1L,
-                Instrumentation.SyncOutcome.UNAVAILABLE, 1L), fullWindow.syncOutcomes());
+        assertEquals(
+                Map.of(
+                        Instrumentation.SyncOutcome.SUCCESS, 1L,
+                        Instrumentation.SyncOutcome.UNAVAILABLE, 1L),
+                fullWindow.syncOutcomes());
         assertEquals(new Instrumentation.EventCounts(1, 1), fullWindow.events().get(eventKey));
-        assertEquals(new Instrumentation.EventSyncSummary(2, 6, 4), fullWindow.eventsPerSync().get(TARGET));
-        assertEquals(new Instrumentation.EffectCounts(2, 1, new Instrumentation.TimingSummary(2, 9, 5)),
+        assertEquals(
+                new Instrumentation.EventSyncSummary(2, 6, 4),
+                fullWindow.eventsPerSync().get(TARGET));
+        assertEquals(
+                new Instrumentation.EffectCounts(2, 1, new Instrumentation.TimingSummary(2, 9, 5)),
                 fullWindow.effects().get(effectKey));
         assertEquals(Map.of(TARGET, Instrumentation.LifecycleState.STOPPED), fullWindow.cobbleputerStates());
-        assertThrows(UnsupportedOperationException.class,
+        assertThrows(
+                UnsupportedOperationException.class,
                 () -> fullWindow.events().put(eventKey, new Instrumentation.EventCounts(0, 0)));
 
         instrumentation.advanceTick(3);
@@ -63,8 +71,11 @@ class InstrumentationTest {
         assertEquals(new Instrumentation.TimingSummary(1, 7, 7), evicted.syncDurations());
         assertEquals(Map.of(Instrumentation.SyncOutcome.UNAVAILABLE, 1L), evicted.syncOutcomes());
         assertEquals(new Instrumentation.EventCounts(0, 1), evicted.events().get(eventKey));
-        assertEquals(new Instrumentation.EventSyncSummary(1, 4, 4), evicted.eventsPerSync().get(TARGET));
-        assertEquals(new Instrumentation.EffectCounts(1, 1, new Instrumentation.TimingSummary(1, 5, 5)),
+        assertEquals(
+                new Instrumentation.EventSyncSummary(1, 4, 4),
+                evicted.eventsPerSync().get(TARGET));
+        assertEquals(
+                new Instrumentation.EffectCounts(1, 1, new Instrumentation.TimingSummary(1, 5, 5)),
                 evicted.effects().get(effectKey));
         assertEquals(Map.of(TARGET, Instrumentation.LifecycleState.RUNNING), evicted.cobbleputerStates());
     }
@@ -74,9 +85,11 @@ class InstrumentationTest {
         assertThrows(IllegalArgumentException.class, () -> new Instrumentation(0));
 
         Instrumentation instrumentation = new Instrumentation(1);
-        assertThrows(IllegalArgumentException.class,
+        assertThrows(
+                IllegalArgumentException.class,
                 () -> instrumentation.recordSyncCompletion(-1, Instrumentation.SyncOutcome.SUCCESS));
-        assertThrows(IllegalArgumentException.class,
+        assertThrows(
+                IllegalArgumentException.class,
                 () -> instrumentation.recordEffect(TARGET, Effect.EffectCase.SEND_CHAT, -1, false));
         assertThrows(IllegalArgumentException.class, () -> instrumentation.recordEventsPerSync(TARGET, -1));
     }

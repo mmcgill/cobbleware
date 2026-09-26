@@ -3,17 +3,17 @@ package io.github.mmcgill.cobbleware.block;
 import eu.pb4.polymer.blocks.api.PolymerTexturedBlock;
 import io.github.mmcgill.cobbleware.CobblewareMod;
 import io.github.mmcgill.cobbleware.execution.ExecutionDriver;
-import io.github.mmcgill.cobbleware.registry.CobblewareBlockEntities;
 import net.fabricmc.fabric.api.networking.v1.context.PacketContext;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
+import net.minecraft.server.level.ServerLevel;
 import net.minecraft.util.RandomSource;
 import net.minecraft.world.item.DyeColor;
 import net.minecraft.world.item.context.BlockPlaceContext;
-import net.minecraft.world.level.LevelReader;
-import net.minecraft.world.level.ScheduledTickAccess;
 import net.minecraft.world.level.BlockGetter;
 import net.minecraft.world.level.Level;
+import net.minecraft.world.level.LevelReader;
+import net.minecraft.world.level.ScheduledTickAccess;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.DirectionalBlock;
 import net.minecraft.world.level.block.EntityBlock;
@@ -22,7 +22,6 @@ import net.minecraft.world.level.block.state.BlockBehaviour;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.block.state.StateDefinition;
 import net.minecraft.world.level.block.state.properties.IntegerProperty;
-import net.minecraft.server.level.ServerLevel;
 
 /** A colored, orientable observer endpoint with a controllable weak redstone output. */
 public final class WirelessObserverBlock extends Block implements EntityBlock, PolymerTexturedBlock {
@@ -32,7 +31,8 @@ public final class WirelessObserverBlock extends Block implements EntityBlock, P
     public WirelessObserverBlock(DyeColor color, BlockBehaviour.Properties properties) {
         super(properties);
         this.color = color;
-        registerDefaultState(stateDefinition.any()
+        registerDefaultState(stateDefinition
+                .any()
                 .setValue(DirectionalBlock.FACING, Direction.NORTH)
                 .setValue(POWER, 0));
     }
@@ -44,7 +44,8 @@ public final class WirelessObserverBlock extends Block implements EntityBlock, P
     @Override
     public BlockState getStateForPlacement(BlockPlaceContext context) {
         // This matches vanilla ObserverBlock: its front points in the placement look direction.
-        return defaultBlockState().setValue(DirectionalBlock.FACING, facingForPlacement(context.getNearestLookingDirection()));
+        return defaultBlockState()
+                .setValue(DirectionalBlock.FACING, facingForPlacement(context.getNearestLookingDirection()));
     }
 
     static Direction facingForPlacement(Direction nearestLookingDirection) {

@@ -4,6 +4,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import net.minecraft.SharedConstants;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.GlobalPos;
 import net.minecraft.core.registries.Registries;
@@ -11,7 +12,6 @@ import net.minecraft.nbt.CompoundTag;
 import net.minecraft.resources.Identifier;
 import net.minecraft.resources.ResourceKey;
 import net.minecraft.server.Bootstrap;
-import net.minecraft.SharedConstants;
 import net.minecraft.world.level.Level;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
@@ -34,7 +34,9 @@ class CobblemeterPairingTest {
         GlobalPos overworldTarget = GlobalPos.of(Level.OVERWORLD, new BlockPos(4, 72, -19));
         CobblemeterPairing.pair(overworldData, overworldTarget);
 
-        assertEquals(overworldTarget, CobblemeterPairing.getPairedCobbleputer(overworldData).orElseThrow());
+        assertEquals(
+                overworldTarget,
+                CobblemeterPairing.getPairedCobbleputer(overworldData).orElseThrow());
         assertEquals(
                 overworldTarget,
                 CobblemeterPairing.getPairedCobbleputer(overworldData.copy()).orElseThrow());
@@ -43,7 +45,9 @@ class CobblemeterPairingTest {
         GlobalPos netherTarget = GlobalPos.of(Level.NETHER, new BlockPos(-80, 48, 31));
         CobblemeterPairing.pair(netherData, netherTarget);
 
-        assertEquals(netherTarget, CobblemeterPairing.getPairedCobbleputer(netherData).orElseThrow());
+        assertEquals(
+                netherTarget,
+                CobblemeterPairing.getPairedCobbleputer(netherData).orElseThrow());
     }
 
     @Test
@@ -54,7 +58,8 @@ class CobblemeterPairingTest {
 
         CobblemeterPairing.pair(data, replacementTarget);
 
-        assertEquals(replacementTarget, CobblemeterPairing.getPairedCobbleputer(data).orElseThrow());
+        assertEquals(
+                replacementTarget, CobblemeterPairing.getPairedCobbleputer(data).orElseThrow());
     }
 
     @Test
@@ -82,9 +87,8 @@ class CobblemeterPairingTest {
     @Test
     void recordsCanonicalDimensionIdentifiers() {
         CompoundTag data = new CompoundTag();
-        ResourceKey<Level> customDimension = ResourceKey.create(
-                Registries.DIMENSION,
-                Identifier.fromNamespaceAndPath("example", "moon"));
+        ResourceKey<Level> customDimension =
+                ResourceKey.create(Registries.DIMENSION, Identifier.fromNamespaceAndPath("example", "moon"));
         CobblemeterPairing.pair(data, GlobalPos.of(customDimension, BlockPos.ZERO));
 
         assertEquals("example:moon", data.getStringOr(CobblemeterPairing.DIMENSION_KEY, ""));

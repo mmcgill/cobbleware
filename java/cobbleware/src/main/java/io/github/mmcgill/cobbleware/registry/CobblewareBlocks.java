@@ -9,23 +9,22 @@ import java.util.Collection;
 import java.util.EnumMap;
 import java.util.Map;
 import net.minecraft.core.Registry;
-import net.minecraft.core.registries.Registries;
 import net.minecraft.core.registries.BuiltInRegistries;
+import net.minecraft.core.registries.Registries;
 import net.minecraft.resources.Identifier;
 import net.minecraft.resources.ResourceKey;
+import net.minecraft.world.item.DyeColor;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.SoundType;
-import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.block.state.BlockBehaviour;
-import net.minecraft.world.item.DyeColor;
+import net.minecraft.world.level.block.state.BlockState;
 
 /** Registers Cobbleware blocks. */
 public final class CobblewareBlocks {
     public static final Block COBBLEPUTER;
     private static final Map<DyeColor, WirelessObserverBlock> WIRELESS_OBSERVERS;
-    private static final ResourceKey<Block> COBBLEPUTER_KEY = ResourceKey.create(
-            Registries.BLOCK,
-            Identifier.fromNamespaceAndPath(CobblewareMod.MOD_ID, "cobbleputer"));
+    private static final ResourceKey<Block> COBBLEPUTER_KEY =
+            ResourceKey.create(Registries.BLOCK, Identifier.fromNamespaceAndPath(CobblewareMod.MOD_ID, "cobbleputer"));
 
     static {
         CobbleputerPolymerModels.initialize();
@@ -44,17 +43,18 @@ public final class CobblewareBlocks {
                     Identifier.fromNamespaceAndPath(CobblewareMod.MOD_ID, color.getName() + "_wireless_observer"));
             WirelessObserverBlock observer = (WirelessObserverBlock) register(
                     key,
-                    new WirelessObserverBlock(color, BlockBehaviour.Properties.of()
-                            .setId(key)
-                            .strength(3.0F, 6.0F)
-                            .sound(SoundType.METAL)));
+                    new WirelessObserverBlock(
+                            color,
+                            BlockBehaviour.Properties.of()
+                                    .setId(key)
+                                    .strength(3.0F, 6.0F)
+                                    .sound(SoundType.METAL)));
             observers.put(color, observer);
         }
         WIRELESS_OBSERVERS = Map.copyOf(observers);
     }
 
-    private CobblewareBlocks() {
-    }
+    private CobblewareBlocks() {}
 
     public static void initialize() {
         // Loads this class and performs its static registrations.

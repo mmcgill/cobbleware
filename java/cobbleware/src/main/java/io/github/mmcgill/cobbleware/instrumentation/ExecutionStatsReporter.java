@@ -19,8 +19,7 @@ import java.util.UUID;
 
 /** Converts one raw Mod instrumentation tick into the player-scoped reporting contract. */
 public final class ExecutionStatsReporter {
-    private ExecutionStatsReporter() {
-    }
+    private ExecutionStatsReporter() {}
 
     /** Builds one complete, non-durable raw tick report. */
     public static ExecutionStatsTick report(Instrumentation.TickSnapshot snapshot, long sampledAtUnixMillis) {
@@ -28,40 +27,51 @@ public final class ExecutionStatsReporter {
             throw new IllegalArgumentException("raw tick snapshot and positive sample time are required");
         }
         Map<UUID, PlayerMeasurements> players = new HashMap<>();
-        snapshot.events().forEach((key, value) -> players.computeIfAbsent(key.target().playerId(), ignored -> new PlayerMeasurements())
-                .events.add(ExecutionStatsTick.EventMeasurement.newBuilder()
-                        .setCobbleputer(cobbleputer(key.target().cobbleputer()))
-                        .setType(eventType(key.type()))
-                        .setAccepted(value.accepted())
-                        .setDropped(value.dropped())
-                        .build()));
-        snapshot.eventsPerSync().forEach((key, value) -> players.computeIfAbsent(key.playerId(), ignored -> new PlayerMeasurements())
-                .eventsPerSync.add(ExecutionStatsTick.EventsPerSyncMeasurement.newBuilder()
-                        .setCobbleputer(cobbleputer(key.cobbleputer()))
-                        .setCount(value.count())
-                        .setTotal(value.totalEvents())
-                        .setMax(value.maxEvents())
-                        .build()));
-        snapshot.effects().forEach((key, value) -> players.computeIfAbsent(key.target().playerId(), ignored -> new PlayerMeasurements())
-                .effects.add(ExecutionStatsTick.EffectMeasurement.newBuilder()
-                        .setCobbleputer(cobbleputer(key.target().cobbleputer()))
-                        .setType(effectType(key.type()))
-                        .setAttempted(value.attempted())
-                        .setFailed(value.failed())
-                        .setTotalNanos(value.durations().totalNanos())
-                        .setMaxNanos(value.durations().maxNanos())
-                        .build()));
-        snapshot.cobbleputerStates().forEach((key, value) -> players.computeIfAbsent(key.playerId(), ignored -> new PlayerMeasurements())
-                .states.add(ExecutionStatsTick.CobbleputerState.newBuilder()
-                        .setCobbleputer(cobbleputer(key.cobbleputer()))
-                        .setState(lifecycleState(value))
-                        .build()));
+        snapshot.events()
+                .forEach((key, value) -> players.computeIfAbsent(
+                                key.target().playerId(), ignored -> new PlayerMeasurements())
+                        .events
+                        .add(ExecutionStatsTick.EventMeasurement.newBuilder()
+                                .setCobbleputer(cobbleputer(key.target().cobbleputer()))
+                                .setType(eventType(key.type()))
+                                .setAccepted(value.accepted())
+                                .setDropped(value.dropped())
+                                .build()));
+        snapshot.eventsPerSync()
+                .forEach((key, value) -> players.computeIfAbsent(key.playerId(), ignored -> new PlayerMeasurements())
+                        .eventsPerSync
+                        .add(ExecutionStatsTick.EventsPerSyncMeasurement.newBuilder()
+                                .setCobbleputer(cobbleputer(key.cobbleputer()))
+                                .setCount(value.count())
+                                .setTotal(value.totalEvents())
+                                .setMax(value.maxEvents())
+                                .build()));
+        snapshot.effects()
+                .forEach((key, value) -> players.computeIfAbsent(
+                                key.target().playerId(), ignored -> new PlayerMeasurements())
+                        .effects
+                        .add(ExecutionStatsTick.EffectMeasurement.newBuilder()
+                                .setCobbleputer(cobbleputer(key.target().cobbleputer()))
+                                .setType(effectType(key.type()))
+                                .setAttempted(value.attempted())
+                                .setFailed(value.failed())
+                                .setTotalNanos(value.durations().totalNanos())
+                                .setMaxNanos(value.durations().maxNanos())
+                                .build()));
+        snapshot.cobbleputerStates()
+                .forEach((key, value) -> players.computeIfAbsent(key.playerId(), ignored -> new PlayerMeasurements())
+                        .states
+                        .add(ExecutionStatsTick.CobbleputerState.newBuilder()
+                                .setCobbleputer(cobbleputer(key.cobbleputer()))
+                                .setState(lifecycleState(value))
+                                .build()));
 
         ExecutionStatsTick.Builder report = ExecutionStatsTick.newBuilder()
                 .setSampledAtUnixMillis(sampledAtUnixMillis)
                 .setTickSequence(snapshot.tick());
-        players.entrySet().stream().sorted(Map.Entry.comparingByKey()).forEach(entry ->
-                report.addPlayers(entry.getValue().toProto(entry.getKey())));
+        players.entrySet().stream()
+                .sorted(Map.Entry.comparingByKey())
+                .forEach(entry -> report.addPlayers(entry.getValue().toProto(entry.getKey())));
         return report.build();
     }
 
@@ -96,9 +106,12 @@ public final class ExecutionStatsReporter {
     }
 
     private static String cobbleputerKey(ExecutionStatsTick.CobbleputerRef value) {
-        return value.getCobbleputerId().getHigh() + ":" + value.getCobbleputerId().getLow() + ':'
-                + value.getPosition().getDimension().getNs() + ':' + value.getPosition().getDimension().getPath() + ':'
-                + value.getPosition().getPosition().getX() + ':' + value.getPosition().getPosition().getY() + ':'
+        return value.getCobbleputerId().getHigh() + ":"
+                + value.getCobbleputerId().getLow() + ':'
+                + value.getPosition().getDimension().getNs() + ':'
+                + value.getPosition().getDimension().getPath() + ':'
+                + value.getPosition().getPosition().getX() + ':'
+                + value.getPosition().getPosition().getY() + ':'
                 + value.getPosition().getPosition().getZ();
     }
 
@@ -113,12 +126,18 @@ public final class ExecutionStatsReporter {
                         .setDimension(Identifier.newBuilder()
                                 .setNs(value.dimension().substring(0, separator))
                                 .setPath(value.dimension().substring(separator + 1)))
-                        .setPosition(Vec3i.newBuilder().setX(value.x()).setY(value.y()).setZ(value.z())))
+                        .setPosition(Vec3i.newBuilder()
+                                .setX(value.x())
+                                .setY(value.y())
+                                .setZ(value.z())))
                 .build();
     }
 
     private static Uuid uuid(UUID value) {
-        return Uuid.newBuilder().setHigh(value.getMostSignificantBits()).setLow(value.getLeastSignificantBits()).build();
+        return Uuid.newBuilder()
+                .setHigh(value.getMostSignificantBits())
+                .setLow(value.getLeastSignificantBits())
+                .build();
     }
 
     private static InstrumentationEventType eventType(Event.EventCase value) {
@@ -127,8 +146,10 @@ public final class ExecutionStatsReporter {
             case RESUMED -> InstrumentationEventType.INSTRUMENTATION_EVENT_TYPE_RESUMED;
             case CHAT_MESSAGE -> InstrumentationEventType.INSTRUMENTATION_EVENT_TYPE_CHAT_MESSAGE;
             case BLOCK_STATE_CHANGE -> InstrumentationEventType.INSTRUMENTATION_EVENT_TYPE_BLOCK_STATE_CHANGE;
-            case WIRELESS_OBSERVER_PAIRED -> InstrumentationEventType.INSTRUMENTATION_EVENT_TYPE_WIRELESS_OBSERVER_PAIRED;
-            case WIRELESS_OBSERVER_UNPAIRED -> InstrumentationEventType.INSTRUMENTATION_EVENT_TYPE_WIRELESS_OBSERVER_UNPAIRED;
+            case WIRELESS_OBSERVER_PAIRED ->
+                InstrumentationEventType.INSTRUMENTATION_EVENT_TYPE_WIRELESS_OBSERVER_PAIRED;
+            case WIRELESS_OBSERVER_UNPAIRED ->
+                InstrumentationEventType.INSTRUMENTATION_EVENT_TYPE_WIRELESS_OBSERVER_UNPAIRED;
             case EVENT_NOT_SET -> throw new IllegalArgumentException("cannot report an unset event type");
         };
     }

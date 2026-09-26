@@ -1,6 +1,7 @@
 plugins {
     id 'net.fabricmc.fabric-loom' version "${loom_version}"
     id 'com.google.protobuf' version "${protobuf_gradle_plugin_version}"
+    id 'com.diffplug.spotless' version '8.10.2'
 }
 
 version = project.mod_version
@@ -35,6 +36,13 @@ sourceSets {
         proto {
             srcDir '../../protobuf'
         }
+    }
+}
+
+spotless {
+    java {
+        target 'src/main/java/**/*.java', 'src/test/java/**/*.java'
+        palantirJavaFormat '2.91.0'
     }
 }
 

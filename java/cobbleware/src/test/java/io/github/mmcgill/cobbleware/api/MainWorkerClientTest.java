@@ -1,7 +1,7 @@
 package io.github.mmcgill.cobbleware.api;
 
-import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
+import static org.junit.jupiter.api.Assertions.assertEquals;
 
 import cobbleware.common.Uuid;
 import cobbleware.internal.ExecutionStatus;
@@ -44,7 +44,8 @@ class MainWorkerClientTest {
             body.set(new String(exchange.getRequestBody().readAllBytes(), StandardCharsets.UTF_8));
         });
 
-        MainWorkerClient.AuthenticationResult result = productionClient("secret").authenticate(request()).get();
+        MainWorkerClient.AuthenticationResult result =
+                productionClient("secret").authenticate(request()).get();
 
         assertEquals(MainWorkerClient.Status.SUCCESS, result.status());
         assertEquals("Bearer secret", authorization.get());
@@ -56,14 +57,16 @@ class MainWorkerClientTest {
 
     @Test
     void classifiesWorkerRejectionAndBadApiKey() throws Exception {
-        startServer(400, "{\"error\":\"invalid authentication request\"}", exchange -> { });
-        MainWorkerClient.AuthenticationResult rejected = client("secret").authenticate(request()).get();
+        startServer(400, "{\"error\":\"invalid authentication request\"}", exchange -> {});
+        MainWorkerClient.AuthenticationResult rejected =
+                client("secret").authenticate(request()).get();
         assertEquals(MainWorkerClient.Status.REJECTED, rejected.status());
 
         server.stop(0);
         server = null;
-        startServer(401, "{\"error\":\"unauthorized\"}", exchange -> { });
-        MainWorkerClient.AuthenticationResult unauthorized = client("secret").authenticate(request()).get();
+        startServer(401, "{\"error\":\"unauthorized\"}", exchange -> {});
+        MainWorkerClient.AuthenticationResult unauthorized =
+                client("secret").authenticate(request()).get();
         assertEquals(MainWorkerClient.Status.UNAUTHORIZED, unauthorized.status());
     }
 
@@ -74,7 +77,8 @@ class MainWorkerClientTest {
                 HttpClient.newHttpClient(),
                 LOGGER);
 
-        MainWorkerClient.AuthenticationResult result = client.authenticate(request()).get();
+        MainWorkerClient.AuthenticationResult result =
+                client.authenticate(request()).get();
 
         assertEquals(MainWorkerClient.Status.CONFIGURATION_ERROR, result.status());
         assertEquals("mainWorkerApiKey is empty", result.detail());
@@ -85,14 +89,15 @@ class MainWorkerClientTest {
         AtomicReference<String> authorization = new AtomicReference<>();
         AtomicReference<String> method = new AtomicReference<>();
         startServer("/worker/modapi/v1/players/123e4567-e89b-12d3-a456-426614174000/program", 200, """
-                {"id":"AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA","name":"examples.eszip","uploadedAt":"2026-09-03T00:00:00.000Z","sizeBytes":42,"startStates":{"idle":[1],"running":[2]}}
-                """, exchange -> {
+            {"id":"AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA","name":"examples.eszip","uploadedAt":"2026-09-03T00:00:00.000Z","sizeBytes":42,"startStates":{"idle":[1],"running":[2]}}
+            """, exchange -> {
             authorization.set(exchange.getRequestHeaders().getFirst("Authorization"));
             method.set(exchange.getRequestMethod());
         });
 
-        MainWorkerClient.ProgramResult result = client("secret").getProgram(
-                UUID.fromString("123e4567-e89b-12d3-a456-426614174000")).get();
+        MainWorkerClient.ProgramResult result = client("secret")
+                .getProgram(UUID.fromString("123e4567-e89b-12d3-a456-426614174000"))
+                .get();
 
         assertEquals(MainWorkerClient.ProgramStatus.SUCCESS, result.status());
         assertEquals("examples.eszip", result.program().name());
@@ -107,11 +112,12 @@ class MainWorkerClientTest {
     @Test
     void rejectsMalformedStartStateBytes() throws Exception {
         startServer("/worker/modapi/v1/players/123e4567-e89b-12d3-a456-426614174000/program", 200, """
-                {"id":"AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA","name":"examples.eszip","uploadedAt":"2026-09-03T00:00:00.000Z","sizeBytes":42,"startStates":{"invalid":[256]}}
-                """, exchange -> { });
+            {"id":"AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA","name":"examples.eszip","uploadedAt":"2026-09-03T00:00:00.000Z","sizeBytes":42,"startStates":{"invalid":[256]}}
+            """, exchange -> {});
 
-        MainWorkerClient.ProgramResult result = client("secret").getProgram(
-                UUID.fromString("123e4567-e89b-12d3-a456-426614174000")).get();
+        MainWorkerClient.ProgramResult result = client("secret")
+                .getProgram(UUID.fromString("123e4567-e89b-12d3-a456-426614174000"))
+                .get();
 
         assertEquals(MainWorkerClient.ProgramStatus.UNAVAILABLE, result.status());
     }
@@ -131,17 +137,22 @@ class MainWorkerClientTest {
 
     @Test
     void classifiesMissingProgramAndProgramErrors() throws Exception {
-        startServer("/worker/modapi/v1/players/123e4567-e89b-12d3-a456-426614174000/program", 404, "", exchange -> { });
-        MainWorkerClient.ProgramResult noProgram = client("secret").getProgram(
-                UUID.fromString("123e4567-e89b-12d3-a456-426614174000")).get();
+        startServer("/worker/modapi/v1/players/123e4567-e89b-12d3-a456-426614174000/program", 404, "", exchange -> {});
+        MainWorkerClient.ProgramResult noProgram = client("secret")
+                .getProgram(UUID.fromString("123e4567-e89b-12d3-a456-426614174000"))
+                .get();
         assertEquals(MainWorkerClient.ProgramStatus.NO_PROGRAM, noProgram.status());
 
         server.stop(0);
         server = null;
-        startServer("/worker/modapi/v1/players/123e4567-e89b-12d3-a456-426614174000/program", 200,
-                "{\"programError\":\"program exploded\"}", exchange -> { });
-        MainWorkerClient.ProgramResult programError = client("secret").getProgram(
-                UUID.fromString("123e4567-e89b-12d3-a456-426614174000")).get();
+        startServer(
+                "/worker/modapi/v1/players/123e4567-e89b-12d3-a456-426614174000/program",
+                200,
+                "{\"programError\":\"program exploded\"}",
+                exchange -> {});
+        MainWorkerClient.ProgramResult programError = client("secret")
+                .getProgram(UUID.fromString("123e4567-e89b-12d3-a456-426614174000"))
+                .get();
         assertEquals(MainWorkerClient.ProgramStatus.PROGRAM_ERROR, programError.status());
         assertEquals("program exploded", programError.detail());
     }
@@ -166,7 +177,8 @@ class MainWorkerClientTest {
         });
 
         ExecutionsRequest request = ExecutionsRequest.newBuilder().build();
-        MainWorkerClient.ExecutionSyncResult result = client("secret").syncExecutions(request).get();
+        MainWorkerClient.ExecutionSyncResult result =
+                client("secret").syncExecutions(request).get();
 
         assertEquals(MainWorkerClient.ExecutionSyncStatus.SUCCESS, result.status());
         assertEquals(expected, result.response());
@@ -179,7 +191,8 @@ class MainWorkerClientTest {
         startServer("/worker/modapi/v1/authentication", status, responseBody, inspector);
     }
 
-    private void startServer(String path, int status, String responseBody, RequestInspector inspector) throws Exception {
+    private void startServer(String path, int status, String responseBody, RequestInspector inspector)
+            throws Exception {
         server = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
         server.createContext(path, exchange -> {
             inspector.inspect(exchange);
@@ -196,7 +209,8 @@ class MainWorkerClientTest {
         server.start();
     }
 
-    private void startBinaryServer(String path, int status, byte[] responseBody, RequestInspector inspector) throws Exception {
+    private void startBinaryServer(String path, int status, byte[] responseBody, RequestInspector inspector)
+            throws Exception {
         server = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
         server.createContext(path, exchange -> {
             inspector.inspect(exchange);
@@ -223,9 +237,7 @@ class MainWorkerClientTest {
 
     private static MainWorkerClient.AuthenticationRequest request() {
         return new MainWorkerClient.AuthenticationRequest(
-                "XAU1-98B1",
-                UUID.fromString("123e4567-e89b-12d3-a456-426614174000"),
-                "Alice");
+                "XAU1-98B1", UUID.fromString("123e4567-e89b-12d3-a456-426614174000"), "Alice");
     }
 
     @FunctionalInterface

@@ -59,7 +59,8 @@ public final class Instrumentation {
     /** Records the number of events included for one Cobbleputer in one dispatched execution-sync request. */
     public synchronized void recordEventsPerSync(PlayerCobbleputerKey target, int eventCount) {
         if (target == null || eventCount < 0) {
-            throw new IllegalArgumentException("event-sync measurement must have a target and non-negative event count");
+            throw new IllegalArgumentException(
+                    "event-sync measurement must have a target and non-negative event count");
         }
         TickBucket bucket = currentBucket();
         EventSyncSummary current = bucket.eventsPerSync.getOrDefault(target, EventSyncSummary.EMPTY);
@@ -80,8 +81,8 @@ public final class Instrumentation {
 
     /** Replaces the current tick's per-Cobbleputer lifecycle-state gauge. */
     public synchronized void recordCobbleputerStates(Map<PlayerCobbleputerKey, LifecycleState> states) {
-        if (states == null || states.entrySet().stream().anyMatch(entry -> entry.getKey() == null
-                || entry.getValue() == null)) {
+        if (states == null
+                || states.entrySet().stream().anyMatch(entry -> entry.getKey() == null || entry.getValue() == null)) {
             throw new IllegalArgumentException("Cobbleputer state gauge must contain keyed lifecycle states");
         }
         currentBucket().states = Map.copyOf(states);
@@ -149,7 +150,8 @@ public final class Instrumentation {
         source.forEach((key, value) -> target.merge(key, value, Instrumentation::saturatingAdd));
     }
 
-    private static void mergeEventCounts(Map<EventMetricKey, EventCounts> target, Map<EventMetricKey, EventCounts> source) {
+    private static void mergeEventCounts(
+            Map<EventMetricKey, EventCounts> target, Map<EventMetricKey, EventCounts> source) {
         source.forEach((key, value) -> target.merge(key, value, EventCounts::add));
     }
 
@@ -227,8 +229,8 @@ public final class Instrumentation {
         }
 
         private TimingSummary add(long elapsedNanos) {
-            return new TimingSummary(saturatingAdd(count, 1), saturatingAdd(totalNanos, elapsedNanos),
-                    Math.max(maxNanos, elapsedNanos));
+            return new TimingSummary(
+                    saturatingAdd(count, 1), saturatingAdd(totalNanos, elapsedNanos), Math.max(maxNanos, elapsedNanos));
         }
 
         private TimingSummary add(TimingSummary other) {
@@ -294,13 +296,17 @@ public final class Instrumentation {
         }
 
         private EffectCounts add(long elapsedNanos, boolean failedAttempt) {
-            return new EffectCounts(saturatingAdd(attempted, 1),
-                    failedAttempt ? saturatingAdd(failed, 1) : failed, durations.add(elapsedNanos));
+            return new EffectCounts(
+                    saturatingAdd(attempted, 1),
+                    failedAttempt ? saturatingAdd(failed, 1) : failed,
+                    durations.add(elapsedNanos));
         }
 
         private EffectCounts add(EffectCounts other) {
-            return new EffectCounts(saturatingAdd(attempted, other.attempted),
-                    saturatingAdd(failed, other.failed), durations.add(other.durations));
+            return new EffectCounts(
+                    saturatingAdd(attempted, other.attempted),
+                    saturatingAdd(failed, other.failed),
+                    durations.add(other.durations));
         }
     }
 

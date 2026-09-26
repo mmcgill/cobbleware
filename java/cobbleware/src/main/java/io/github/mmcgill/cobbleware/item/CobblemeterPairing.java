@@ -17,8 +17,7 @@ public final class CobblemeterPairing {
     static final String DIMENSION_KEY = "cobbleware:paired_dimension";
     static final String POSITION_KEY = "cobbleware:paired_pos";
 
-    private CobblemeterPairing() {
-    }
+    private CobblemeterPairing() {}
 
     /** Returns the paired Cobbleputer location, or empty when the stack is unpaired or malformed. */
     public static Optional<GlobalPos> getPairedCobbleputer(ItemStack stack) {

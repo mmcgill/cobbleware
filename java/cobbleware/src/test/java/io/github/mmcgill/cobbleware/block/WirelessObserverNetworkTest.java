@@ -41,7 +41,6 @@ class WirelessObserverNetworkTest {
     }
 
     private static boolean matches(Optional<UUID> observerId, Optional<DyeColor> observerColor) {
-        return WirelessObserverNetwork.matchesRedstonePowerTarget(
-                OBSERVER_ID, DyeColor.RED, observerId, observerColor);
+        return WirelessObserverNetwork.matchesRedstonePowerTarget(OBSERVER_ID, DyeColor.RED, observerId, observerColor);
     }
 }

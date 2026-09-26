@@ -66,7 +66,8 @@ public final class CobbleputerBlockEntity extends BlockEntity {
     /** Starts a fresh execution owned by {@code owner}, replacing any previous execution record. */
     public void startExecution(UUID owner, String ownerName, byte[] initialState) {
         if (owner == null || ownerName == null || ownerName.isEmpty() || initialState == null) {
-            throw new IllegalArgumentException("execution owner, owner name, and initial state must not be null or empty");
+            throw new IllegalArgumentException(
+                    "execution owner, owner name, and initial state must not be null or empty");
         }
 
         executionId = UUID.randomUUID();
@@ -144,10 +145,7 @@ public final class CobbleputerBlockEntity extends BlockEntity {
     }
 
     static boolean isRecoverableCrashedExecution(
-            UUID executionId,
-            UUID ownerPlayerId,
-            String ownerPlayerName,
-            byte[] executionState) {
+            UUID executionId, UUID ownerPlayerId, String ownerPlayerName, byte[] executionState) {
         return executionId == null
                 && ownerPlayerId != null
                 && ownerPlayerName != null
@@ -274,8 +272,8 @@ public final class CobbleputerBlockEntity extends BlockEntity {
         stoppedAtTick = loadedStoppedAtTick < 0 ? null : loadedStoppedAtTick;
 
         CobbleputerState lifecycleState = getBlockState().getValue(CobbleputerBlock.STATE);
-        wasRunningWhenUnloaded = shouldResumeAfterChunkLoad(
-                lifecycleState, input.read(WAS_RUNNING_WHEN_UNLOADED_TAG, Codec.BOOL));
+        wasRunningWhenUnloaded =
+                shouldResumeAfterChunkLoad(lifecycleState, input.read(WAS_RUNNING_WHEN_UNLOADED_TAG, Codec.BOOL));
         boolean validCrashedRecord = lifecycleState == CobbleputerState.CRASHED
                 && executionId == null
                 && ownerPlayerId != null

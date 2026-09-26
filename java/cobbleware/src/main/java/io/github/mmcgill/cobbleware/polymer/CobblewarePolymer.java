@@ -5,8 +5,7 @@ import io.github.mmcgill.cobbleware.CobblewareMod;
 
 /** Configures Cobbleware's required generated resource pack. */
 public final class CobblewarePolymer {
-    private CobblewarePolymer() {
-    }
+    private CobblewarePolymer() {}
 
     public static void initialize() {
         if (!PolymerResourcePackUtils.addModAssets(CobblewareMod.MOD_ID)) {

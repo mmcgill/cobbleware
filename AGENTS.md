@@ -18,6 +18,8 @@ assume the implementation is wrong unless specifically instructed otherwise.
 
 When working in the mc-edge-runtime submodule, be sure to check its AGENTS.md as well.
 
+After every change in `java/cobbleware`, run `./gradlew.bat spotlessApply` from that directory.
+
 When working on the Mod, always keep this key invariant in mind: The `setChanged` method can never be called on a code path
 that runs during chunk load, because `setChanged` will attempt to load the containing chunk, which takes a lock that
 is not reentrant (and so will deadlock).

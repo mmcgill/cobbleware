@@ -43,29 +43,31 @@ class CobblewareConfigLoaderTest {
     void preservesBasePathsAndRejectsUnusableUrls() throws Exception {
         Path configPath = tempDir.resolve(CobblewareConfigLoader.FILE_NAME);
         Files.writeString(configPath, """
-                {
-                  "mainWorkerUrl": "https://example.test/cobbleware",
-                  "mainWorkerApiKey": "secret",
-                  "instrumentationWindowTicks": 42,
-                  "maxRunningExecutionsPerPlayer": 7
-                }
-                """);
+            {
+              "mainWorkerUrl": "https://example.test/cobbleware",
+              "mainWorkerApiKey": "secret",
+              "instrumentationWindowTicks": 42,
+              "maxRunningExecutionsPerPlayer": 7
+            }
+            """);
 
         CobblewareConfig configured = CobblewareConfigLoader.load(configPath, LOGGER);
 
-        assertEquals("https://example.test/cobbleware/", configured.mainWorkerBaseUri().toString());
+        assertEquals(
+                "https://example.test/cobbleware/",
+                configured.mainWorkerBaseUri().toString());
         assertEquals(42, configured.instrumentationWindowTicks());
         assertEquals(7, configured.maxRunningExecutionsPerPlayer());
         assertTrue(configured.isEnabled());
 
         Files.writeString(configPath, """
-                {
-                  "mainWorkerUrl": "ftp://example.test",
-                  "mainWorkerApiKey": "secret",
-                  "instrumentationWindowTicks": 600,
-                  "maxRunningExecutionsPerPlayer": 10
-                }
-                """);
+            {
+              "mainWorkerUrl": "ftp://example.test",
+              "mainWorkerApiKey": "secret",
+              "instrumentationWindowTicks": 600,
+              "maxRunningExecutionsPerPlayer": 10
+            }
+            """);
         CobblewareConfig invalid = CobblewareConfigLoader.load(configPath, LOGGER);
 
         assertFalse(invalid.isEnabled());
@@ -87,12 +89,12 @@ class CobblewareConfigLoaderTest {
     void rejectsInvalidInstrumentationWindow() throws Exception {
         Path configPath = tempDir.resolve(CobblewareConfigLoader.FILE_NAME);
         Files.writeString(configPath, """
-                {
-                  "mainWorkerUrl": "http://localhost:9000",
-                  "mainWorkerApiKey": "secret",
-                  "instrumentationWindowTicks": 1.5
-                }
-                """);
+            {
+              "mainWorkerUrl": "http://localhost:9000",
+              "mainWorkerApiKey": "secret",
+              "instrumentationWindowTicks": 1.5
+            }
+            """);
 
         CobblewareConfig config = CobblewareConfigLoader.load(configPath, LOGGER);
 
@@ -104,11 +106,11 @@ class CobblewareConfigLoaderTest {
     void defaultsInstrumentationWindowForExistingConfiguration() throws Exception {
         Path configPath = tempDir.resolve(CobblewareConfigLoader.FILE_NAME);
         Files.writeString(configPath, """
-                {
-                  "mainWorkerUrl": "http://localhost:9000",
-                  "mainWorkerApiKey": "secret"
-                }
-                """);
+            {
+              "mainWorkerUrl": "http://localhost:9000",
+              "mainWorkerApiKey": "secret"
+            }
+            """);
 
         CobblewareConfig config = CobblewareConfigLoader.load(configPath, LOGGER);
 
@@ -121,12 +123,12 @@ class CobblewareConfigLoaderTest {
     void rejectsInvalidRunningExecutionLimit() throws Exception {
         Path configPath = tempDir.resolve(CobblewareConfigLoader.FILE_NAME);
         Files.writeString(configPath, """
-                {
-                  "mainWorkerUrl": "http://localhost:9000",
-                  "mainWorkerApiKey": "secret",
-                  "maxRunningExecutionsPerPlayer": 0
-                }
-                """);
+            {
+              "mainWorkerUrl": "http://localhost:9000",
+              "mainWorkerApiKey": "secret",
+              "maxRunningExecutionsPerPlayer": 0
+            }
+            """);
 
         CobblewareConfig config = CobblewareConfigLoader.load(configPath, LOGGER);
 

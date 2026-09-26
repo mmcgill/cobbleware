@@ -1,7 +1,6 @@
 package io.github.mmcgill.cobbleware.block;
 
 import io.github.mmcgill.cobbleware.item.CobblemeterPairing;
-import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.IdentityHashMap;
@@ -106,8 +105,8 @@ public final class WirelessObserverNetwork {
                     observer.observerId(), wirelessObserver.color(), observerId, observerColor)) {
                 continue;
             }
-            changed |= WirelessObserverBlock.setPower(
-                    level, observer.getBlockPos(), observer.getBlockState(), powerLevel);
+            changed |=
+                    WirelessObserverBlock.setPower(level, observer.getBlockPos(), observer.getBlockState(), powerLevel);
         }
         return changed;
     }
@@ -204,7 +203,8 @@ public final class WirelessObserverNetwork {
             return;
         }
         for (WirelessObserverBlockEntity observer : List.copyOf(indexedObservers)) {
-            if (observer.isRemoved() || observer.getLevel() != level
+            if (observer.isRemoved()
+                    || observer.getLevel() != level
                     || !observer.pairedCobbleputer().filter(target::equals).isPresent()
                     || !(observer.getBlockState().getBlock() instanceof WirelessObserverBlock wirelessObserver)) {
                 continue;
@@ -223,7 +223,8 @@ public final class WirelessObserverNetwork {
         Vec3 end = Vec3.atCenterOf(observer.getBlockPos());
         double distance = start.distanceTo(end);
         int points = Math.min(MAX_PARTICLES_PER_PATH, Math.max(1, (int) Math.ceil(distance / PARTICLE_SPACING)));
-        DustParticleOptions particle = new DustParticleOptions(wirelessObserver.color().getTextureDiffuseColor(), 1.0F);
+        DustParticleOptions particle =
+                new DustParticleOptions(wirelessObserver.color().getTextureDiffuseColor(), 1.0F);
         for (int index = 0; index < points; index++) {
             double progress = points == 1 ? 0.5 : (double) index / (points - 1);
             Vec3 point = start.lerp(end, progress);

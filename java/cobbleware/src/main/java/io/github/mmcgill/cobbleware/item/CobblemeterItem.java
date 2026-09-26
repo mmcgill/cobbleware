@@ -2,9 +2,9 @@ package io.github.mmcgill.cobbleware.item;
 
 import eu.pb4.polymer.core.api.item.SimplePolymerItem;
 import io.github.mmcgill.cobbleware.CobblewareMod;
+import io.github.mmcgill.cobbleware.block.WirelessObserverBlockEntity;
 import io.github.mmcgill.cobbleware.execution.ExecutionDriver;
 import io.github.mmcgill.cobbleware.registry.CobblewareBlocks;
-import io.github.mmcgill.cobbleware.block.WirelessObserverBlockEntity;
 import java.util.Optional;
 import net.minecraft.core.GlobalPos;
 import net.minecraft.core.component.DataComponents;
@@ -30,8 +30,9 @@ public final class CobblemeterItem extends SimplePolymerItem {
                 Optional<GlobalPos> target = CobblemeterPairing.getPairedCobbleputer(context.getItemInHand());
                 if (target.isEmpty()) {
                     if (context.getPlayer() != null) {
-                        context.getPlayer().sendSystemMessage(Component.translatable(
-                                "item.cobbleware.cobblemeter.observer_unpaired"));
+                        context.getPlayer()
+                                .sendSystemMessage(
+                                        Component.translatable("item.cobbleware.cobblemeter.observer_unpaired"));
                     }
                     return InteractionResult.SUCCESS;
                 }
@@ -40,15 +41,15 @@ public final class CobblemeterItem extends SimplePolymerItem {
                     Optional<GlobalPos> previousTarget = observer.setPairedCobbleputer(newTarget);
                     ExecutionDriver executionDriver = CobblewareMod.executionDriverOrNull();
                     if (executionDriver != null) {
-                        executionDriver.observerPaired(
-                                observer, previousTarget.orElse(null), newTarget);
+                        executionDriver.observerPaired(observer, previousTarget.orElse(null), newTarget);
                     }
                     if (context.getPlayer() != null) {
-                        context.getPlayer().sendSystemMessage(Component.translatable(
-                                "item.cobbleware.cobblemeter.observer_paired",
-                                context.getClickedPos().getX(),
-                                context.getClickedPos().getY(),
-                                context.getClickedPos().getZ()));
+                        context.getPlayer()
+                                .sendSystemMessage(Component.translatable(
+                                        "item.cobbleware.cobblemeter.observer_paired",
+                                        context.getClickedPos().getX(),
+                                        context.getClickedPos().getY(),
+                                        context.getClickedPos().getZ()));
                     }
                 }
             }
@@ -59,15 +60,15 @@ public final class CobblemeterItem extends SimplePolymerItem {
             CobblemeterPairing.pair(
                     context.getItemInHand(),
                     GlobalPos.of(level.dimension(), context.getClickedPos().immutable()));
-            context.getItemInHand().set(
-                    DataComponents.ITEM_NAME,
-                    Component.translatable("item.cobbleware.cobblemeter.paired_name"));
+            context.getItemInHand()
+                    .set(DataComponents.ITEM_NAME, Component.translatable("item.cobbleware.cobblemeter.paired_name"));
             if (context.getPlayer() != null) {
-                context.getPlayer().sendSystemMessage(Component.translatable(
-                        "item.cobbleware.cobblemeter.paired",
-                        context.getClickedPos().getX(),
-                        context.getClickedPos().getY(),
-                        context.getClickedPos().getZ()));
+                context.getPlayer()
+                        .sendSystemMessage(Component.translatable(
+                                "item.cobbleware.cobblemeter.paired",
+                                context.getClickedPos().getX(),
+                                context.getClickedPos().getY(),
+                                context.getClickedPos().getZ()));
             }
         }
         return InteractionResult.SUCCESS;

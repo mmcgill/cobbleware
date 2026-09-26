@@ -1,0 +1,3 @@
+{
+    "jdk.serverVmOptions": ["-Xmx4g"]
+}

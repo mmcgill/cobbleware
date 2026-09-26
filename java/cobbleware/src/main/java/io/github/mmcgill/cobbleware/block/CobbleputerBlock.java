@@ -7,10 +7,10 @@ import net.minecraft.core.BlockPos;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.EntityBlock;
+import net.minecraft.world.level.block.entity.BlockEntity;
 import net.minecraft.world.level.block.state.BlockBehaviour;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.block.state.StateDefinition;
-import net.minecraft.world.level.block.entity.BlockEntity;
 import net.minecraft.world.level.block.state.properties.EnumProperty;
 
 /** A Cobbleputer whose lifecycle state is visible in its block state. */
@@ -29,10 +29,7 @@ public final class CobbleputerBlock extends Block implements EntityBlock, Polyme
 
     /** Updates and logs a Cobbleputer lifecycle transition. */
     public static boolean setLifecycleState(
-            Level level,
-            BlockPos pos,
-            BlockState currentBlockState,
-            CobbleputerState nextState) {
+            Level level, BlockPos pos, BlockState currentBlockState, CobbleputerState nextState) {
         CobbleputerState previousState = currentBlockState.getValue(STATE);
         if (previousState == nextState) {
             return false;

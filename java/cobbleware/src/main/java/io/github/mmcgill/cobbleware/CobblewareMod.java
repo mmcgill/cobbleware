@@ -1,8 +1,5 @@
 package io.github.mmcgill.cobbleware;
 
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-
 import io.github.mmcgill.cobbleware.api.MainWorkerClient;
 import io.github.mmcgill.cobbleware.block.CobbleputerBlockEntity;
 import io.github.mmcgill.cobbleware.block.WirelessObserverBlockEntity;
@@ -20,6 +17,8 @@ import net.fabricmc.api.ModInitializer;
 import net.fabricmc.fabric.api.event.lifecycle.v1.ServerChunkEvents;
 import net.fabricmc.fabric.api.event.lifecycle.v1.ServerLifecycleEvents;
 import net.minecraft.server.level.FullChunkStatus;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 /** The common Fabric entrypoint for Cobbleware. */
 public final class CobblewareMod implements ModInitializer {
@@ -55,7 +54,8 @@ public final class CobblewareMod implements ModInitializer {
 
         CobblewareConfig config = CobblewareConfigLoader.load(LOGGER);
         if (config.configurationError() == null && config.mainWorkerApiKey().isEmpty()) {
-            LOGGER.error("Cobbleware mainWorkerApiKey is empty; authentication commands are disabled until it is configured");
+            LOGGER.error("Cobbleware mainWorkerApiKey is empty; authentication commands are disabled until it is"
+                    + " configured");
         }
         MainWorkerClient mainWorkerClient = new MainWorkerClient(config, LOGGER);
         ServerLifecycleEvents.SERVER_STOPPING.register(server -> mainWorkerClient.close());
@@ -89,14 +89,16 @@ public final class CobblewareMod implements ModInitializer {
                 wirelessObserverNetwork.targetChunkLoaded(level, chunk.getPos());
             }
         });
-        ServerChunkEvents.CHUNK_UNLOAD.register((level, chunk) -> chunk.getBlockEntities().values().forEach(blockEntity -> {
-            if (blockEntity instanceof CobbleputerBlockEntity cobbleputer) {
-                executionDriver.deactivate(cobbleputer);
-            }
-            if (blockEntity instanceof WirelessObserverBlockEntity observer) {
-                wirelessObserverNetwork.deactivate(observer);
-            }
-        }));
+        ServerChunkEvents.CHUNK_UNLOAD.register((level, chunk) -> chunk.getBlockEntities()
+                .values()
+                .forEach(blockEntity -> {
+                    if (blockEntity instanceof CobbleputerBlockEntity cobbleputer) {
+                        executionDriver.deactivate(cobbleputer);
+                    }
+                    if (blockEntity instanceof WirelessObserverBlockEntity observer) {
+                        wirelessObserverNetwork.deactivate(observer);
+                    }
+                }));
         CobblewareCommands.register(mainWorkerClient, executionDriver);
     }
 }

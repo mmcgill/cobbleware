@@ -1,9 +1,9 @@
 package io.github.mmcgill.cobbleware.registry;
 
-import io.github.mmcgill.cobbleware.CobblewareMod;
-import io.github.mmcgill.cobbleware.item.CobblemeterItem;
-import io.github.mmcgill.cobbleware.block.WirelessObserverBlock;
 import eu.pb4.polymer.core.api.item.PolymerBlockItem;
+import io.github.mmcgill.cobbleware.CobblewareMod;
+import io.github.mmcgill.cobbleware.block.WirelessObserverBlock;
+import io.github.mmcgill.cobbleware.item.CobblemeterItem;
 import java.util.EnumMap;
 import java.util.Map;
 import net.minecraft.core.Registry;
@@ -11,20 +11,18 @@ import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.core.registries.Registries;
 import net.minecraft.resources.Identifier;
 import net.minecraft.resources.ResourceKey;
-import net.minecraft.world.item.Item;
 import net.minecraft.world.item.DyeColor;
+import net.minecraft.world.item.Item;
 
 /** Registers Cobbleware items. */
 public final class CobblewareItems {
     public static final Item COBBLEPUTER;
     public static final Item COBBLEMETER;
     private static final Map<DyeColor, Item> WIRELESS_OBSERVERS;
-    private static final ResourceKey<Item> COBBLEPUTER_KEY = ResourceKey.create(
-            Registries.ITEM,
-            Identifier.fromNamespaceAndPath(CobblewareMod.MOD_ID, "cobbleputer"));
-    private static final ResourceKey<Item> COBBLEMETER_KEY = ResourceKey.create(
-            Registries.ITEM,
-            Identifier.fromNamespaceAndPath(CobblewareMod.MOD_ID, "cobblemeter"));
+    private static final ResourceKey<Item> COBBLEPUTER_KEY =
+            ResourceKey.create(Registries.ITEM, Identifier.fromNamespaceAndPath(CobblewareMod.MOD_ID, "cobbleputer"));
+    private static final ResourceKey<Item> COBBLEMETER_KEY =
+            ResourceKey.create(Registries.ITEM, Identifier.fromNamespaceAndPath(CobblewareMod.MOD_ID, "cobblemeter"));
 
     static {
         COBBLEPUTER = register(
@@ -45,8 +43,7 @@ public final class CobblewareItems {
         WIRELESS_OBSERVERS = Map.copyOf(observers);
     }
 
-    private CobblewareItems() {
-    }
+    private CobblewareItems() {}
 
     public static void initialize() {
         // Loads this class and performs its static registrations.

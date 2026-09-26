@@ -17,11 +17,9 @@ public final class CobblewareBlockEntities {
     public static final BlockEntityType<CobbleputerBlockEntity> COBBLEPUTER;
     public static final BlockEntityType<WirelessObserverBlockEntity> WIRELESS_OBSERVER;
     private static final ResourceKey<BlockEntityType<?>> COBBLEPUTER_KEY = ResourceKey.create(
-            Registries.BLOCK_ENTITY_TYPE,
-            Identifier.fromNamespaceAndPath(CobblewareMod.MOD_ID, "cobbleputer"));
+            Registries.BLOCK_ENTITY_TYPE, Identifier.fromNamespaceAndPath(CobblewareMod.MOD_ID, "cobbleputer"));
     private static final ResourceKey<BlockEntityType<?>> WIRELESS_OBSERVER_KEY = ResourceKey.create(
-            Registries.BLOCK_ENTITY_TYPE,
-            Identifier.fromNamespaceAndPath(CobblewareMod.MOD_ID, "wireless_observer"));
+            Registries.BLOCK_ENTITY_TYPE, Identifier.fromNamespaceAndPath(CobblewareMod.MOD_ID, "wireless_observer"));
 
     static {
         COBBLEPUTER = Registry.register(
@@ -32,12 +30,12 @@ public final class CobblewareBlockEntities {
         WIRELESS_OBSERVER = Registry.register(
                 BuiltInRegistries.BLOCK_ENTITY_TYPE,
                 WIRELESS_OBSERVER_KEY,
-                new BlockEntityType<>(WirelessObserverBlockEntity::new, Set.copyOf(CobblewareBlocks.wirelessObservers())));
+                new BlockEntityType<>(
+                        WirelessObserverBlockEntity::new, Set.copyOf(CobblewareBlocks.wirelessObservers())));
         PolymerBlockUtils.registerBlockEntity(WIRELESS_OBSERVER);
     }
 
-    private CobblewareBlockEntities() {
-    }
+    private CobblewareBlockEntities() {}
 
     public static void initialize() {
         // Loads this class and performs its static registrations.

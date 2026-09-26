@@ -16,8 +16,7 @@ import net.minecraft.world.level.block.state.BlockState;
 public final class WirelessObserverPolymerModels {
     private static volatile Map<DyeColor, Map<Direction, Map<Boolean, BlockState>>> states;
 
-    private WirelessObserverPolymerModels() {
-    }
+    private WirelessObserverPolymerModels() {}
 
     public static synchronized void initialize() {
         if (states != null) {
@@ -59,8 +58,7 @@ public final class WirelessObserverPolymerModels {
 
     static Identifier modelIdFor(DyeColor color, boolean powered) {
         return Identifier.fromNamespaceAndPath(
-                CobblewareMod.MOD_ID,
-                "block/" + color.getName() + "_wireless_observer" + (powered ? "_powered" : ""));
+                CobblewareMod.MOD_ID, "block/" + color.getName() + "_wireless_observer" + (powered ? "_powered" : ""));
     }
 
     private record Rotation(int x, int y) {

@@ -16,7 +16,8 @@ class CobbleputerStateTest {
 
     @Test
     void mapsEveryLifecycleStateToItsDedicatedPolymerModel() {
-        assertEquals(id("cobbleputer_uninitialized"), CobbleputerPolymerModels.modelIdFor(CobbleputerState.UNINITIALIZED));
+        assertEquals(
+                id("cobbleputer_uninitialized"), CobbleputerPolymerModels.modelIdFor(CobbleputerState.UNINITIALIZED));
         assertEquals(id("cobbleputer_running"), CobbleputerPolymerModels.modelIdFor(CobbleputerState.RUNNING));
         assertEquals(id("cobbleputer_stopped"), CobbleputerPolymerModels.modelIdFor(CobbleputerState.STOPPED));
         assertEquals(id("cobbleputer_crashed"), CobbleputerPolymerModels.modelIdFor(CobbleputerState.CRASHED));

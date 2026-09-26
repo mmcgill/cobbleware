@@ -17,16 +17,16 @@ import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 import java.util.stream.Collectors;
 import net.fabricmc.fabric.api.command.v2.CommandRegistrationCallback;
-import net.minecraft.commands.SharedSuggestionProvider;
 import net.minecraft.commands.CommandSourceStack;
 import net.minecraft.commands.Commands;
+import net.minecraft.commands.SharedSuggestionProvider;
 import net.minecraft.core.BlockPos;
 import net.minecraft.network.chat.Component;
 import net.minecraft.network.chat.FontDescription;
 import net.minecraft.network.chat.MutableComponent;
 import net.minecraft.resources.Identifier;
-import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.server.level.ServerLevel;
+import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.server.permissions.Permissions;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.state.BlockState;
@@ -35,36 +35,35 @@ import net.minecraft.world.phys.Vec3;
 /** Registers commands supplied by Cobbleware. */
 public final class CobblewareCommands {
     private static final double EXECUTION_RANGE = 3.0;
-    private static final FontDescription UNIFORM_FONT = new FontDescription.Resource(Identifier.withDefaultNamespace("uniform"));
+    private static final FontDescription UNIFORM_FONT =
+            new FontDescription.Resource(Identifier.withDefaultNamespace("uniform"));
 
-    private CobblewareCommands() {
-    }
+    private CobblewareCommands() {}
 
     public static void register(MainWorkerClient mainWorkerClient, ExecutionDriver executionDriver) {
-        CommandRegistrationCallback.EVENT.register((dispatcher, registryAccess, environment) -> dispatcher.register(
-                Commands.literal("cobbleware")
+        CommandRegistrationCallback.EVENT.register((dispatcher, registryAccess, environment) ->
+                dispatcher.register(Commands.literal("cobbleware")
                         .then(Commands.literal("auth")
                                 .then(Commands.argument("code", StringArgumentType.word())
                                         .executes(context -> authenticate(context, mainWorkerClient))))
-                        .then(Commands.literal("program")
-                                .executes(context -> program(context, mainWorkerClient)))
+                        .then(Commands.literal("program").executes(context -> program(context, mainWorkerClient)))
                         .then(Commands.literal("exec")
                                 .then(Commands.argument("start-state", StringArgumentType.word())
-                                        .suggests((context, builder) -> suggestStartStates(context, builder, mainWorkerClient))
+                                        .suggests((context, builder) ->
+                                                suggestStartStates(context, builder, mainWorkerClient))
                                         .executes(context -> execute(context, mainWorkerClient, executionDriver))))
-                        .then(Commands.literal("pause")
-                                .executes(context -> pause(context, executionDriver)))
-                        .then(Commands.literal("resume")
-                                .executes(context -> resume(context, executionDriver)))
+                        .then(Commands.literal("pause").executes(context -> pause(context, executionDriver)))
+                        .then(Commands.literal("resume").executes(context -> resume(context, executionDriver)))
                         .then(Commands.literal("stats")
                                 .requires(source -> source.permissions().hasPermission(Permissions.COMMANDS_GAMEMASTER))
                                 .executes(context -> stats(context, executionDriver))
                                 .then(Commands.argument("qualifier", StringArgumentType.word())
                                         .suggests((context, builder) -> SharedSuggestionProvider.suggest(
-                                                StatsFormatter.qualifiers(executionDriver.instrumentation().snapshot()),
+                                                StatsFormatter.qualifiers(executionDriver
+                                                        .instrumentation()
+                                                        .snapshot()),
                                                 builder))
-                                        .executes(context -> stats(context, executionDriver))))
-        ));
+                                        .executes(context -> stats(context, executionDriver))))));
     }
 
     private static int stats(CommandContext<CommandSourceStack> context, ExecutionDriver executionDriver) {
@@ -72,7 +71,9 @@ public final class CobblewareCommands {
         try {
             qualifier = StringArgumentType.getString(context, "qualifier");
         } catch (IllegalArgumentException ignored) {
-            sendStats(context.getSource(), StatsFormatter.all(executionDriver.instrumentation().snapshot()));
+            sendStats(
+                    context.getSource(),
+                    StatsFormatter.all(executionDriver.instrumentation().snapshot()));
             return 1;
         }
 
@@ -82,8 +83,9 @@ public final class CobblewareCommands {
             UUID cobbleputerId = UUID.fromString(qualifier);
             Optional<java.util.List<StatsFormatter.Line>> stats = StatsFormatter.cobbleputer(snapshot, cobbleputerId);
             if (stats.isEmpty()) {
-                context.getSource().sendFailure(Component.literal(
-                        "No instrumentation data exists for Cobbleputer " + cobbleputerId + "."));
+                context.getSource()
+                        .sendFailure(Component.literal(
+                                "No instrumentation data exists for Cobbleputer " + cobbleputerId + "."));
                 return 0;
             }
             sendStats(context.getSource(), stats.orElseThrow());
@@ -102,8 +104,7 @@ public final class CobblewareCommands {
             sendStats(context.getSource(), playerStats.orElseThrow());
             return 1;
         }
-        context.getSource().sendFailure(Component.literal(
-                "Unknown Cobbleware stats qualifier '" + qualifier + "'."));
+        context.getSource().sendFailure(Component.literal("Unknown Cobbleware stats qualifier '" + qualifier + "'."));
         return 0;
     }
 
@@ -130,26 +131,33 @@ public final class CobblewareCommands {
 
         String code = StringArgumentType.getString(context, "code");
         MainWorkerClient.AuthenticationRequest request = new MainWorkerClient.AuthenticationRequest(
-                code,
-                player.getUUID(),
-                player.getGameProfile().name());
+                code, player.getUUID(), player.getGameProfile().name());
 
         player.sendSystemMessage(Component.literal("Checking Cobbleware authentication code..."));
-        mainWorkerClient.authenticate(request).thenAccept(result -> source.getServer().execute(
-                () -> sendAuthenticationResult(player, result)));
+        mainWorkerClient
+                .authenticate(request)
+                .thenAccept(result -> source.getServer().execute(() -> sendAuthenticationResult(player, result)));
         return 1;
     }
 
-    private static void sendAuthenticationResult(
-            ServerPlayer player,
-            MainWorkerClient.AuthenticationResult result) {
-        Component message = switch (result.status()) {
-            case SUCCESS -> Component.literal("Cobbleware authentication accepted. Your browser should finish connecting shortly.");
-            case CONFIGURATION_ERROR -> Component.literal("Cobbleware is not configured correctly on this server.");
-            case UNAUTHORIZED -> Component.literal("Cobbleware could not authenticate with its Main Worker. Contact a server administrator.");
-            case REJECTED -> Component.literal("That Cobbleware authentication code is invalid, expired, or already in use. Get a new code and try again.");
-            case UNAVAILABLE -> Component.literal("Cobbleware could not reach its Main Worker. Try again shortly.");
-        };
+    private static void sendAuthenticationResult(ServerPlayer player, MainWorkerClient.AuthenticationResult result) {
+        Component message =
+                switch (result.status()) {
+                    case SUCCESS ->
+                        Component.literal(
+                                "Cobbleware authentication accepted. Your browser should finish connecting shortly.");
+                    case CONFIGURATION_ERROR ->
+                        Component.literal("Cobbleware is not configured correctly on this server.");
+                    case UNAUTHORIZED ->
+                        Component.literal("Cobbleware could not authenticate with its Main Worker. Contact a server"
+                                + " administrator.");
+                    case REJECTED ->
+                        Component.literal(
+                                "That Cobbleware authentication code is invalid, expired, or already in use. Get a new"
+                                        + " code and try again.");
+                    case UNAVAILABLE ->
+                        Component.literal("Cobbleware could not reach its Main Worker. Try again shortly.");
+                };
         player.sendSystemMessage(message);
     }
 
@@ -164,27 +172,32 @@ public final class CobblewareCommands {
         }
 
         player.sendSystemMessage(Component.literal("Looking up your Cobbleware program..."));
-        mainWorkerClient.getProgram(player.getUUID()).thenAccept(result -> source.getServer().execute(
-                () -> sendProgramResult(player, result)));
+        mainWorkerClient
+                .getProgram(player.getUUID())
+                .thenAccept(result -> source.getServer().execute(() -> sendProgramResult(player, result)));
         return 1;
     }
 
     private static void sendProgramResult(ServerPlayer player, MainWorkerClient.ProgramResult result) {
-        Component message = switch (result.status()) {
-            case SUCCESS -> Component.literal(formatProgram(result.program()));
-            case NO_PROGRAM -> Component.literal("You do not have an active Cobbleware program.");
-            case CONFIGURATION_ERROR -> Component.literal("Cobbleware is not configured correctly on this server.");
-            case UNAUTHORIZED -> Component.literal("Cobbleware could not authenticate with its Main Worker. Contact a server administrator.");
-            case PROGRAM_ERROR -> Component.literal("Your Cobbleware program could not provide start states: " + result.detail());
-            case UNAVAILABLE -> Component.literal("Cobbleware could not reach its Main Worker. Try again shortly.");
-        };
+        Component message =
+                switch (result.status()) {
+                    case SUCCESS -> Component.literal(formatProgram(result.program()));
+                    case NO_PROGRAM -> Component.literal("You do not have an active Cobbleware program.");
+                    case CONFIGURATION_ERROR ->
+                        Component.literal("Cobbleware is not configured correctly on this server.");
+                    case UNAUTHORIZED ->
+                        Component.literal("Cobbleware could not authenticate with its Main Worker. Contact a server"
+                                + " administrator.");
+                    case PROGRAM_ERROR ->
+                        Component.literal("Your Cobbleware program could not provide start states: " + result.detail());
+                    case UNAVAILABLE ->
+                        Component.literal("Cobbleware could not reach its Main Worker. Try again shortly.");
+                };
         player.sendSystemMessage(message);
     }
 
     private static CompletableFuture<Suggestions> suggestStartStates(
-            CommandContext<CommandSourceStack> context,
-            SuggestionsBuilder builder,
-            MainWorkerClient mainWorkerClient) {
+            CommandContext<CommandSourceStack> context, SuggestionsBuilder builder, MainWorkerClient mainWorkerClient) {
         ServerPlayer player;
         try {
             player = context.getSource().getPlayerOrException();
@@ -192,7 +205,8 @@ public final class CobblewareCommands {
             return builder.buildFuture();
         }
 
-        return mainWorkerClient.getProgram(player.getUUID())
+        return mainWorkerClient
+                .getProgram(player.getUUID())
                 .thenCompose(result -> result.status() == MainWorkerClient.ProgramStatus.SUCCESS
                         ? SharedSuggestionProvider.suggest(result.program().startStateNames(), builder)
                         : builder.buildFuture());
@@ -216,16 +230,17 @@ public final class CobblewareCommands {
             player.sendSystemMessage(Component.literal("No Cobbleputer is within 3m."));
             return 0;
         }
-        if (target.orElseThrow().state().getValue(CobbleputerBlock.STATE)
-                == CobbleputerState.RUNNING) {
+        if (target.orElseThrow().state().getValue(CobbleputerBlock.STATE) == CobbleputerState.RUNNING) {
             player.sendSystemMessage(Component.literal("The nearest Cobbleputer is already running."));
             return 0;
         }
 
         String startStateName = StringArgumentType.getString(context, "start-state");
         player.sendSystemMessage(Component.literal("Looking up your Cobbleware program..."));
-        mainWorkerClient.getProgram(player.getUUID()).thenAccept(result -> source.getServer().execute(
-                () -> completeExecutionStart(player, startStateName, result, executionDriver)));
+        mainWorkerClient
+                .getProgram(player.getUUID())
+                .thenAccept(result -> source.getServer()
+                        .execute(() -> completeExecutionStart(player, startStateName, result, executionDriver)));
         return 1;
     }
 
@@ -277,21 +292,25 @@ public final class CobblewareCommands {
             player.sendSystemMessage(Component.literal("The nearest Cobbleputer could not be started."));
             return;
         }
-        player.sendSystemMessage(Component.literal(
-                "Started your Cobbleware program at start state '" + startStateName + "'."));
+        player.sendSystemMessage(
+                Component.literal("Started your Cobbleware program at start state '" + startStateName + "'."));
     }
 
     private static void sendExecutionProgramFailure(ServerPlayer player, MainWorkerClient.ProgramResult result) {
-        Component message = switch (result.status()) {
-            case NO_PROGRAM -> Component.literal("You do not have an active Cobbleware program.");
-            case CONFIGURATION_ERROR -> Component.literal("Cobbleware is not configured correctly on this server.");
-            case UNAUTHORIZED -> Component.literal(
-                    "Cobbleware could not authenticate with its Main Worker. Contact a server administrator.");
-            case PROGRAM_ERROR -> Component.literal(
-                    "Your Cobbleware program could not provide start states: " + result.detail());
-            case UNAVAILABLE -> Component.literal("Cobbleware could not reach its Main Worker. Try again shortly.");
-            case SUCCESS -> throw new IllegalArgumentException("successful program result is not a failure");
-        };
+        Component message =
+                switch (result.status()) {
+                    case NO_PROGRAM -> Component.literal("You do not have an active Cobbleware program.");
+                    case CONFIGURATION_ERROR ->
+                        Component.literal("Cobbleware is not configured correctly on this server.");
+                    case UNAUTHORIZED ->
+                        Component.literal("Cobbleware could not authenticate with its Main Worker. Contact a server"
+                                + " administrator.");
+                    case PROGRAM_ERROR ->
+                        Component.literal("Your Cobbleware program could not provide start states: " + result.detail());
+                    case UNAVAILABLE ->
+                        Component.literal("Cobbleware could not reach its Main Worker. Try again shortly.");
+                    case SUCCESS -> throw new IllegalArgumentException("successful program result is not a failure");
+                };
         player.sendSystemMessage(message);
     }
 
@@ -321,8 +340,10 @@ public final class CobblewareCommands {
             player.sendSystemMessage(Component.literal("The nearest Cobbleputer is not stopped or crashed."));
             return 0;
         }
-        if (!player.getUUID().equals(resolvedTarget.blockEntity().ownerPlayerId().orElse(null))) {
-            player.sendSystemMessage(Component.literal("You can only change the state of your own Cobbleputer execution."));
+        if (!player.getUUID()
+                .equals(resolvedTarget.blockEntity().ownerPlayerId().orElse(null))) {
+            player.sendSystemMessage(
+                    Component.literal("You can only change the state of your own Cobbleputer execution."));
             return 0;
         }
         if (!(resolvedTarget.level() instanceof ServerLevel serverLevel)) {
@@ -379,8 +400,10 @@ public final class CobblewareCommands {
             player.sendSystemMessage(Component.literal("The nearest Cobbleputer is not " + requiredStateName + "."));
             return 0;
         }
-        if (!player.getUUID().equals(resolvedTarget.blockEntity().ownerPlayerId().orElse(null))) {
-            player.sendSystemMessage(Component.literal("You can only change the state of your own Cobbleputer execution."));
+        if (!player.getUUID()
+                .equals(resolvedTarget.blockEntity().ownerPlayerId().orElse(null))) {
+            player.sendSystemMessage(
+                    Component.literal("You can only change the state of your own Cobbleputer execution."));
             return 0;
         }
         if (!(resolvedTarget.level() instanceof ServerLevel serverLevel)) {
@@ -389,10 +412,12 @@ public final class CobblewareCommands {
         }
 
         if (requiredState == CobbleputerState.RUNNING) {
-            executionDriver.stop(serverLevel, resolvedTarget.pos(), resolvedTarget.state(), resolvedTarget.blockEntity());
+            executionDriver.stop(
+                    serverLevel, resolvedTarget.pos(), resolvedTarget.state(), resolvedTarget.blockEntity());
             player.sendSystemMessage(Component.literal("Paused your Cobbleputer execution."));
         } else {
-            executionDriver.resume(serverLevel, resolvedTarget.pos(), resolvedTarget.state(), resolvedTarget.blockEntity());
+            executionDriver.resume(
+                    serverLevel, resolvedTarget.pos(), resolvedTarget.state(), resolvedTarget.blockEntity());
             player.sendSystemMessage(Component.literal("Resumed your Cobbleputer execution."));
         }
         return 1;
@@ -401,9 +426,13 @@ public final class CobblewareCommands {
     private static Optional<CobbleputerTarget> findNearestCobbleputer(ServerPlayer player) {
         Level level = player.level();
         Vec3 playerPosition = player.position();
-        BlockPos min = BlockPos.containing(playerPosition.x - EXECUTION_RANGE, playerPosition.y - EXECUTION_RANGE,
+        BlockPos min = BlockPos.containing(
+                playerPosition.x - EXECUTION_RANGE,
+                playerPosition.y - EXECUTION_RANGE,
                 playerPosition.z - EXECUTION_RANGE);
-        BlockPos max = BlockPos.containing(playerPosition.x + EXECUTION_RANGE, playerPosition.y + EXECUTION_RANGE,
+        BlockPos max = BlockPos.containing(
+                playerPosition.x + EXECUTION_RANGE,
+                playerPosition.y + EXECUTION_RANGE,
                 playerPosition.z + EXECUTION_RANGE);
         CobbleputerTarget closest = null;
         double closestDistanceSquared = EXECUTION_RANGE * EXECUTION_RANGE;
@@ -430,8 +459,8 @@ public final class CobblewareCommands {
     }
 
     private static void sendRunningExecutionLimitReached(ServerPlayer player, int limit) {
-        player.sendSystemMessage(Component.literal(
-                "You have reached the running-executions-per-player limit of " + limit + "."));
+        player.sendSystemMessage(
+                Component.literal("You have reached the running-executions-per-player limit of " + limit + "."));
     }
 
     private static String formatProgram(MainWorkerClient.ProgramInfo program) {
@@ -445,6 +474,5 @@ public final class CobblewareCommands {
                 + "\nStart states: " + startStates;
     }
 
-    private record CobbleputerTarget(Level level, BlockPos pos, BlockState state, CobbleputerBlockEntity blockEntity) {
-    }
+    private record CobbleputerTarget(Level level, BlockPos pos, BlockState state, CobbleputerBlockEntity blockEntity) {}
 }

@@ -1,12 +1,12 @@
 package io.github.mmcgill.cobbleware.api;
 
-import com.google.gson.JsonElement;
-import com.google.gson.JsonObject;
-import com.google.gson.JsonParser;
 import cobbleware.internal.ErrorResponse;
 import cobbleware.internal.ExecutionStatsTick;
 import cobbleware.internal.ExecutionsRequest;
 import cobbleware.internal.ExecutionsResponse;
+import com.google.gson.JsonElement;
+import com.google.gson.JsonObject;
+import com.google.gson.JsonParser;
 import io.github.mmcgill.cobbleware.config.CobblewareConfig;
 import java.math.BigDecimal;
 import java.net.URI;
@@ -43,9 +43,7 @@ public final class MainWorkerClient {
     private final ExecutionStatsStreamer executionStatsStreamer;
 
     public MainWorkerClient(CobblewareConfig config, Logger logger) {
-        this(config, HttpClient.newBuilder()
-                .connectTimeout(CONNECT_TIMEOUT)
-                .build(), logger);
+        this(config, HttpClient.newBuilder().connectTimeout(CONNECT_TIMEOUT).build(), logger);
     }
 
     MainWorkerClient(CobblewareConfig config, HttpClient httpClient, Logger logger) {
@@ -70,7 +68,8 @@ public final class MainWorkerClient {
                 .POST(HttpRequest.BodyPublishers.ofString(requestJson(authentication)))
                 .build();
 
-        return httpClient.sendAsync(request, HttpResponse.BodyHandlers.ofString())
+        return httpClient
+                .sendAsync(request, HttpResponse.BodyHandlers.ofString())
                 .handle((response, failure) -> {
                     if (failure != null) {
                         Throwable cause = unwrap(failure);
@@ -95,7 +94,8 @@ public final class MainWorkerClient {
                 .GET()
                 .build();
 
-        return httpClient.sendAsync(request, HttpResponse.BodyHandlers.ofString())
+        return httpClient
+                .sendAsync(request, HttpResponse.BodyHandlers.ofString())
                 .handle((response, failure) -> {
                     if (failure != null) {
                         Throwable cause = unwrap(failure);
@@ -124,7 +124,8 @@ public final class MainWorkerClient {
                 .POST(HttpRequest.BodyPublishers.ofByteArray(executions.toByteArray()))
                 .build();
 
-        return httpClient.sendAsync(request, HttpResponse.BodyHandlers.ofByteArray())
+        return httpClient
+                .sendAsync(request, HttpResponse.BodyHandlers.ofByteArray())
                 .handle((response, failure) -> {
                     if (failure != null) {
                         Throwable cause = unwrap(failure);
@@ -157,11 +158,12 @@ public final class MainWorkerClient {
         private final HttpClient httpClient;
         private final Logger logger;
         private final Object lock = new Object();
-        private final ScheduledExecutorService reconnectExecutor = Executors.newSingleThreadScheduledExecutor(runnable -> {
-            Thread thread = new Thread(runnable, "cobbleware-execution-stats");
-            thread.setDaemon(true);
-            return thread;
-        });
+        private final ScheduledExecutorService reconnectExecutor =
+                Executors.newSingleThreadScheduledExecutor(runnable -> {
+                    Thread thread = new Thread(runnable, "cobbleware-execution-stats");
+                    thread.setDaemon(true);
+                    return thread;
+                });
 
         private CompletableFuture<WebSocket> connecting;
         private ScheduledFuture<?> reconnect;
@@ -200,7 +202,9 @@ public final class MainWorkerClient {
                     }
                     sendPending = false;
                     if (failure != null) {
-                        logger.debug("Main Worker execution-stats send failed: {}", unwrap(failure).toString());
+                        logger.debug(
+                                "Main Worker execution-stats send failed: {}",
+                                unwrap(failure).toString());
                         socket = null;
                         target.abort();
                         scheduleReconnectLocked();
@@ -214,7 +218,8 @@ public final class MainWorkerClient {
                 return;
             }
             URI endpoint = websocketUri(config.mainWorkerBaseUri().resolve("modapi/v1/execution-stats"));
-            connecting = httpClient.newWebSocketBuilder()
+            connecting = httpClient
+                    .newWebSocketBuilder()
                     .connectTimeout(CONNECT_TIMEOUT)
                     .header("Authorization", "Bearer " + config.mainWorkerApiKey())
                     .buildAsync(endpoint, this);
@@ -228,7 +233,9 @@ public final class MainWorkerClient {
                         return;
                     }
                     if (failure != null) {
-                        logger.debug("Main Worker execution-stats connection failed: {}", unwrap(failure).toString());
+                        logger.debug(
+                                "Main Worker execution-stats connection failed: {}",
+                                unwrap(failure).toString());
                         scheduleReconnectLocked();
                         return;
                     }
@@ -245,12 +252,15 @@ public final class MainWorkerClient {
             }
             long delay = nextReconnectMillis;
             nextReconnectMillis = Math.min(MAX_RECONNECT_MILLIS, nextReconnectMillis * 2);
-            reconnect = reconnectExecutor.schedule(() -> {
-                synchronized (lock) {
-                    reconnect = null;
-                    ensureConnectionLocked();
-                }
-            }, delay, TimeUnit.MILLISECONDS);
+            reconnect = reconnectExecutor.schedule(
+                    () -> {
+                        synchronized (lock) {
+                            reconnect = null;
+                            ensureConnectionLocked();
+                        }
+                    },
+                    delay,
+                    TimeUnit.MILLISECONDS);
         }
 
         @Override
@@ -348,7 +358,8 @@ public final class MainWorkerClient {
             try {
                 JsonObject body = JsonParser.parseString(response.body()).getAsJsonObject();
                 JsonElement programError = body.get("programError");
-                if (programError != null && programError.isJsonPrimitive()
+                if (programError != null
+                        && programError.isJsonPrimitive()
                         && programError.getAsJsonPrimitive().isString()) {
                     return ProgramResult.programError(programError.getAsString());
                 }
@@ -405,7 +416,8 @@ public final class MainWorkerClient {
             throw new IllegalArgumentException("program response has no startStates object");
         }
         Map<String, byte[]> parsedStartStates = new LinkedHashMap<>();
-        for (Map.Entry<String, JsonElement> entry : startStates.getAsJsonObject().entrySet()) {
+        for (Map.Entry<String, JsonElement> entry :
+                startStates.getAsJsonObject().entrySet()) {
             parsedStartStates.put(entry.getKey(), parseStateBytes(entry.getValue()));
         }
         return new ProgramInfo(
@@ -441,7 +453,9 @@ public final class MainWorkerClient {
 
     private static String requiredString(JsonObject body, String field) {
         JsonElement value = body.get(field);
-        if (value == null || !value.isJsonPrimitive() || !value.getAsJsonPrimitive().isString()) {
+        if (value == null
+                || !value.isJsonPrimitive()
+                || !value.getAsJsonPrimitive().isString()) {
             throw new IllegalArgumentException("program response has no string " + field);
         }
         return value.getAsString();
@@ -449,7 +463,9 @@ public final class MainWorkerClient {
 
     private static long requiredLong(JsonObject body, String field) {
         JsonElement value = body.get(field);
-        if (value == null || !value.isJsonPrimitive() || !value.getAsJsonPrimitive().isNumber()) {
+        if (value == null
+                || !value.isJsonPrimitive()
+                || !value.getAsJsonPrimitive().isNumber()) {
             throw new IllegalArgumentException("program response has no numeric " + field);
         }
         return value.getAsLong();
@@ -468,7 +484,9 @@ public final class MainWorkerClient {
             JsonElement element = JsonParser.parseString(responseBody);
             if (element.isJsonObject()) {
                 JsonElement error = element.getAsJsonObject().get("error");
-                if (error != null && error.isJsonPrimitive() && error.getAsJsonPrimitive().isString()) {
+                if (error != null
+                        && error.isJsonPrimitive()
+                        && error.getAsJsonPrimitive().isString()) {
                     return error.getAsString();
                 }
             }
@@ -523,7 +541,8 @@ public final class MainWorkerClient {
         UNAVAILABLE
     }
 
-    public record ProgramInfo(String id, String name, String uploadedAt, long sizeBytes, Map<String, byte[]> startStates) {
+    public record ProgramInfo(
+            String id, String name, String uploadedAt, long sizeBytes, Map<String, byte[]> startStates) {
         public ProgramInfo {
             if (id == null || name == null || uploadedAt == null || sizeBytes < 0 || startStates == null) {
                 throw new IllegalArgumentException("program information is invalid");

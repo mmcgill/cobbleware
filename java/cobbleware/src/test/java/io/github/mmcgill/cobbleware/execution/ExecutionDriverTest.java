@@ -2,6 +2,7 @@ package io.github.mmcgill.cobbleware.execution;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
+import io.github.mmcgill.cobbleware.block.CobbleputerState;
 import java.util.Map;
 import java.util.Optional;
 import net.minecraft.SharedConstants;
@@ -9,7 +10,6 @@ import net.minecraft.server.Bootstrap;
 import net.minecraft.world.item.DyeColor;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.state.BlockState;
-import io.github.mmcgill.cobbleware.block.CobbleputerState;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
@@ -58,8 +58,7 @@ class ExecutionDriverTest {
             assertEquals(Optional.of(entry.getValue()), ExecutionDriver.minecraftDyeColor(entry.getKey()));
         }
         assertEquals(
-                Optional.empty(),
-                ExecutionDriver.minecraftDyeColor(cobbleware.common.DyeColor.DYE_COLOR_UNSPECIFIED));
+                Optional.empty(), ExecutionDriver.minecraftDyeColor(cobbleware.common.DyeColor.DYE_COLOR_UNSPECIFIED));
         assertEquals(Optional.empty(), ExecutionDriver.minecraftDyeColor(cobbleware.common.DyeColor.UNRECOGNIZED));
     }
 
