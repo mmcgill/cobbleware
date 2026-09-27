@@ -4,6 +4,7 @@ import cobbleware.common.Uuid;
 import cobbleware.internal.ExecutionLogEntry;
 import cobbleware.internal.ExecutionTransition;
 import cobbleware.internal.ExecutionTransitionLogEntry;
+import cobbleware.internal.LimitExceededLogEntry;
 import io.github.mmcgill.cobbleware.config.CobblewareConfig;
 import java.net.URI;
 import java.net.http.HttpClient;
@@ -54,14 +55,20 @@ final class ExecutionTransitionPublisher implements WebSocket.Listener {
     }
 
     void offer(
-            UUID playerId, UUID executionId, ExecutionTransition transition, int executionCount, int executionLimit) {
+            UUID playerId,
+            UUID executionId,
+            ExecutionTransition transition,
+            int executionCount,
+            int executionLimit,
+            long totalExecutionStateLimit) {
         if (playerId == null
                 || executionId == null
                 || transition == null
                 || transition == ExecutionTransition.EXECUTION_TRANSITION_UNSPECIFIED
                 || executionCount < 0
                 || executionLimit <= 0
-                || executionCount > executionLimit) {
+                || executionCount > executionLimit
+                || totalExecutionStateLimit <= 0) {
             throw new IllegalArgumentException("execution transition is invalid");
         }
         if (!config.isEnabled()) {
@@ -76,7 +83,32 @@ final class ExecutionTransitionPublisher implements WebSocket.Listener {
                 pending.removeFirst();
                 logger.warn("Dropping the oldest pending execution transition because the publication queue is full");
             }
-            pending.addLast(entry(playerId, executionId, transition, executionCount, executionLimit));
+            pending.addLast(transitionEntry(
+                    playerId, executionId, transition, executionCount, executionLimit, totalExecutionStateLimit));
+            ensureConnectionLocked();
+            sendNextLocked();
+        }
+    }
+
+    void offerLimitExceeded(UUID playerId, UUID executionId, String reason) {
+        if (playerId == null || executionId == null || reason == null || reason.isEmpty()) {
+            throw new IllegalArgumentException("limit-exceeded log entry is invalid");
+        }
+        if (!config.isEnabled()) {
+            return;
+        }
+        synchronized (lock) {
+            if (closed) {
+                return;
+            }
+            if (pending.size() == MAX_PENDING_TRANSITIONS) {
+                pending.removeFirst();
+                logger.warn("Dropping the oldest pending execution log because the publication queue is full");
+            }
+            pending.addLast(ExecutionLogEntry.newBuilder()
+                    .setPlayerId(protoUuid(playerId))
+                    .setLimited(LimitExceededLogEntry.newBuilder().setReason(reason))
+                    .build());
             ensureConnectionLocked();
             sendNextLocked();
         }
@@ -214,15 +246,21 @@ final class ExecutionTransitionPublisher implements WebSocket.Listener {
         reconnectExecutor.shutdownNow();
     }
 
-    private static ExecutionLogEntry entry(
-            UUID playerId, UUID executionId, ExecutionTransition transition, int executionCount, int executionLimit) {
+    private static ExecutionLogEntry transitionEntry(
+            UUID playerId,
+            UUID executionId,
+            ExecutionTransition transition,
+            int executionCount,
+            int executionLimit,
+            long totalExecutionStateLimit) {
         return ExecutionLogEntry.newBuilder()
                 .setPlayerId(protoUuid(playerId))
                 .setTransition(ExecutionTransitionLogEntry.newBuilder()
                         .setExecutionId(protoUuid(executionId))
                         .setTransition(transition)
                         .setExecutionCount(executionCount)
-                        .setExecutionLimit(executionLimit))
+                        .setExecutionLimit(executionLimit)
+                        .setTotalExecutionStateLimit(totalExecutionStateLimit))
                 .build();
     }
 

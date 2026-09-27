@@ -162,7 +162,7 @@ async function routeRequest(
   if (pathname === '/playerapi/v1/limits') {
     const context: RequestContext = {};
     const authError = await requirePlayerAuth(request, config, store, context, 'api');
-    return authError ?? handlePlayerLimits(request, context.player!.playerUUID, executionLogHub);
+    return authError ?? handlePlayerLimits(request, context.player!.playerUUID, executionLogHub, executionStatsHub);
   }
 
   if (pathname === '/playerapi/v1/programs') {

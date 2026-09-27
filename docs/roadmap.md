@@ -27,7 +27,7 @@ Here's a rough sketch of the current plan to getting something working end-to-en
   * [x] Per-player active executions
   * [ ] Per-player effects per tick
   * [x] Per-player memory utilization (via runtime)
-  * [ ] Per-player total execution state size
+  * [x] Per-player total execution state size
   * [ ] Per-execution pending events
 * [ ] Drop events for Players not online (configurable)
 * [ ] Cobbleputer art assets

@@ -25,7 +25,8 @@ class ExecutionStatsReporterTest {
         instrumentation.recordEvent(TARGET, Event.EventCase.CHAT_MESSAGE, false);
         instrumentation.recordEventsPerSync(TARGET, 3);
         instrumentation.recordEffect(TARGET, Effect.EffectCase.SEND_CHAT, 4, true);
-        instrumentation.recordCobbleputerStates(Map.of(TARGET, Instrumentation.LifecycleState.RUNNING));
+        instrumentation.recordCobbleputerStates(Map.of(
+                TARGET, new Instrumentation.CobbleputerStateMeasurement(Instrumentation.LifecycleState.RUNNING, 12)));
 
         ExecutionStatsTick report = ExecutionStatsReporter.report(instrumentation.currentTickSnapshot(), 1234);
 
@@ -44,5 +45,6 @@ class ExecutionStatsReporterTest {
         assertEquals(1, player.getEffects(0).getAttempted());
         assertEquals(1, player.getEffects(0).getFailed());
         assertEquals(1, player.getCobbleputerStatesCount());
+        assertEquals(12, player.getCobbleputerStates(0).getStateSizeBytes());
     }
 }

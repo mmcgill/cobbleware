@@ -54,9 +54,9 @@ Program's event handler function, the 'puter enters the `CRASHED` state. Resumin
 a crashed 'puter starts a new execution using its most recently stored state.
 
 Each 'puter has a state value that is provided as input to each event handler, and can
-be arbitrarily modified by that event handler. The state value has a maximum size in bytes
-given as server configuration. If an event handler returns a state value larger than this size,
-the 'puter crashes and the returned state value is discarded.
+be arbitrarily modified by that event handler. Its maximum returned-state size is dynamically
+derived from its owner's remaining total execution-state capacity. If an event handler returns a
+state value larger than that allowance, the 'puter crashes and the returned state value is discarded.
 
 Each 'puter has an associated in-memory event queue with a current maximum length of 10.
 If events are produced faster than the 'puter can process them, the queue will eventually fill.
@@ -112,6 +112,15 @@ releases its slot. When the chunk becomes block-ticking again, the Mod considers
 against the owner's current limit before it runs, so the returning Cobbleputer never temporarily exceeds
 that limit. If the limit is full, the Cobbleputer remains stopped and the player receives an error message
 via chat.
+
+#### Total Execution State Per Player
+
+Each player is limited to an admin-configurable total number of bytes across every durable Cobbleputer execution
+state they own. The total counts only state byte arrays, including stopped, crashed, unloaded, and running
+Cobbleputers. When an event handler's final state would exceed the remaining total, that returned state is discarded
+and the Cobbleputer crashes while retaining its prior state for `/cobbleware resume` recovery. The Player receives a
+limit-exceeded log entry and the usual crash transition. The Browser Limits tab shows the total state-byte usage and
+cap with live updates from execution statistics.
 
 ## Wireless Observer
 

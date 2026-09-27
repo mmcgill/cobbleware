@@ -70,6 +70,7 @@ public final class CobblewareMod implements ModInitializer {
                 mainWorkerClient,
                 new Instrumentation(config.instrumentationWindowTicks()),
                 config.maxRunningExecutionsPerPlayer(),
+                config.maxTotalExecutionStateBytesPerPlayer(),
                 LOGGER);
         wirelessObserverNetwork = new WirelessObserverNetwork();
         ServerLifecycleEvents.SERVER_STARTING.register(server -> {

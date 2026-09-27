@@ -16,6 +16,8 @@ type CachedExecution = {
   id: Common.Uuid;
   ownerKey: string;
   state: Internal.ExecutionStatus;
+  failureReason: Internal.ExecutionFailureReason;
+  stateSizeLimit: bigint;
   baseState: Uint8Array;
   baseEventSeqNum: bigint;
   currentState: Uint8Array;
@@ -125,6 +127,9 @@ export class ExecutionManager implements ExecutionCoordinator {
       if (!this.isCurrent(entry, generation, eventSeqNum)) {
         return;
       }
+      if (BigInt(step.state.byteLength) > entry.stateSizeLimit) {
+        throw new StateSizeLimitError();
+      }
 
       entry.currentState = step.state.slice();
       entry.lastConsumedEventSeqNum = eventSeqNum;
@@ -150,6 +155,9 @@ export class ExecutionManager implements ExecutionCoordinator {
       );
       entry.lastConsumedEventSeqNum = eventSeqNum;
       entry.state = Internal.ExecutionStatus.CRASHED;
+      entry.failureReason = error instanceof StateSizeLimitError
+        ? Internal.ExecutionFailureReason.STATE_SIZE_LIMIT
+        : Internal.ExecutionFailureReason.UNSPECIFIED;
       entry.events = entry.events.slice(0, Number(eventSeqNum - entry.baseEventSeqNum + 1n));
       entry.inFlight = undefined;
     }
@@ -167,6 +175,7 @@ export class ExecutionManager implements ExecutionCoordinator {
       state: entry.currentState.slice(),
       event: cloneEvent(event),
       effectLimit,
+      stateSizeLimit: entry.stateSizeLimit,
     });
     return await this.programRunner.step(
       sourceRequest,
@@ -208,6 +217,11 @@ function validateRequest(
     );
     requireRequestField(execution, Internal.ExecutionStateSchema.field.playerId, 'player_id');
     requireRequestField(execution, Internal.ExecutionStateSchema.field.state, 'state');
+    requireRequestField(
+      execution,
+      Internal.ExecutionStateSchema.field.stateSizeLimit,
+      'state_size_limit',
+    );
     if (execution.eventSeqNum < 1n) {
       invalidRequest('event_seq_num must be at least one');
     }
@@ -263,6 +277,8 @@ function createEntry(execution: Internal.ExecutionState, priorGeneration: number
     id: cloneUuid(execution.executionId!),
     ownerKey: uuidString(execution.playerId!),
     state,
+    failureReason: Internal.ExecutionFailureReason.UNSPECIFIED,
+    stateSizeLimit: execution.stateSizeLimit,
     baseState: execution.initialState.slice(),
     baseEventSeqNum: execution.eventSeqNum,
     currentState: execution.initialState.slice(),
@@ -328,6 +344,7 @@ function reconcileEntry(
     entry.events.push(cloneEvent(execution.events[index]!));
   }
   entry.state = execution.state;
+  entry.stateSizeLimit = execution.stateSizeLimit;
   acknowledgeEffects(entry, execution.effectSeqNum);
   return entry;
 }
@@ -358,7 +375,14 @@ function executionResult(entry: CachedExecution): Internal.ExecutionResult {
     eventSeqNum: entry.lastConsumedEventSeqNum,
     effectSeqNum: entry.outbox[0]?.sequence ?? entry.nextEffectSeqNum,
     state: entry.state,
+    failureReason: entry.failureReason,
   });
+}
+
+class StateSizeLimitError extends Error {
+  constructor() {
+    super('program response state exceeds the execution state-size limit');
+  }
 }
 
 async function decodeStepResponse(response: Response): Promise<Program.StepResponse> {

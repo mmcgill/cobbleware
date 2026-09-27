@@ -149,8 +149,19 @@ public final class MainWorkerClient {
 
     /** Publishes a non-durable execution lifecycle transition without blocking the server tick. */
     public void reportExecutionTransition(
-            UUID playerId, UUID executionId, ExecutionTransition transition, int executionCount, int executionLimit) {
-        executionTransitionPublisher.offer(playerId, executionId, transition, executionCount, executionLimit);
+            UUID playerId,
+            UUID executionId,
+            ExecutionTransition transition,
+            int executionCount,
+            int executionLimit,
+            long totalExecutionStateLimit) {
+        executionTransitionPublisher.offer(
+                playerId, executionId, transition, executionCount, executionLimit, totalExecutionStateLimit);
+    }
+
+    /** Publishes a non-durable state-limit log entry without blocking the server tick. */
+    public void reportLimitExceeded(UUID playerId, UUID executionId, String reason) {
+        executionTransitionPublisher.offerLimitExceeded(playerId, executionId, reason);
     }
 
     /** Stops the best-effort stats stream and prevents reconnects during server shutdown. */

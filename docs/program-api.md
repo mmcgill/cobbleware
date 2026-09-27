@@ -49,8 +49,9 @@ that indicates, for the given program state, the subsequent state and associated
 effects.
 
 The request body is a `StepRequest` containing the simulated `execution_id`, the current `state`, an `event` from
-the `Events.Event` message, and `effect_limit`. The message's `event` `oneof` identifies the concrete event message.
-`effect_limit` is the maximum number of effects the Runtime will accept from that invocation. The program's transition
+the `Events.Event` message, `effect_limit`, and `state_size_limit`. The message's `event` `oneof` identifies the concrete event message.
+`effect_limit` is the maximum number of effects the Runtime will accept from that invocation. `state_size_limit` is the
+maximum byte length the Runtime will accept for the returned state; programs can use it to compact or defer work. The program's transition
 function receives the state, event, and this limit as its context and returns a `Program.StepResponse` containing the
 subsequent state and effects. Effects beyond the supplied limit are dropped.
 On success, the response should have 200 status with a `StepResponse` body. On failure (e.g. due to an exception)

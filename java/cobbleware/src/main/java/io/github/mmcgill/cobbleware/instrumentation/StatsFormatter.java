@@ -118,7 +118,7 @@ public final class StatsFormatter {
                 snapshot.eventsPerSync().entrySet().stream()
                         .filter(entry -> entry.getKey().cobbleputer().id().equals(cobbleputerId))
                         .toList();
-        List<Map.Entry<Instrumentation.PlayerCobbleputerKey, Instrumentation.LifecycleState>> states =
+        List<Map.Entry<Instrumentation.PlayerCobbleputerKey, Instrumentation.CobbleputerStateMeasurement>> states =
                 snapshot.cobbleputerStates().entrySet().stream()
                         .filter(entry -> entry.getKey().cobbleputer().id().equals(cobbleputerId))
                         .toList();
@@ -284,23 +284,30 @@ public final class StatsFormatter {
     }
 
     private static void appendStates(
-            List<Line> lines, Map<Instrumentation.PlayerCobbleputerKey, Instrumentation.LifecycleState> states) {
+            List<Line> lines,
+            Map<Instrumentation.PlayerCobbleputerKey, Instrumentation.CobbleputerStateMeasurement> states) {
         appendStates(lines, states.entrySet());
     }
 
     private static void appendStates(
             List<Line> lines,
-            java.util.Collection<Map.Entry<Instrumentation.PlayerCobbleputerKey, Instrumentation.LifecycleState>>
+            java.util.Collection<
+                            Map.Entry<
+                                    Instrumentation.PlayerCobbleputerKey, Instrumentation.CobbleputerStateMeasurement>>
                     states) {
         if (states.isEmpty()) {
             lines.add(heading("Cobbleputers: none"));
             return;
         }
         Map<Instrumentation.PlayerStateKey, Integer> grouped = new java.util.HashMap<>();
-        for (Map.Entry<Instrumentation.PlayerCobbleputerKey, Instrumentation.LifecycleState> entry : states) {
+        for (Map.Entry<Instrumentation.PlayerCobbleputerKey, Instrumentation.CobbleputerStateMeasurement> entry :
+                states) {
             Instrumentation.PlayerCobbleputerKey target = entry.getKey();
             grouped.merge(
-                    new Instrumentation.PlayerStateKey(target.playerId(), target.playerName(), entry.getValue()),
+                    new Instrumentation.PlayerStateKey(
+                            target.playerId(),
+                            target.playerName(),
+                            entry.getValue().state()),
                     1,
                     Integer::sum);
         }

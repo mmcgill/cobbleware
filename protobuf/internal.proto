@@ -14,6 +14,12 @@ enum ExecutionStatus {
   EXECUTION_STATUS_CRASHED = 3;
 }
 
+// Explains a terminal execution result when the Runtime can identify its cause.
+enum ExecutionFailureReason {
+  EXECUTION_FAILURE_REASON_UNSPECIFIED = 0;
+  EXECUTION_FAILURE_REASON_STATE_SIZE_LIMIT = 1;
+}
+
 message ExecutionState {
   // Identifies an execution. Required by the application contract.
   cobbleware.common.Uuid execution_id = 1;
@@ -33,6 +39,9 @@ message ExecutionState {
   cobbleware.common.Uuid player_id = 6;
   // The execution lifecycle state. Required by the application contract.
   ExecutionStatus state = 7;
+  // Maximum final-state size the Runtime may accept for this execution in this snapshot.
+  // Required by the application contract; zero permits only an empty final state.
+  uint64 state_size_limit = 8;
 }
 
 message ExecutionResult {
@@ -52,6 +61,8 @@ message ExecutionResult {
   uint64 effect_seq_num = 5;
   // The execution lifecycle state. Required by the application contract.
   ExecutionStatus state = 6;
+  // Identifies a Runtime-enforced terminal failure when known.
+  ExecutionFailureReason failure_reason = 7;
 }
 
 message ExecutionsRequest {
@@ -169,6 +180,8 @@ message ExecutionStatsTick {
   message CobbleputerState {
     CobbleputerRef cobbleputer = 1;
     InstrumentationLifecycleState state = 2;
+    // The current durable execution-state byte-array length.
+    uint64 state_size_bytes = 3;
   }
 }
 
@@ -220,6 +233,7 @@ message ExecutionTransitionLogEntry {
   ExecutionTransition transition = 2;
   uint32 execution_count = 3;
   uint32 execution_limit = 4;
+  uint64 total_execution_state_limit = 5;
 }
 
 message ExecutionLogEntry {

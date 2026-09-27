@@ -49,7 +49,7 @@ function assertStep(
   expectedEffect: 'emitBeep' | 'sendChat',
   expectedMessage?: string,
 ): Uint8Array {
-  const output = handle(state, input, { effectLimit: 50 });
+  const output = handle(state, input, { effectLimit: 50, stateSizeLimit: 1024n });
 
   assertEquals([...output.state], expectedState, 'handler returned an unexpected state');
   assertEquals(output.effects.length, 1, 'handler must emit one effect');

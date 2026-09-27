@@ -43,6 +43,7 @@ Deno.test('Program API decodes a step and encodes its result', async () => {
       },
     }),
     effectLimit: 7,
+    stateSizeLimit: 42n,
   });
   const response = await handler(
     binaryRequest('/nextState', toBinary(Program.StepRequestSchema, request)),
@@ -60,6 +61,7 @@ Deno.test('Program API decodes a step and encodes its result', async () => {
   );
   assertEquals(decoded.effects[0]?.effect.case, 'emitBeep', 'handler effects should round-trip');
   assertEquals(receivedEffectLimit, 7, 'handler should receive the effect limit');
+  assertEquals(receivedStateSizeLimit, 42n, 'handler should receive the state-size limit');
 });
 
 Deno.test('Program API round-trips ID-targeted and color-targeted SetRedstonePower effects', async () => {
@@ -299,10 +301,12 @@ Deno.test('Program API rejects unsupported routes and methods', async () => {
 });
 
 let receivedEffectLimit: number | undefined;
+let receivedStateSizeLimit: bigint | undefined;
 
 const handle: EventProgram = (state, event, context) => {
   if (event.event.case !== 'resumed') throw new Error('unexpected event');
   receivedEffectLimit = context.effectLimit;
+  receivedStateSizeLimit = context.stateSizeLimit;
   return create(Program.StepResponseSchema, {
     state: new Uint8Array([state[0]! + 1]),
     effects: [

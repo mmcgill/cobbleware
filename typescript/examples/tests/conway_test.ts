@@ -137,7 +137,7 @@ Deno.test('Conway chat commands enter simulation, step it, and return to init', 
 });
 
 function step(state: Uint8Array, event: Events.Event, effectLimit = 50) {
-  return conwayHandler(state, event, { effectLimit });
+  return conwayHandler(state, event, { effectLimit, stateSizeLimit: 1024n });
 }
 
 function paired(color: Common.DyeColor, id: number, x: number, y: number, z: number): Events.Event {

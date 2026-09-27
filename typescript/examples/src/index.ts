@@ -1,5 +1,6 @@
 import { Common, create, Effects, Program, start } from '@cobbleware/core';
 import { CONWAY, conwayHandler, conwayStartState } from './conway.ts';
+import { BIGSTATE, bigstateHandler, bigstateStartState } from './bigstate.ts';
 
 const { DyeColor } = Common;
 
@@ -124,6 +125,8 @@ export const handle: Program = function handle(state, event, context) {
       return hangHandler(state, event, context);
     case CONWAY:
       return conwayHandler(state, event, context);
+    case BIGSTATE:
+      return bigstateHandler(state, event, context);
     default:
       return create(Program.StepResponseSchema, { state: state.slice(), effects: [] });
   }
@@ -134,6 +137,7 @@ export const startStates = {
   echo: new Uint8Array([ECHO, 0]),
   hang: new Uint8Array([HANG]),
   conway: conwayStartState,
+  bigstate: bigstateStartState,
 };
 
 if (import.meta.main) {

@@ -9,6 +9,7 @@ const EVENT_WORKER_PROTOCOL_PREFIX = 'cobbleware.bearer.';
 export type RunningExecutionsSnapshot = {
   used: number;
   limit: number;
+  totalExecutionStateLimit: bigint;
   updatedAt: string;
 };
 
@@ -34,6 +35,7 @@ export class ExecutionLogHub {
       !isExecutionTransition(transition.transition) ||
       !Number.isInteger(transition.executionCount) ||
       !Number.isInteger(transition.executionLimit) ||
+      transition.totalExecutionStateLimit <= 0n ||
       transition.executionCount < 0 ||
       transition.executionLimit <= 0 ||
       transition.executionCount > transition.executionLimit
@@ -43,6 +45,7 @@ export class ExecutionLogHub {
     this.runningExecutionLimits.set(playerId, {
       used: transition.executionCount,
       limit: transition.executionLimit,
+      totalExecutionStateLimit: transition.totalExecutionStateLimit,
       updatedAt: new Date().toISOString(),
     });
   }

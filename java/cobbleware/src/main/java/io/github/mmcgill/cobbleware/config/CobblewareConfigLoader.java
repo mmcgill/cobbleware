@@ -21,6 +21,7 @@ public final class CobblewareConfigLoader {
     public static final String DEFAULT_MAIN_WORKER_URL = "http://localhost:9000";
     public static final int DEFAULT_INSTRUMENTATION_WINDOW_TICKS = 600;
     public static final int DEFAULT_MAX_RUNNING_EXECUTIONS_PER_PLAYER = 10;
+    public static final long DEFAULT_MAX_TOTAL_EXECUTION_STATE_BYTES_PER_PLAYER = 1024L * 1024L;
 
     private CobblewareConfigLoader() {}
 
@@ -72,9 +73,16 @@ public final class CobblewareConfigLoader {
                 optionalPositiveInt(object, "instrumentationWindowTicks", DEFAULT_INSTRUMENTATION_WINDOW_TICKS);
         int maxRunningExecutionsPerPlayer =
                 optionalPositiveInt(object, "maxRunningExecutionsPerPlayer", DEFAULT_MAX_RUNNING_EXECUTIONS_PER_PLAYER);
+        long maxTotalExecutionStateBytesPerPlayer = optionalPositiveLong(
+                object, "maxTotalExecutionStateBytesPerPlayer", DEFAULT_MAX_TOTAL_EXECUTION_STATE_BYTES_PER_PLAYER);
         URI baseUri = normalizeBaseUri(mainWorkerUrl);
         return new CobblewareConfig(
-                baseUri, mainWorkerApiKey, instrumentationWindowTicks, maxRunningExecutionsPerPlayer, null);
+                baseUri,
+                mainWorkerApiKey,
+                instrumentationWindowTicks,
+                maxRunningExecutionsPerPlayer,
+                maxTotalExecutionStateBytesPerPlayer,
+                null);
     }
 
     private static String requiredString(JsonObject object, String property) {
@@ -98,6 +106,25 @@ public final class CobblewareConfigLoader {
         try {
             BigDecimal number = value.getAsBigDecimal();
             int result = number.intValueExact();
+            if (result <= 0) {
+                throw new IllegalArgumentException(property + " must be a positive integer");
+            }
+            return result;
+        } catch (ArithmeticException exception) {
+            throw new IllegalArgumentException(property + " must be a positive integer", exception);
+        }
+    }
+
+    private static long optionalPositiveLong(JsonObject object, String property, long defaultValue) {
+        JsonElement value = object.get(property);
+        if (value == null) {
+            return defaultValue;
+        }
+        if (!value.isJsonPrimitive() || !value.getAsJsonPrimitive().isNumber()) {
+            throw new IllegalArgumentException(property + " must be a positive integer");
+        }
+        try {
+            long result = value.getAsBigDecimal().longValueExact();
             if (result <= 0) {
                 throw new IllegalArgumentException(property + " must be a positive integer");
             }
@@ -132,7 +159,9 @@ public final class CobblewareConfigLoader {
                 + "  \"mainWorkerApiKey\": \"\",\n"
                 + "  \"instrumentationWindowTicks\": " + DEFAULT_INSTRUMENTATION_WINDOW_TICKS + ",\n"
                 + "  \"maxRunningExecutionsPerPlayer\": "
-                + DEFAULT_MAX_RUNNING_EXECUTIONS_PER_PLAYER + "\n"
+                + DEFAULT_MAX_RUNNING_EXECUTIONS_PER_PLAYER + ",\n"
+                + "  \"maxTotalExecutionStateBytesPerPlayer\": "
+                + DEFAULT_MAX_TOTAL_EXECUTION_STATE_BYTES_PER_PLAYER + "\n"
                 + "}\n";
     }
 }

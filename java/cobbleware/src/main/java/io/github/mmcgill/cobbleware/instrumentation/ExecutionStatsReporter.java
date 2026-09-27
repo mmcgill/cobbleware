@@ -23,8 +23,19 @@ public final class ExecutionStatsReporter {
 
     /** Builds one complete, non-durable raw tick report. */
     public static ExecutionStatsTick report(Instrumentation.TickSnapshot snapshot, long sampledAtUnixMillis) {
+        return report(snapshot, sampledAtUnixMillis, Map.of());
+    }
+
+    /** Builds one complete report, including durable state records that are not currently block-ticking. */
+    public static ExecutionStatsTick report(
+            Instrumentation.TickSnapshot snapshot,
+            long sampledAtUnixMillis,
+            Map<UUID, Map<UUID, Long>> stateSizeCensus) {
         if (snapshot == null || snapshot.tick() <= 0 || sampledAtUnixMillis <= 0) {
             throw new IllegalArgumentException("raw tick snapshot and positive sample time are required");
+        }
+        if (stateSizeCensus == null) {
+            throw new IllegalArgumentException("state-size census must not be null");
         }
         Map<UUID, PlayerMeasurements> players = new HashMap<>();
         snapshot.events()
@@ -63,8 +74,26 @@ public final class ExecutionStatsReporter {
                         .states
                         .add(ExecutionStatsTick.CobbleputerState.newBuilder()
                                 .setCobbleputer(cobbleputer(key.cobbleputer()))
-                                .setState(lifecycleState(value))
+                                .setState(lifecycleState(value.state()))
+                                .setStateSizeBytes(value.stateSizeBytes())
                                 .build()));
+        stateSizeCensus.forEach((playerId, records) -> {
+            PlayerMeasurements measurements = players.computeIfAbsent(playerId, ignored -> new PlayerMeasurements());
+            java.util.Set<UUID> known = new java.util.HashSet<>();
+            measurements.states.forEach(
+                    state -> known.add(javaUuid(state.getCobbleputer().getCobbleputerId())));
+            records.forEach((cobbleputerId, stateSize) -> {
+                if (stateSize < 0 || !known.add(cobbleputerId)) {
+                    return;
+                }
+                measurements.states.add(ExecutionStatsTick.CobbleputerState.newBuilder()
+                        .setCobbleputer(
+                                ExecutionStatsTick.CobbleputerRef.newBuilder().setCobbleputerId(uuid(cobbleputerId)))
+                        .setState(InstrumentationLifecycleState.INSTRUMENTATION_LIFECYCLE_STATE_STOPPED)
+                        .setStateSizeBytes(stateSize)
+                        .build());
+            });
+        });
 
         ExecutionStatsTick.Builder report = ExecutionStatsTick.newBuilder()
                 .setSampledAtUnixMillis(sampledAtUnixMillis)
@@ -102,7 +131,9 @@ public final class ExecutionStatsReporter {
     }
 
     private static String stateKey(ExecutionStatsTick.CobbleputerState value) {
-        return cobbleputerKey(value.getCobbleputer());
+        return value.getCobbleputer().getCobbleputerId().getHigh()
+                + ":"
+                + value.getCobbleputer().getCobbleputerId().getLow();
     }
 
     private static String cobbleputerKey(ExecutionStatsTick.CobbleputerRef value) {
@@ -138,6 +169,10 @@ public final class ExecutionStatsReporter {
                 .setHigh(value.getMostSignificantBits())
                 .setLow(value.getLeastSignificantBits())
                 .build();
+    }
+
+    private static UUID javaUuid(Uuid value) {
+        return new UUID(value.getHigh(), value.getLow());
     }
 
     private static InstrumentationEventType eventType(Event.EventCase value) {

@@ -26,6 +26,8 @@ export interface StepContext {
    * are dropped.
    */
   effectLimit: number;
+  /** The maximum byte length the Runtime will accept for the next execution state. */
+  stateSizeLimit: bigint;
 }
 
 /**
@@ -95,7 +97,10 @@ async function handleNextState(request: Request, program: Program): Promise<Resp
     return binaryResponse(
       toBinary(
         ProgramMessages.StepResponseSchema,
-        program(stepRequest.state, stepRequest.event, { effectLimit: stepRequest.effectLimit }),
+        program(stepRequest.state, stepRequest.event, {
+          effectLimit: stepRequest.effectLimit,
+          stateSizeLimit: stepRequest.stateSizeLimit,
+        }),
       ),
       200,
     );

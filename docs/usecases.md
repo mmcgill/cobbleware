@@ -80,6 +80,7 @@ know whether I can start or resume another execution.
 
 The Limits tab initially reads the Player's current limit snapshot. A received execution-transition log entry updates
 the displayed count and limit without polling or another limits request. It initially shows the enforced
-running-executions-per-player limit, including the Player's number of loaded, running executions. If the Main Worker
+running-executions-per-player limit, including the Player's number of loaded, running executions, and the per-player
+total execution-state byte limit and current byte usage. If the Main Worker
 has not yet received a transition after a restart or connection loss, it tells the Player that the value is temporarily
 unavailable rather than inventing usage.

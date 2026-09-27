@@ -25,14 +25,16 @@ class InstrumentationTest {
         instrumentation.recordEvent(TARGET, Event.EventCase.CHAT_MESSAGE, true);
         instrumentation.recordEventsPerSync(TARGET, 2);
         instrumentation.recordEffect(TARGET, Effect.EffectCase.SEND_CHAT, 4, false);
-        instrumentation.recordCobbleputerStates(Map.of(TARGET, Instrumentation.LifecycleState.RUNNING));
+        instrumentation.recordCobbleputerStates(Map.of(
+                TARGET, new Instrumentation.CobbleputerStateMeasurement(Instrumentation.LifecycleState.RUNNING, 3)));
 
         instrumentation.advanceTick(2);
         instrumentation.recordSyncCompletion(7, Instrumentation.SyncOutcome.UNAVAILABLE);
         instrumentation.recordEvent(TARGET, Event.EventCase.CHAT_MESSAGE, false);
         instrumentation.recordEventsPerSync(TARGET, 4);
         instrumentation.recordEffect(TARGET, Effect.EffectCase.SEND_CHAT, 5, true);
-        instrumentation.recordCobbleputerStates(Map.of(TARGET, Instrumentation.LifecycleState.STOPPED));
+        instrumentation.recordCobbleputerStates(Map.of(
+                TARGET, new Instrumentation.CobbleputerStateMeasurement(Instrumentation.LifecycleState.STOPPED, 4)));
 
         Instrumentation.Snapshot fullWindow = instrumentation.snapshot();
         Instrumentation.EventMetricKey eventKey =
@@ -57,13 +59,18 @@ class InstrumentationTest {
         assertEquals(
                 new Instrumentation.EffectCounts(2, 1, new Instrumentation.TimingSummary(2, 9, 5)),
                 fullWindow.effects().get(effectKey));
-        assertEquals(Map.of(TARGET, Instrumentation.LifecycleState.STOPPED), fullWindow.cobbleputerStates());
+        assertEquals(
+                Map.of(
+                        TARGET,
+                        new Instrumentation.CobbleputerStateMeasurement(Instrumentation.LifecycleState.STOPPED, 4)),
+                fullWindow.cobbleputerStates());
         assertThrows(
                 UnsupportedOperationException.class,
                 () -> fullWindow.events().put(eventKey, new Instrumentation.EventCounts(0, 0)));
 
         instrumentation.advanceTick(3);
-        instrumentation.recordCobbleputerStates(Map.of(TARGET, Instrumentation.LifecycleState.RUNNING));
+        instrumentation.recordCobbleputerStates(Map.of(
+                TARGET, new Instrumentation.CobbleputerStateMeasurement(Instrumentation.LifecycleState.RUNNING, 5)));
 
         Instrumentation.Snapshot evicted = instrumentation.snapshot();
         assertEquals(2, evicted.firstTick());
@@ -77,7 +84,11 @@ class InstrumentationTest {
         assertEquals(
                 new Instrumentation.EffectCounts(1, 1, new Instrumentation.TimingSummary(1, 5, 5)),
                 evicted.effects().get(effectKey));
-        assertEquals(Map.of(TARGET, Instrumentation.LifecycleState.RUNNING), evicted.cobbleputerStates());
+        assertEquals(
+                Map.of(
+                        TARGET,
+                        new Instrumentation.CobbleputerStateMeasurement(Instrumentation.LifecycleState.RUNNING, 5)),
+                evicted.cobbleputerStates());
     }
 
     @Test

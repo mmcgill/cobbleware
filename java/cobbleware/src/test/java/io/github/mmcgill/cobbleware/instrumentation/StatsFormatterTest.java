@@ -30,7 +30,8 @@ class StatsFormatterTest {
         instrumentation.recordEvent(target, Event.EventCase.CHAT_MESSAGE, false);
         instrumentation.recordEventsPerSync(target, 4);
         instrumentation.recordEffect(target, Effect.EffectCase.SEND_CHAT, 500_000, true);
-        instrumentation.recordCobbleputerStates(Map.of(target, Instrumentation.LifecycleState.RUNNING));
+        instrumentation.recordCobbleputerStates(Map.of(
+                target, new Instrumentation.CobbleputerStateMeasurement(Instrumentation.LifecycleState.RUNNING, 3)));
         snapshot = instrumentation.snapshot();
     }
 

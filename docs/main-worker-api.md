@@ -105,14 +105,21 @@ enforced limits. Its initial response is JSON:
     "used": 2,
     "limit": 10
   },
+  "totalExecutionStateBytes": {
+    "used": 32768,
+    "limit": 1048576,
+    "updatedAt": "2026-09-26T16:22:14.123Z"
+  },
   "updatedAt": "2026-09-26T16:22:14.123Z"
 }
 ```
 
 `used` counts exactly the Player's loaded Cobbleputers whose executions are running; `limit` is the Mod's configured
-running-executions-per-player cap. `updatedAt` is when the Main Worker received the transition that supplied the
-snapshot. The operation returns `503` with a JSON `error` when no transition has reached the Main Worker for that
-Player, for example shortly after a Main Worker restart. Clients must show that state as unavailable rather than
+running-executions-per-player cap. `totalExecutionStateBytes.used` is the latest total of the Player's durable
+execution-state byte arrays from the Mod's execution-statistics census; its `limit` is the configured per-player
+state cap and its nested `updatedAt` identifies that census. `updatedAt` is when the Main Worker received the transition that supplied the
+snapshot. The operation returns `503` with a JSON `error` when no transition or state census has reached the Main
+Worker for that Player, for example shortly after a Main Worker restart. Clients must show that state as unavailable rather than
 assuming zero usage. It returns
 `401` for an invalid Player session and `405` with `Allow: GET` for another method.
 
@@ -585,7 +592,10 @@ that a result from an invocation cancelled by a re-sync cannot update a newer en
 uses the execution id as `StepRequest.execution_id` when it invokes the player program.
 
 `ExecutionResult.event_seq_num` is the last event consumed by the Runtime, and `final_state` is the
-state after that event. A failing event is consumed but leaves the state unchanged. The result's
+state after that event. Every `ExecutionState` supplies `state_size_limit`, the largest final state that may be
+returned for that execution snapshot. The Runtime passes that value to the Program and rejects a larger response
+before it reaches the Mod, returning a crashed result with the state-size-limit failure reason and the prior state.
+A failing event is consumed but leaves the state unchanged. The result's
 effects occupy the contiguous range beginning at `effect_seq_num`; they are all effects that have
 not been acknowledged by the request. When `effects` is empty, `effect_seq_num` is the next effect
 sequence number. A result for a newly created execution with no consumed events reports event

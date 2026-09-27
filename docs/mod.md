@@ -12,8 +12,11 @@ connection settings, it accepts these positive integer settings:
   retained for the in-memory instrumentation window.
 * `maxRunningExecutionsPerPlayer`, which defaults to 10 and caps the number of a player's loaded
   Cobbleputer executions that can be `RUNNING` across all dimensions. Existing configuration files
-  that omit either setting receive its default; zero, negative, fractional, or non-numeric values
+  that omit any setting receive its default; zero, negative, fractional, or non-numeric values
   make the configuration invalid.
+* `maxTotalExecutionStateBytesPerPlayer`, which defaults to 1,048,576 and caps the sum of all durable
+  execution-state byte arrays owned by one player. Stopped, crashed, and unloaded records count; protobuf
+  storage overhead, events, and effects do not.
 
 Starting or resuming an execution is rejected when it would exceed the running-execution cap. When a
 chunk falls below Minecraft's `BLOCK_TICKING` status, the Mod immediately removes a running execution
@@ -28,6 +31,13 @@ The Mod publishes each execution lifecycle transition to the Main Worker through
 publication connection. Every transition carries its owner's current running-execution usage and the configured cap,
 so the Browser UI can show a cached value and update it without polling. Publication is best-effort and happens only
 from normal server-tick processing; it does not alter the chunk-load persistence rule.
+
+For every execution-sync snapshot, the Mod supplies the Runtime with a per-execution `state_size_limit` equal to
+the space available after all of that owner's other durable states. The Runtime rejects a program response whose
+state exceeds that value before it reaches the Mod. The Mod still verifies each accepted final state against the full
+durable owner record set, because separately in-flight executions may each have been offered their own maximum. An
+over-limit state is discarded, the Cobbleputer crashes with its prior state retained, and `TotalExecutionStateSize`
+is published as a limit-exceeded log entry before the crash transition.
 
 ## Slash Commands
 

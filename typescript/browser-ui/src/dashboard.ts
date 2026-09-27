@@ -57,6 +57,8 @@ markBundledUi(document.documentElement);
     limitsRetryButton: document.querySelector('#limits-retry-button'),
     limitsRunningExecutionsProgress: document.querySelector('#limits-running-executions-progress'),
     limitsRunningExecutionsText: document.querySelector('#limits-running-executions-text'),
+    limitsTotalExecutionStateProgress: document.querySelector('#limits-total-execution-state-progress'),
+    limitsTotalExecutionStateText: document.querySelector('#limits-total-execution-state-text'),
     limitsUpdatedAt: document.querySelector('#limits-updated-at'),
   };
 
@@ -351,16 +353,26 @@ markBundledUi(document.documentElement);
     elements.limitsRunningExecutionsProgress.value = used;
     elements.limitsRunningExecutionsText.textContent =
       `${used.toLocaleString()} of ${limit.toLocaleString()} running executions`;
+    const stateBytes = limits.totalExecutionStateBytes;
+    elements.limitsTotalExecutionStateProgress.max = stateBytes.limit;
+    elements.limitsTotalExecutionStateProgress.value = stateBytes.used;
+    elements.limitsTotalExecutionStateText.textContent =
+      `${formatBytes(stateBytes.used)} of ${formatBytes(stateBytes.limit)} execution state`;
     elements.limitsUpdatedAt.textContent = formatDate(limits.updatedAt);
     elements.limitsUpdatedAt.title = limits.updatedAt;
   }
 
   function parseLimits(body) {
     const runningExecutions = body?.runningExecutions;
+    const totalExecutionStateBytes = body?.totalExecutionStateBytes;
     if (
       !runningExecutions || !Number.isInteger(runningExecutions.used) ||
       !Number.isInteger(runningExecutions.limit) || runningExecutions.used < 0 ||
       runningExecutions.limit <= 0 || runningExecutions.used > runningExecutions.limit ||
+      !totalExecutionStateBytes || !Number.isSafeInteger(totalExecutionStateBytes.used) ||
+      !Number.isSafeInteger(totalExecutionStateBytes.limit) || totalExecutionStateBytes.used < 0 ||
+      totalExecutionStateBytes.limit <= 0 ||
+      typeof totalExecutionStateBytes.updatedAt !== 'string' ||
       typeof body.updatedAt !== 'string'
     ) {
       throw makeError('The server returned invalid limit data.');
@@ -713,7 +725,9 @@ markBundledUi(document.documentElement);
           statsConnectionError(error.error, false);
           return;
         }
-        appendStatsTick(decodeExecutionStatsTick(new Uint8Array(event.data)));
+        const tick = decodeExecutionStatsTick(new Uint8Array(event.data));
+        appendStatsTick(tick);
+        updateLimitsFromStats(tick);
         statsLastReceivedAt = Date.now();
         renderStats();
         updateStatsStaleness();
@@ -830,14 +844,18 @@ markBundledUi(document.documentElement);
         };
       case 'limited': {
         const { reason, cpuTimeUsed, totalMemUsed } = entry.inner.value;
-        if (reason !== 'CPUTime' && reason !== 'Memory') throw new Error('invalid limit reason');
+        if (reason !== 'CPUTime' && reason !== 'Memory' && reason !== 'TotalExecutionStateSize') {
+          throw new Error('invalid limit reason');
+        }
         const details = [];
         if (cpuTimeUsed !== 0n) details.push(`CPU time used: ${formatNanos(cpuTimeUsed)}`);
         if (totalMemUsed !== 0n) details.push(`Memory used: ${formatStatBytes(totalMemUsed)}`);
         return {
           type: 'limited',
           typeLabel: 'Limit exceeded',
-          message: `${reason} limit exceeded.`,
+          message: reason === 'TotalExecutionStateSize'
+            ? 'Total execution-state size limit exceeded.'
+            : `${reason} limit exceeded.`,
           metadata: details.join('; '),
         };
       }
@@ -847,7 +865,9 @@ markBundledUi(document.documentElement);
           !isFieldSet(value, Internal.ExecutionTransitionLogEntrySchema.field.executionId) ||
           value.executionId === undefined || !Number.isInteger(value.executionCount) ||
           !Number.isInteger(value.executionLimit) || value.executionCount < 0 ||
-          value.executionLimit <= 0 || value.executionCount > value.executionLimit
+          value.executionLimit <= 0 || value.executionCount > value.executionLimit ||
+          value.totalExecutionStateLimit <= 0n ||
+          value.totalExecutionStateLimit > BigInt(Number.MAX_SAFE_INTEGER)
         ) {
           throw new Error('invalid execution transition');
         }
@@ -858,9 +878,11 @@ markBundledUi(document.documentElement);
             executionTransitionName(value.transition)
           }.`,
           metadata:
-            `${value.executionCount.toLocaleString()} of ${value.executionLimit.toLocaleString()} running executions`,
+            `${value.executionCount.toLocaleString()} of ${value.executionLimit.toLocaleString()} running executions; ` +
+            `${formatStatBytes(value.totalExecutionStateLimit)} total execution-state limit`,
           executionCount: value.executionCount,
           executionLimit: value.executionLimit,
+          totalExecutionStateLimit: Number(value.totalExecutionStateLimit),
         };
       }
       default:
@@ -911,6 +933,11 @@ markBundledUi(document.documentElement);
     limitsGeneration += 1;
     limits = {
       runningExecutions: { used: entry.executionCount, limit: entry.executionLimit },
+      totalExecutionStateBytes: {
+        used: limits?.totalExecutionStateBytes.used ?? 0,
+        limit: entry.totalExecutionStateLimit,
+        updatedAt: limits?.totalExecutionStateBytes.updatedAt ?? new Date().toISOString(),
+      },
       updatedAt: new Date().toISOString(),
     };
     elements.limitsRetryButton.hidden = true;
@@ -933,6 +960,10 @@ markBundledUi(document.documentElement);
     const events = (playerFields.get(2) || []).map(decodeEventMeasurement);
     const syncs = (playerFields.get(3) || []).map(decodeEventsPerSyncMeasurement);
     const effects = (playerFields.get(4) || []).map(decodeEffectMeasurement);
+    const stateBytes = (playerFields.get(5) || []).reduce(
+      (total, bytes) => total + decodeCobbleputerState(bytes),
+      0n,
+    );
     const usedBytes = protoVarint(playerFields, 6);
     const maxBytes = protoVarint(playerFields, 7);
     return {
@@ -943,8 +974,15 @@ markBundledUi(document.documentElement);
       effects,
       usedBytes,
       maxBytes,
+      stateBytes,
       graph: summarizeStatsTickGraph(events, effects),
     };
+  }
+
+  function decodeCobbleputerState(bytes) {
+    const fields = readProtoFields(bytes);
+    requiredMessage(fields, 1);
+    return protoVarint(fields, 3);
   }
 
   function decodeEventMeasurement(bytes) {
@@ -1005,6 +1043,13 @@ markBundledUi(document.documentElement);
     if (last !== undefined && tick.sequence > last.sequence + 1n) statsGapObserved = true;
     statsTicks.push(tick);
     if (statsTicks.length > STATS_RETENTION_TICKS) statsTicks.shift();
+  }
+
+  function updateLimitsFromStats(tick) {
+    if (limits === null || tick.stateBytes > BigInt(Number.MAX_SAFE_INTEGER)) return;
+    limits.totalExecutionStateBytes.used = Number(tick.stateBytes);
+    limits.totalExecutionStateBytes.updatedAt = new Date(Number(tick.sampledAt)).toISOString();
+    renderLimits();
   }
 
   function summarizeStatsTickGraph(events, effects) {

@@ -152,6 +152,54 @@ public final class ExecutionStateStore implements AutoCloseable {
         }
     }
 
+    /**
+     * Returns the largest state byte length this Cobbleputer may next store without exceeding its owner's cap.
+     * The result treats this Cobbleputer's current record as replaceable and all other durable records as fixed.
+     */
+    public synchronized long stateSizeLimit(UUID owner, UUID cobbleputerId, long ownerLimit) {
+        if (owner == null || cobbleputerId == null || ownerLimit < 0) {
+            throw new IllegalArgumentException("owner, Cobbleputer id, and non-negative limit are required");
+        }
+        PlayerState player = load(owner);
+        if (player == null) {
+            return 0;
+        }
+        long otherBytes = 0;
+        for (Map.Entry<UUID, ExecutionRecord> entry : player.records.entrySet()) {
+            if (entry.getKey().equals(cobbleputerId)) {
+                continue;
+            }
+            int length = entry.getValue().executionState().length;
+            if (Long.MAX_VALUE - otherBytes < length) {
+                return 0;
+            }
+            otherBytes += length;
+        }
+        return otherBytes >= ownerLimit ? 0 : ownerLimit - otherBytes;
+    }
+
+    /** Returns whether replacing one durable record's state with {@code candidate} fits the owner's cap. */
+    public synchronized boolean fitsStateUpdate(UUID owner, UUID cobbleputerId, byte[] candidate, long ownerLimit) {
+        if (candidate == null) {
+            throw new IllegalArgumentException("candidate state must not be null");
+        }
+        return candidate.length <= stateSizeLimit(owner, cobbleputerId, ownerLimit);
+    }
+
+    /** Returns a read-only census of every durable execution-state byte length, grouped by owner. */
+    public synchronized Map<UUID, Map<UUID, Long>> stateSizeCensus() {
+        Map<UUID, Map<UUID, Long>> census = new HashMap<>();
+        for (Map.Entry<UUID, PlayerState> player : players.entrySet()) {
+            Map<UUID, Long> records = new HashMap<>();
+            for (Map.Entry<UUID, ExecutionRecord> record :
+                    player.getValue().records.entrySet()) {
+                records.put(record.getKey(), (long) record.getValue().executionState().length);
+            }
+            census.put(player.getKey(), Map.copyOf(records));
+        }
+        return Map.copyOf(census);
+    }
+
     /** Queues asynchronous writes of each changed owner file before Minecraft saves its worlds. */
     public synchronized void beforeSave() {
         if (closing) {

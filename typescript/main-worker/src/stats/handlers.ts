@@ -14,6 +14,11 @@ export type ExecutionStatsHubOptions = {
   memoryStats?: MemoryStatsProvider;
 };
 
+export type ExecutionStateBytesSnapshot = {
+  used: bigint;
+  updatedAt: string;
+};
+
 /** Retains the latest non-durable raw tick per player and the one permitted player stream. */
 export class ExecutionStatsHub {
   private readonly reports = new Map<string, Internal.ExecutionStatsTick>();
@@ -90,6 +95,18 @@ export class ExecutionStatsHub {
     } catch {
       // The closed socket has already released its stream slot.
     }
+  }
+
+  /** Returns the latest player-scoped durable execution-state total from the Mod census. */
+  executionStateBytes(playerId: string): ExecutionStateBytesSnapshot | undefined {
+    const report = this.reports.get(playerId);
+    const player = report?.players[0];
+    if (player === undefined) return undefined;
+    let used = 0n;
+    for (const state of player.cobbleputerStates) {
+      used += state.stateSizeBytes;
+    }
+    return { used, updatedAt: new Date().toISOString() };
   }
 
   private enqueueModReport(socket: WebSocket, generation: number, data: ArrayBuffer): void {
@@ -332,12 +349,19 @@ function validatePlayer(player: Internal.ExecutionStatsTick_PlayerStats): void {
   }
   const states = new Set<string>();
   for (const metric of player.cobbleputerStates) {
-    const key = cobbleputerKey(metric.cobbleputer);
+    const key = cobbleputerStateKey(metric.cobbleputer);
     if (!validLifecycleState(metric.state) || states.has(key)) {
       throw new Error('Cobbleputer states must have unique valid Cobbleputers');
     }
     states.add(key);
   }
+}
+
+function cobbleputerStateKey(value: Internal.ExecutionStatsTick_CobbleputerRef | undefined): string {
+  if (value?.cobbleputerId === undefined) {
+    throw new Error('Cobbleputer state must contain a Cobbleputer id');
+  }
+  return uuidString(value.cobbleputerId);
 }
 
 function cobbleputerKey(value: Internal.ExecutionStatsTick_CobbleputerRef | undefined): string {

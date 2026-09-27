@@ -26,6 +26,8 @@ message StepRequest {
   cobbleware.events.Event event = 3;
   // The maximum number of effects the Runtime will accept from this step.
   uint32 effect_limit = 4;
+  // The maximum size in bytes the Runtime will accept for the next execution state.
+  uint64 state_size_limit = 5;
 }
 
 message StepResponse {

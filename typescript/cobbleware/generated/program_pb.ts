@@ -16,7 +16,7 @@ import type { Message } from "@bufbuild/protobuf";
  * Describes the file program.proto.
  */
 export const file_program: GenFile = /*@__PURE__*/
-  fileDesc("Cg1wcm9ncmFtLnByb3RvEhJjb2JibGV3YXJlLnByb2dyYW0iLwoKU3RhcnRTdGF0ZRISCgpzdGF0ZV9uYW1lGAEgASgJEg0KBXN0YXRlGAIgASgMIksKE1N0YXJ0U3RhdGVzUmVzcG9uc2USNAoMc3RhcnRfc3RhdGVzGAEgAygLMh4uY29iYmxld2FyZS5wcm9ncmFtLlN0YXJ0U3RhdGUiigEKC1N0ZXBSZXF1ZXN0Ei0KDGV4ZWN1dGlvbl9pZBgBIAEoCzIXLmNvYmJsZXdhcmUuY29tbW9uLlV1aWQSDQoFc3RhdGUYAiABKAwSJwoFZXZlbnQYAyABKAsyGC5jb2JibGV3YXJlLmV2ZW50cy5FdmVudBIUCgxlZmZlY3RfbGltaXQYBCABKA0iSgoMU3RlcFJlc3BvbnNlEg0KBXN0YXRlGAEgASgMEisKB2VmZmVjdHMYAiADKAsyGi5jb2JibGV3YXJlLmVmZmVjdHMuRWZmZWN0Ih4KDUVycm9yUmVzcG9uc2USDQoFZXJyb3IYASABKAliCGVkaXRpb25zcOkH", [file_common, file_effects, file_events]);
+  fileDesc("Cg1wcm9ncmFtLnByb3RvEhJjb2JibGV3YXJlLnByb2dyYW0iLwoKU3RhcnRTdGF0ZRISCgpzdGF0ZV9uYW1lGAEgASgJEg0KBXN0YXRlGAIgASgMIksKE1N0YXJ0U3RhdGVzUmVzcG9uc2USNAoMc3RhcnRfc3RhdGVzGAEgAygLMh4uY29iYmxld2FyZS5wcm9ncmFtLlN0YXJ0U3RhdGUipAEKC1N0ZXBSZXF1ZXN0Ei0KDGV4ZWN1dGlvbl9pZBgBIAEoCzIXLmNvYmJsZXdhcmUuY29tbW9uLlV1aWQSDQoFc3RhdGUYAiABKAwSJwoFZXZlbnQYAyABKAsyGC5jb2JibGV3YXJlLmV2ZW50cy5FdmVudBIUCgxlZmZlY3RfbGltaXQYBCABKA0SGAoQc3RhdGVfc2l6ZV9saW1pdBgFIAEoBCJKCgxTdGVwUmVzcG9uc2USDQoFc3RhdGUYASABKAwSKwoHZWZmZWN0cxgCIAMoCzIaLmNvYmJsZXdhcmUuZWZmZWN0cy5FZmZlY3QiHgoNRXJyb3JSZXNwb25zZRINCgVlcnJvchgBIAEoCWIIZWRpdGlvbnNw6Qc", [file_common, file_effects, file_events]);
 
 /**
  * @generated from message cobbleware.program.StartState
@@ -92,6 +92,13 @@ export type StepRequest = Message<"cobbleware.program.StepRequest"> & {
    * @generated from field: uint32 effect_limit = 4;
    */
   effectLimit: number;
+
+  /**
+   * The maximum size in bytes the Runtime will accept for the next execution state.
+   *
+   * @generated from field: uint64 state_size_limit = 5;
+   */
+  stateSizeLimit: bigint;
 };
 
 /**

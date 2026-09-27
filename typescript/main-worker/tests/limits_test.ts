@@ -10,12 +10,14 @@ Deno.test('Player limits endpoint returns the cached running-execution snapshot'
     new Request('http://localhost/playerapi/v1/limits'),
     'player-a',
     logs,
+    stats(42n),
   );
 
   assertEquals(response.status, 200, 'cached limits should be available');
   const body = await response.json();
   assertEquals(body, {
     runningExecutions: { used: 2, limit: 10 },
+    totalExecutionStateBytes: { used: 42, limit: 1024, updatedAt: body.totalExecutionStateBytes.updatedAt },
     updatedAt: body.updatedAt,
   }, 'limits response should preserve the authoritative snapshot');
 });
@@ -25,6 +27,7 @@ Deno.test('Player limits endpoint reports unavailable until a snapshot arrives',
     new Request('http://localhost/playerapi/v1/limits'),
     'player-a',
     new ExecutionLogHub(),
+    stats(0n),
   );
   assertEquals(unavailable.status, 503, 'missing snapshot should not be represented as zero usage');
 
@@ -32,6 +35,7 @@ Deno.test('Player limits endpoint reports unavailable until a snapshot arrives',
     new Request('http://localhost/playerapi/v1/limits', { method: 'POST' }),
     'player-a',
     new ExecutionLogHub(),
+    stats(0n),
   );
   assertEquals(method.status, 405, 'limits only supports GET');
   assertEquals(method.headers.get('allow'), 'GET', 'limits advertises GET');
@@ -62,7 +66,12 @@ function transition(
     transition: Internal.ExecutionTransition.STARTED,
     executionCount,
     executionLimit,
+    totalExecutionStateLimit: 1024n,
   });
+}
+
+function stats(used: bigint) {
+  return { executionStateBytes: () => ({ used, updatedAt: new Date().toISOString() }) } as never;
 }
 
 function assertEquals<T>(actual: T, expected: T, message: string): void {

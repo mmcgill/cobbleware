@@ -47,6 +47,7 @@ The Fabric Mod currently creates `config/cobbleware.json` on first start.
 | `mainWorkerApiKey` | Empty string | Required string shared with the Main Worker's `COBBLEWARE_API_KEY`. An empty value disables Mod requests to the Main Worker until configured. |
 | `mainWorkerUrl` | `http://localhost:9000` | Required absolute HTTP or HTTPS Main Worker base URL, without credentials, query, or fragment. A path is allowed. |
 | `maxRunningExecutionsPerPlayer` | `10` | Positive integer cap on each player's block-ticking `RUNNING` Cobbleputer executions across all dimensions. Starting or resuming beyond it is rejected; a running execution is stopped when its chunk stops block ticking and resumes when it starts block ticking again only when capacity permits. Existing configuration files may omit it. |
+| `maxTotalExecutionStateBytesPerPlayer` | `1048576` | Positive integer cap, in bytes, on all durable Cobbleputer execution-state arrays owned by one player. Running, stopped, crashed, and unloaded executions count; events, effects, and protobuf/file overhead do not. The Mod derives a per-execution state-size allowance for each Runtime sync, and discards/crashes an execution whose returned state would exceed the authoritative total. Existing configuration files may omit it. |
 
 Until Mod development progress farther, the following is aspirational rather than descriptive.
 
@@ -61,7 +62,6 @@ The Mod will provide server admins with the following configuration options:
 * A per-player limit on bytes sent over the network.
 * A per-player limit on bytes received over the network.
 * A per-player limit on the total size (in bytes) available for program storage, across all programs.
-* A per-Cobbleputer limit on runtime state size.
 
 
 ## Development

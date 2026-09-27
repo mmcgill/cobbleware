@@ -10,6 +10,7 @@ import cobbleware.events.Resumed;
 import cobbleware.events.Started;
 import cobbleware.events.WirelessObserverPaired;
 import cobbleware.events.WirelessObserverUnpaired;
+import cobbleware.internal.ExecutionFailureReason;
 import cobbleware.internal.ExecutionResult;
 import cobbleware.internal.ExecutionState;
 import cobbleware.internal.ExecutionStatus;
@@ -78,6 +79,7 @@ public final class ExecutionDriver {
     private final MainWorkerClient mainWorkerClient;
     private final Instrumentation instrumentation;
     private final int maxRunningExecutionsPerPlayer;
+    private final long maxTotalExecutionStateBytesPerPlayer;
     private final Logger logger;
     private final Map<CobbleputerBlockEntity, EphemeralCobbleputerState> loadedCobbleputers = new IdentityHashMap<>();
     private final Set<WirelessObserverBlockEntity> pendingObserverInitializations =
@@ -99,17 +101,20 @@ public final class ExecutionDriver {
             MainWorkerClient mainWorkerClient,
             Instrumentation instrumentation,
             int maxRunningExecutionsPerPlayer,
+            long maxTotalExecutionStateBytesPerPlayer,
             Logger logger) {
         if (mainWorkerClient == null
                 || instrumentation == null
                 || logger == null
-                || maxRunningExecutionsPerPlayer <= 0) {
+                || maxRunningExecutionsPerPlayer <= 0
+                || maxTotalExecutionStateBytesPerPlayer <= 0) {
             throw new IllegalArgumentException(
-                    "ExecutionDriver dependencies must not be null and running-execution limit must be positive");
+                    "ExecutionDriver dependencies must not be null and execution limits must be positive");
         }
         this.mainWorkerClient = mainWorkerClient;
         this.instrumentation = instrumentation;
         this.maxRunningExecutionsPerPlayer = maxRunningExecutionsPerPlayer;
+        this.maxTotalExecutionStateBytesPerPlayer = maxTotalExecutionStateBytesPerPlayer;
         this.logger = logger;
         ServerTickEvents.END_SERVER_TICK.register(this::tick);
         ServerMessageEvents.CHAT_MESSAGE.register(
@@ -535,6 +540,17 @@ public final class ExecutionDriver {
         return maxRunningExecutionsPerPlayer;
     }
 
+    private long stateSizeLimit(UUID owner, UUID cobbleputerId) {
+        ExecutionStateStore store = CobblewareMod.executionStateStoreOrNull();
+        return store == null ? 0 : store.stateSizeLimit(owner, cobbleputerId, maxTotalExecutionStateBytesPerPlayer);
+    }
+
+    private boolean fitsStateUpdate(UUID owner, UUID cobbleputerId, byte[] candidate) {
+        ExecutionStateStore store = CobblewareMod.executionStateStoreOrNull();
+        return store != null
+                && store.fitsStateUpdate(owner, cobbleputerId, candidate, maxTotalExecutionStateBytesPerPlayer);
+    }
+
     private boolean hasRunningExecutionCapacity(UUID owner) {
         return runningExecutionCount(owner, Collections.emptySet()) < maxRunningExecutionsPerPlayer;
     }
@@ -720,6 +736,7 @@ public final class ExecutionDriver {
                     .setEventSeqNum(firstEventSequence)
                     .setEffectSeqNum(blockEntity.effectSequenceNum())
                     .setState(status)
+                    .setStateSizeLimit(stateSizeLimit(ownerId, blockEntity.cobbleputerId()))
                     .build());
             offered.put(
                     uuidKey(executionId),
@@ -791,12 +808,26 @@ public final class ExecutionDriver {
             active.events.clear();
             UUID owner = offered.blockEntity.ownerPlayerId().orElseThrow();
             UUID executionId = offered.blockEntity.executionId().orElseThrow();
+            if (result.getFailureReason() == ExecutionFailureReason.EXECUTION_FAILURE_REASON_STATE_SIZE_LIMIT) {
+                mainWorkerClient.reportLimitExceeded(owner, executionId, "TotalExecutionStateSize");
+            }
             offered.blockEntity.crashExecution();
             updateVisibleState(offered.blockEntity, CobbleputerState.CRASHED);
             reportExecutionTransition(owner, executionId, ExecutionTransition.EXECUTION_TRANSITION_CRASHED);
             return;
         }
-        offered.blockEntity.updateExecutionState(result.getFinalState().toByteArray());
+        byte[] finalState = result.getFinalState().toByteArray();
+        UUID owner = offered.blockEntity.ownerPlayerId().orElseThrow();
+        UUID executionId = offered.blockEntity.executionId().orElseThrow();
+        if (!fitsStateUpdate(owner, offered.blockEntity.cobbleputerId(), finalState)) {
+            active.events.clear();
+            mainWorkerClient.reportLimitExceeded(owner, executionId, "TotalExecutionStateSize");
+            offered.blockEntity.crashExecution();
+            updateVisibleState(offered.blockEntity, CobbleputerState.CRASHED);
+            reportExecutionTransition(owner, executionId, ExecutionTransition.EXECUTION_TRANSITION_CRASHED);
+            return;
+        }
+        offered.blockEntity.updateExecutionState(finalState);
         CobbleputerState previousState = offered.blockEntity.getBlockState().getValue(CobbleputerBlock.STATE);
         CobbleputerState nextState = status == ExecutionStatus.EXECUTION_STATUS_RUNNING
                 ? CobbleputerState.RUNNING
@@ -1071,7 +1102,7 @@ public final class ExecutionDriver {
     }
 
     private void recordCobbleputerStateGauge() {
-        Map<Instrumentation.PlayerCobbleputerKey, Instrumentation.LifecycleState> states = new HashMap<>();
+        Map<Instrumentation.PlayerCobbleputerKey, Instrumentation.CobbleputerStateMeasurement> states = new HashMap<>();
         for (CobbleputerBlockEntity blockEntity : loadedCobbleputers.keySet()) {
             Instrumentation.LifecycleState lifecycle =
                     switch (blockEntity.getBlockState().getValue(CobbleputerBlock.STATE)) {
@@ -1082,15 +1113,24 @@ public final class ExecutionDriver {
             if (lifecycle == null) {
                 continue;
             }
-            instrumentationKey(blockEntity).ifPresent(key -> states.put(key, lifecycle));
+            long stateSize = blockEntity
+                    .executionState()
+                    .map(state -> (long) state.length)
+                    .orElse(0L);
+            instrumentationKey(blockEntity)
+                    .ifPresent(key ->
+                            states.put(key, new Instrumentation.CobbleputerStateMeasurement(lifecycle, stateSize)));
         }
         instrumentation.recordCobbleputerStates(states);
     }
 
     private void recordCobbleputerStateGaugeAndStream(MinecraftServer server) {
         recordCobbleputerStateGauge();
-        mainWorkerClient.reportExecutionStats(
-                ExecutionStatsReporter.report(instrumentation.currentTickSnapshot(), System.currentTimeMillis()));
+        ExecutionStateStore store = CobblewareMod.executionStateStoreOrNull();
+        mainWorkerClient.reportExecutionStats(ExecutionStatsReporter.report(
+                instrumentation.currentTickSnapshot(),
+                System.currentTimeMillis(),
+                store == null ? Map.of() : store.stateSizeCensus()));
     }
 
     private void reportExecutionTransition(CobbleputerBlockEntity blockEntity, ExecutionTransition transition) {
@@ -1106,7 +1146,8 @@ public final class ExecutionDriver {
                 executionId,
                 transition,
                 runningExecutionCount(owner, Collections.emptySet()),
-                maxRunningExecutionsPerPlayer);
+                maxRunningExecutionsPerPlayer,
+                maxTotalExecutionStateBytesPerPlayer);
     }
 
     private static String ownerName(CobbleputerBlockEntity blockEntity, UUID ownerId) {

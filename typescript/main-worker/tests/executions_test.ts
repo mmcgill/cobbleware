@@ -55,6 +55,7 @@ function execution(
     eventSeqNum: bigint;
     effectSeqNum: bigint;
     state: Internal.ExecutionStatus;
+    stateSizeLimit: bigint;
   }> = {},
 ): Internal.ExecutionState {
   return create(Internal.ExecutionStateSchema, {
@@ -65,6 +66,7 @@ function execution(
     eventSeqNum: options.eventSeqNum ?? 1n,
     effectSeqNum: options.effectSeqNum ?? 0n,
     state: options.state ?? Internal.ExecutionStatus.RUNNING,
+    stateSizeLimit: options.stateSizeLimit ?? 1024n,
   });
 }
 
@@ -289,6 +291,27 @@ Deno.test('Execution sync crashes an execution when the program response is inva
       'state should not change',
     );
     assertEquals(calls, 1, 'crashed execution should not dispatch more events');
+  } finally {
+    await app.cleanup();
+  }
+});
+
+Deno.test('Execution sync rejects an oversized final state before it reaches the Mod', async () => {
+  const app = await createTestApp(() => Promise.resolve(stepResponse(new Uint8Array([1, 2, 3]))));
+  const initial = execution({ initialState: new Uint8Array([4]), stateSizeLimit: 2n });
+  try {
+    await decodeResponse(await app.handler(request([initial])));
+    await flushTasks();
+    const response = await decodeResponse(await app.handler(request([initial])));
+    const result = response.results[0]!;
+    assertEquals(result.state, Internal.ExecutionStatus.CRASHED, 'oversized state should crash');
+    assertEquals(
+      result.failureReason,
+      Internal.ExecutionFailureReason.STATE_SIZE_LIMIT,
+      'crash should identify the state-size limit',
+    );
+    assertEquals(JSON.stringify([...result.finalState]), JSON.stringify([4]), 'old state should remain');
+    assertEquals(result.effects.length, 0, 'oversized response effects should be discarded');
   } finally {
     await app.cleanup();
   }

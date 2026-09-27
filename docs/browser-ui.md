@@ -64,9 +64,9 @@ has independent connection status and retry handling; the documented already-ope
 without retrying automatically. Each feed row records the client-side time at which the Browser received that event.
 
 Limits is a third tab in that section. On page load it reads `/playerapi/v1/limits`, then shows the current loaded,
-running execution count against the enforced running-executions-per-player cap and the snapshot update time. While the
-page is open, each visible execution-transition log entry carries the new running-execution count and limit; the UI
-updates its Limits display directly from that entry rather than polling or issuing another limits read. Limits has
+running execution count and total durable execution-state bytes against their enforced per-player caps and the snapshot
+update time. While the page is open, each visible execution-transition log entry carries the running-execution and
+state-byte caps, while execution-statistics ticks refresh the state-byte usage; the UI does not poll. Limits has
 independent unavailable/error and retry handling. A snapshot unavailable after a Main Worker restart or a temporary
 Mod connection failure is shown as unavailable, not as zero usage.
 

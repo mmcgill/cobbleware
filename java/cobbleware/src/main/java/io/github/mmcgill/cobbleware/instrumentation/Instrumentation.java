@@ -80,7 +80,7 @@ public final class Instrumentation {
     }
 
     /** Replaces the current tick's per-Cobbleputer lifecycle-state gauge. */
-    public synchronized void recordCobbleputerStates(Map<PlayerCobbleputerKey, LifecycleState> states) {
+    public synchronized void recordCobbleputerStates(Map<PlayerCobbleputerKey, CobbleputerStateMeasurement> states) {
         if (states == null
                 || states.entrySet().stream().anyMatch(entry -> entry.getKey() == null || entry.getValue() == null)) {
             throw new IllegalArgumentException("Cobbleputer state gauge must contain keyed lifecycle states");
@@ -176,6 +176,15 @@ public final class Instrumentation {
     public enum LifecycleState {
         RUNNING,
         STOPPED
+    }
+
+    /** Instantaneous lifecycle and durable state size for one Cobbleputer. */
+    public record CobbleputerStateMeasurement(LifecycleState state, long stateSizeBytes) {
+        public CobbleputerStateMeasurement {
+            if (state == null || stateSizeBytes < 0) {
+                throw new IllegalArgumentException("Cobbleputer state measurement must be valid");
+            }
+        }
     }
 
     /** Identifies a physical Cobbleputer without retaining a world or block-entity object. */
@@ -320,7 +329,7 @@ public final class Instrumentation {
             Map<EventMetricKey, EventCounts> events,
             Map<PlayerCobbleputerKey, EventSyncSummary> eventsPerSync,
             Map<EffectMetricKey, EffectCounts> effects,
-            Map<PlayerCobbleputerKey, LifecycleState> cobbleputerStates) {
+            Map<PlayerCobbleputerKey, CobbleputerStateMeasurement> cobbleputerStates) {
         public Snapshot {
             syncOutcomes = Map.copyOf(syncOutcomes);
             events = Map.copyOf(events);
@@ -336,7 +345,7 @@ public final class Instrumentation {
             Map<EventMetricKey, EventCounts> events,
             Map<PlayerCobbleputerKey, EventSyncSummary> eventsPerSync,
             Map<EffectMetricKey, EffectCounts> effects,
-            Map<PlayerCobbleputerKey, LifecycleState> cobbleputerStates) {
+            Map<PlayerCobbleputerKey, CobbleputerStateMeasurement> cobbleputerStates) {
         public TickSnapshot {
             events = Map.copyOf(events);
             eventsPerSync = Map.copyOf(eventsPerSync);
@@ -356,7 +365,7 @@ public final class Instrumentation {
         private final Map<EventMetricKey, EventCounts> events = new HashMap<>();
         private final Map<PlayerCobbleputerKey, EventSyncSummary> eventsPerSync = new HashMap<>();
         private final Map<EffectMetricKey, EffectCounts> effects = new HashMap<>();
-        private Map<PlayerCobbleputerKey, LifecycleState> states = Map.of();
+        private Map<PlayerCobbleputerKey, CobbleputerStateMeasurement> states = Map.of();
 
         private void reset(long nextTick) {
             tick = nextTick;
