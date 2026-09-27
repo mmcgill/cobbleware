@@ -64,6 +64,29 @@ message ExecutionsResponse {
   repeated ExecutionResult results = 1;
 }
 
+// Durable execution records for one player. This message is stored only by the
+// Mod in cobbleware-data/executions/<player-uuid>.pb; it is not part of the
+// Mod/Main Worker execution-sync protocol.
+message PlayerExecutionStates {
+  // Version of this file format. Required by the application contract.
+  uint32 format_version = 1;
+  repeated StoredExecutionState executions = 2;
+}
+
+// One Cobbleputer's durable execution record in a PlayerExecutionStates file.
+message StoredExecutionState {
+  // Identifies the physical Cobbleputer. Required by the application contract.
+  cobbleware.common.Uuid cobbleputer_id = 1;
+  // Absent for a crashed execution, which retains its owner and state for restart.
+  cobbleware.common.Uuid execution_id = 2;
+  string owner_player_name = 3;
+  bytes execution_state = 4;
+  uint64 next_event_sequence_num = 5;
+  uint64 effect_sequence_num = 6;
+  uint64 stopped_at_tick = 7;
+  bool was_running_when_unloaded = 8;
+}
+
 // The types of events recorded by execution instrumentation.
 enum InstrumentationEventType {
   INSTRUMENTATION_EVENT_TYPE_UNSPECIFIED = 0;

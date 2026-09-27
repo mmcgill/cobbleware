@@ -88,24 +88,19 @@ A placed Cobbleputer block has an associated block entity that stores:
 * Cobbleputer ID: a UUID generated when the block entity is created and durable
   until that block is broken. It identifies the physical Cobbleputer for
   instrumentation and administrative commands, independently of executions.
-* execution ID: `null` when the block state is `UNINITIALIZED` or `CRASHED`, and reset to a fresh UUID
-  whenever a program is started or a crashed Cobbleputer is restarted; not reset when a `STOPPED`
-  Cobbleputer is resumed.
-* owner player ID: `null` when the block state is `UNINITIALIZED`; otherwise the ID of the Player whose
-  active program owns the execution or, for a `CRASHED` Cobbleputer, the execution that can restart it.
-* owner player name: `null` when the block state is `UNINITIALIZED`; otherwise the name
-  captured when the execution starts, which permits offline execution owners to
-  be selected by the instrumentation command.
-* event sequence num: a `long` holding the next event sequence number. It starts at 1 and increments
-  after each event is enqueued.
-* effect sequence num: a `long` that starts at 0 and advances for each effect processed.
-* state: `null` when the block state is `UNINITIALIZED`, otherwise a byte array holding the current
-  execution state. A crashed Cobbleputer retains the state before its failing event.
-* stopped-at tick: `null` unless the Cobbleputer is `STOPPED`; when present, the game tick at
-  which it was stopped, used to populate the next `Resumed` event.
-* was-running-when-unloaded: whether a `STOPPED` Cobbleputer should receive one automatic resume
-  attempt after its chunk becomes block-ticking again. A persisted `RUNNING` state is also always treated
-  as a pending automatic resume.
+* owner player ID: `null` when the block state is `UNINITIALIZED`; otherwise a locator for the Player's
+  external execution-state file. It permits chunk loading to locate the record without scanning every Player file.
+
+The durable execution record is stored in `cobbleware-data/executions/<player-uuid>.pb` in the world directory,
+one protobuf file per Player. The file carries a Mod-defined format version and the record's execution ID, owner name,
+sequence counters, state bytes, stopped-at tick, and pending automatic-resume intent. The execution ID is `null` when
+the block state is `UNINITIALIZED` or `CRASHED`, and reset to a fresh UUID whenever a program is started or a crashed
+Cobbleputer is restarted; it is not reset when a `STOPPED` Cobbleputer is resumed. A crashed Cobbleputer retains its
+owner and state before the failing event so it can restart.
+
+The Mod writes every Player file by forcing a complete same-directory temporary file and atomically replacing the
+previous file. It queues dirty files asynchronously before each world save and synchronously flushes all loaded Player
+files during server stopping. Pending events and received effects remain in-memory and best-effort.
 
 Breaking the Cobbleputer block destroys the block entity; effectively terminating the execution.
 It also immediately unpairs every loaded Wireless Observer paired to that Cobbleputer. Unloaded
@@ -142,7 +137,7 @@ At most once per tick (via `ServerTickEvents.END_SERVER_TICK`), the `ExecutionDr
 * If there is a response to a previously issued `/modapi/v1/executions` request:
   * Apply all effects in the response.
   * Pop all events from queues whose event sequence numbers are less than or equal to the `event_seq_num` in the response.
-  * Update active Cobbleputer block entities with new states/sequence numbers.
+* Update active Cobbleputer execution records with new states/sequence numbers.
     * If a Cobbleputer block entity goes inactive before in-flight events are processed, the resulting state is discarded.
 * Construct and send a new `/modapi/v1/executions` request.
   * Include up to `MAX_OFFERED_EVENTS_PER_EXECUTION` events for each active Cobbleputer.

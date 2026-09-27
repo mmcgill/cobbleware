@@ -118,6 +118,10 @@ public final class ExecutionDriver {
 
     /** Adds a loaded Cobbleputer to the driver's loaded set. */
     public void activate(CobbleputerBlockEntity blockEntity) {
+        ExecutionStateStore executionStateStore = CobblewareMod.executionStateStoreOrNull();
+        if (executionStateStore != null) {
+            executionStateStore.attach(blockEntity);
+        }
         pendingChunkNonTickingTransitions.remove(blockEntity);
         boolean newlyLoaded = loadedCobbleputers.putIfAbsent(blockEntity, new EphemeralCobbleputerState()) == null;
         if (newlyLoaded) {
