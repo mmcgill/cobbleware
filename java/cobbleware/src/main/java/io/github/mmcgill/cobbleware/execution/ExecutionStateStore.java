@@ -25,7 +25,7 @@ import net.minecraft.world.level.storage.LevelResource;
 import org.slf4j.Logger;
 
 /** Stores durable Cobbleputer execution records in one atomic-replacement file per owner. */
-public final class ExecutionStateStore implements AutoCloseable {
+public final class ExecutionStateStore implements AutoCloseable, ExecutionStateAccess {
     public static final int CURRENT_EXECUTION_STATE_FORMAT_VERSION = 1;
 
     private final Logger logger;

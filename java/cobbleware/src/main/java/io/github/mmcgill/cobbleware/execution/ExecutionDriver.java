@@ -130,7 +130,7 @@ public final class ExecutionDriver {
     }
 
     private final MainWorker mainWorker;
-    private final ExecutionStateStore executionStateStore;
+    private final ExecutionStateAccess executionStateAccess;
     private final Instrumentation instrumentation;
     private final int maxRunningExecutionsPerPlayer;
     private final long maxTotalExecutionStateBytesPerPlayer;
@@ -152,13 +152,13 @@ public final class ExecutionDriver {
 
     public ExecutionDriver(
             MainWorker mainWorker,
-            ExecutionStateStore executionStateStore,
+            ExecutionStateAccess executionStateAccess,
             Instrumentation instrumentation,
             int maxRunningExecutionsPerPlayer,
             long maxTotalExecutionStateBytesPerPlayer,
             Logger logger) {
         if (mainWorker == null
-                || executionStateStore == null
+                || executionStateAccess == null
                 || instrumentation == null
                 || logger == null
                 || maxRunningExecutionsPerPlayer <= 0
@@ -167,7 +167,7 @@ public final class ExecutionDriver {
                     "ExecutionDriver dependencies must not be null and execution limits must be positive");
         }
         this.mainWorker = mainWorker;
-        this.executionStateStore = executionStateStore;
+        this.executionStateAccess = executionStateAccess;
         this.instrumentation = instrumentation;
         this.maxRunningExecutionsPerPlayer = maxRunningExecutionsPerPlayer;
         this.maxTotalExecutionStateBytesPerPlayer = maxTotalExecutionStateBytesPerPlayer;
@@ -176,7 +176,7 @@ public final class ExecutionDriver {
 
     /** Adds a loaded Cobbleputer to the driver's loaded set. */
     public void activate(CobbleputerBlockEntity blockEntity) {
-        executionStateStore.attach(blockEntity);
+        executionStateAccess.attach(blockEntity);
         pendingChunkNonTickingTransitions.remove(blockEntity);
         boolean newlyLoaded = loadedCobbleputers.putIfAbsent(blockEntity, new EphemeralCobbleputerState()) == null;
         if (newlyLoaded) {
@@ -594,11 +594,11 @@ public final class ExecutionDriver {
     }
 
     private long stateSizeLimit(UUID owner, UUID cobbleputerId) {
-        return executionStateStore.stateSizeLimit(owner, cobbleputerId, maxTotalExecutionStateBytesPerPlayer);
+        return executionStateAccess.stateSizeLimit(owner, cobbleputerId, maxTotalExecutionStateBytesPerPlayer);
     }
 
     private boolean fitsStateUpdate(UUID owner, UUID cobbleputerId, byte[] candidate) {
-        return executionStateStore.fitsStateUpdate(
+        return executionStateAccess.fitsStateUpdate(
                 owner, cobbleputerId, candidate, maxTotalExecutionStateBytesPerPlayer);
     }
 
@@ -1169,7 +1169,7 @@ public final class ExecutionDriver {
         mainWorker.reportExecutionStats(ExecutionStatsReporter.report(
                 instrumentation.currentTickSnapshot(),
                 System.currentTimeMillis(),
-                executionStateStore.stateSizeCensus()));
+                executionStateAccess.stateSizeCensus()));
     }
 
     private void reportExecutionTransition(CobbleputerBlockEntity blockEntity, ExecutionTransition transition) {
