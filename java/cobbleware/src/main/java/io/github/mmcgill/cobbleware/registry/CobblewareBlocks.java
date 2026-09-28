@@ -31,10 +31,12 @@ public final class CobblewareBlocks {
         WirelessObserverPolymerModels.initialize();
         COBBLEPUTER = register(
                 COBBLEPUTER_KEY,
-                new CobbleputerBlock(BlockBehaviour.Properties.of()
-                        .setId(COBBLEPUTER_KEY)
-                        .strength(3.0F, 6.0F)
-                        .sound(SoundType.METAL)));
+                new CobbleputerBlock(
+                        BlockBehaviour.Properties.of()
+                                .setId(COBBLEPUTER_KEY)
+                                .strength(3.0F, 6.0F)
+                                .sound(SoundType.METAL),
+                        CobblewareMod.executionStateStore()));
 
         Map<DyeColor, WirelessObserverBlock> observers = new EnumMap<>(DyeColor.class);
         for (DyeColor color : DyeColor.values()) {

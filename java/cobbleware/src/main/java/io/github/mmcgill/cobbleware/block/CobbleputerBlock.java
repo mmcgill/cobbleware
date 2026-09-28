@@ -2,6 +2,7 @@ package io.github.mmcgill.cobbleware.block;
 
 import eu.pb4.polymer.blocks.api.PolymerTexturedBlock;
 import io.github.mmcgill.cobbleware.CobblewareMod;
+import io.github.mmcgill.cobbleware.execution.ExecutionStateStore;
 import net.fabricmc.fabric.api.networking.v1.context.PacketContext;
 import net.minecraft.core.BlockPos;
 import net.minecraft.world.level.Level;
@@ -16,15 +17,20 @@ import net.minecraft.world.level.block.state.properties.EnumProperty;
 /** A Cobbleputer whose lifecycle state is visible in its block state. */
 public final class CobbleputerBlock extends Block implements EntityBlock, PolymerTexturedBlock {
     public static final EnumProperty<CobbleputerState> STATE = EnumProperty.create("state", CobbleputerState.class);
+    private final ExecutionStateStore executionStateStore;
 
-    public CobbleputerBlock(BlockBehaviour.Properties properties) {
+    public CobbleputerBlock(BlockBehaviour.Properties properties, ExecutionStateStore executionStateStore) {
         super(properties);
+        if (executionStateStore == null) {
+            throw new IllegalArgumentException("execution state store must not be null");
+        }
+        this.executionStateStore = executionStateStore;
         registerDefaultState(stateDefinition.any().setValue(STATE, CobbleputerState.UNINITIALIZED));
     }
 
     @Override
     public BlockEntity newBlockEntity(BlockPos pos, BlockState state) {
-        return new CobbleputerBlockEntity(pos, state);
+        return new CobbleputerBlockEntity(pos, state, executionStateStore);
     }
 
     /** Updates and logs a Cobbleputer lifecycle transition. */

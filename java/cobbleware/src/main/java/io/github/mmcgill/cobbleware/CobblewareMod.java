@@ -20,7 +20,6 @@ import net.fabricmc.fabric.api.event.lifecycle.v1.ServerLifecycleEvents;
 import net.fabricmc.fabric.api.event.lifecycle.v1.ServerTickEvents;
 import net.fabricmc.fabric.api.message.v1.ServerMessageEvents;
 import net.minecraft.server.level.FullChunkStatus;
-import net.minecraft.world.level.storage.LevelResource;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -28,8 +27,8 @@ import org.slf4j.LoggerFactory;
 public final class CobblewareMod implements ModInitializer {
     public static final String MOD_ID = "cobbleware";
     public static final Logger LOGGER = LoggerFactory.getLogger(MOD_ID);
+    private static final ExecutionStateStore executionStateStore = new ExecutionStateStore(LOGGER);
     private static ExecutionDriver executionDriver;
-    private static ExecutionStateStore executionStateStore;
     private static WirelessObserverNetwork wirelessObserverNetwork;
 
     /** Returns the server-owned execution driver after Mod initialization. */
@@ -45,8 +44,8 @@ public final class CobblewareMod implements ModInitializer {
         return executionDriver;
     }
 
-    /** Returns the server-owned external execution-state store, or {@code null} before server startup. */
-    public static ExecutionStateStore executionStateStoreOrNull() {
+    /** Returns the server-owned external execution-state store. */
+    public static ExecutionStateStore executionStateStore() {
         return executionStateStore;
     }
 
@@ -71,6 +70,7 @@ public final class CobblewareMod implements ModInitializer {
         Instrumentation instrumentation = new Instrumentation(config.instrumentationWindowTicks());
         executionDriver = new ExecutionDriver(
                 mainWorkerClient,
+                executionStateStore,
                 instrumentation,
                 config.maxRunningExecutionsPerPlayer(),
                 config.maxTotalExecutionStateBytesPerPlayer(),
@@ -78,19 +78,10 @@ public final class CobblewareMod implements ModInitializer {
         ServerMessageEvents.CHAT_MESSAGE.register(
                 (message, sender, parameters) -> executionDriver.dispatchChatMessage(sender, message.signedContent()));
         wirelessObserverNetwork = new WirelessObserverNetwork();
-        ServerLifecycleEvents.SERVER_STARTING.register(server -> {
-            executionStateStore = new ExecutionStateStore(server.getWorldPath(LevelResource.ROOT), server, LOGGER);
-        });
-        ServerLifecycleEvents.BEFORE_SAVE.register((server, flush, force) -> {
-            if (executionStateStore != null) {
-                executionStateStore.beforeSave();
-            }
-        });
+        ServerLifecycleEvents.SERVER_STARTING.register(executionStateStore::initialize);
+        ServerLifecycleEvents.BEFORE_SAVE.register((server, flush, force) -> executionStateStore.beforeSave());
         ServerLifecycleEvents.SERVER_STOPPING.register(server -> {
-            if (executionStateStore != null) {
-                executionStateStore.close();
-                executionStateStore = null;
-            }
+            executionStateStore.close();
             mainWorkerClient.close();
         });
         ServerChunkEvents.FULL_CHUNK_STATUS_CHANGE.register((level, chunk, previousStatus, nextStatus) -> {

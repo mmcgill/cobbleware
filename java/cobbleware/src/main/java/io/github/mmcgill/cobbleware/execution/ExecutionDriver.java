@@ -130,6 +130,7 @@ public final class ExecutionDriver {
     }
 
     private final MainWorker mainWorker;
+    private final ExecutionStateStore executionStateStore;
     private final Instrumentation instrumentation;
     private final int maxRunningExecutionsPerPlayer;
     private final long maxTotalExecutionStateBytesPerPlayer;
@@ -151,11 +152,13 @@ public final class ExecutionDriver {
 
     public ExecutionDriver(
             MainWorker mainWorker,
+            ExecutionStateStore executionStateStore,
             Instrumentation instrumentation,
             int maxRunningExecutionsPerPlayer,
             long maxTotalExecutionStateBytesPerPlayer,
             Logger logger) {
         if (mainWorker == null
+                || executionStateStore == null
                 || instrumentation == null
                 || logger == null
                 || maxRunningExecutionsPerPlayer <= 0
@@ -164,6 +167,7 @@ public final class ExecutionDriver {
                     "ExecutionDriver dependencies must not be null and execution limits must be positive");
         }
         this.mainWorker = mainWorker;
+        this.executionStateStore = executionStateStore;
         this.instrumentation = instrumentation;
         this.maxRunningExecutionsPerPlayer = maxRunningExecutionsPerPlayer;
         this.maxTotalExecutionStateBytesPerPlayer = maxTotalExecutionStateBytesPerPlayer;
@@ -172,10 +176,7 @@ public final class ExecutionDriver {
 
     /** Adds a loaded Cobbleputer to the driver's loaded set. */
     public void activate(CobbleputerBlockEntity blockEntity) {
-        ExecutionStateStore executionStateStore = CobblewareMod.executionStateStoreOrNull();
-        if (executionStateStore != null) {
-            executionStateStore.attach(blockEntity);
-        }
+        executionStateStore.attach(blockEntity);
         pendingChunkNonTickingTransitions.remove(blockEntity);
         boolean newlyLoaded = loadedCobbleputers.putIfAbsent(blockEntity, new EphemeralCobbleputerState()) == null;
         if (newlyLoaded) {
@@ -593,14 +594,12 @@ public final class ExecutionDriver {
     }
 
     private long stateSizeLimit(UUID owner, UUID cobbleputerId) {
-        ExecutionStateStore store = CobblewareMod.executionStateStoreOrNull();
-        return store == null ? 0 : store.stateSizeLimit(owner, cobbleputerId, maxTotalExecutionStateBytesPerPlayer);
+        return executionStateStore.stateSizeLimit(owner, cobbleputerId, maxTotalExecutionStateBytesPerPlayer);
     }
 
     private boolean fitsStateUpdate(UUID owner, UUID cobbleputerId, byte[] candidate) {
-        ExecutionStateStore store = CobblewareMod.executionStateStoreOrNull();
-        return store != null
-                && store.fitsStateUpdate(owner, cobbleputerId, candidate, maxTotalExecutionStateBytesPerPlayer);
+        return executionStateStore.fitsStateUpdate(
+                owner, cobbleputerId, candidate, maxTotalExecutionStateBytesPerPlayer);
     }
 
     private boolean hasRunningExecutionCapacity(UUID owner) {
@@ -1167,11 +1166,10 @@ public final class ExecutionDriver {
 
     private void recordCobbleputerStateGaugeAndStream(Minecraft minecraft) {
         recordCobbleputerStateGauge(minecraft);
-        ExecutionStateStore store = CobblewareMod.executionStateStoreOrNull();
         mainWorker.reportExecutionStats(ExecutionStatsReporter.report(
                 instrumentation.currentTickSnapshot(),
                 System.currentTimeMillis(),
-                store == null ? Map.of() : store.stateSizeCensus()));
+                executionStateStore.stateSizeCensus()));
     }
 
     private void reportExecutionTransition(CobbleputerBlockEntity blockEntity, ExecutionTransition transition) {

@@ -1,5 +1,6 @@
 package io.github.mmcgill.cobbleware.execution;
 
+import static org.junit.jupiter.api.Assertions.assertAll;
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -12,8 +13,24 @@ import java.util.Map;
 import java.util.UUID;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
+import org.slf4j.LoggerFactory;
 
 class ExecutionStateStoreTest {
+    @Test
+    void rejectsOperationsBeforeInitialization() {
+        ExecutionStateStore store = new ExecutionStateStore(LoggerFactory.getLogger(ExecutionStateStoreTest.class));
+
+        assertAll(
+                () -> assertThrows(IllegalStateException.class, () -> store.attach(null)),
+                () -> assertThrows(IllegalStateException.class, () -> store.update(null, null)),
+                () -> assertThrows(IllegalStateException.class, () -> store.remove(null)),
+                () -> assertThrows(IllegalStateException.class, () -> store.stateSizeLimit(null, null, 0)),
+                () -> assertThrows(IllegalStateException.class, () -> store.fitsStateUpdate(null, null, null, 0)),
+                () -> assertThrows(IllegalStateException.class, store::stateSizeCensus),
+                () -> assertThrows(IllegalStateException.class, store::beforeSave),
+                () -> assertThrows(IllegalStateException.class, store::close));
+    }
+
     @Test
     void roundTripsActiveAndCrashedExecutionRecords() throws Exception {
         UUID activeCobbleputer = UUID.randomUUID();

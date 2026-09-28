@@ -25,7 +25,9 @@ public final class CobblewareBlockEntities {
         COBBLEPUTER = Registry.register(
                 BuiltInRegistries.BLOCK_ENTITY_TYPE,
                 COBBLEPUTER_KEY,
-                new BlockEntityType<>(CobbleputerBlockEntity::new, Set.of(CobblewareBlocks.COBBLEPUTER)));
+                new BlockEntityType<>(
+                        (pos, state) -> new CobbleputerBlockEntity(pos, state, CobblewareMod.executionStateStore()),
+                        Set.of(CobblewareBlocks.COBBLEPUTER)));
         PolymerBlockUtils.registerBlockEntity(COBBLEPUTER);
         WIRELESS_OBSERVER = Registry.register(
                 BuiltInRegistries.BLOCK_ENTITY_TYPE,

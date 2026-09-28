@@ -20,6 +20,7 @@ public final class CobbleputerBlockEntity extends BlockEntity {
     private static final String COBBLEPUTER_ID_TAG = "cobbleputer_id";
     private static final String OWNER_PLAYER_ID_TAG = "owner_player_id";
 
+    private final ExecutionStateStore executionStateStore;
     private UUID cobbleputerId = UUID.randomUUID();
     private UUID executionId;
     private UUID ownerPlayerId;
@@ -31,8 +32,12 @@ public final class CobbleputerBlockEntity extends BlockEntity {
     private boolean wasRunningWhenUnloaded;
     private boolean legacyExecutionStatePending;
 
-    public CobbleputerBlockEntity(BlockPos pos, BlockState state) {
+    public CobbleputerBlockEntity(BlockPos pos, BlockState state, ExecutionStateStore executionStateStore) {
         super(CobblewareBlockEntities.COBBLEPUTER, pos, state);
+        if (executionStateStore == null) {
+            throw new IllegalArgumentException("execution state store must not be null");
+        }
+        this.executionStateStore = executionStateStore;
     }
 
     @Override
@@ -46,10 +51,7 @@ public final class CobbleputerBlockEntity extends BlockEntity {
 
     @Override
     public void preRemoveSideEffects(BlockPos pos, BlockState state) {
-        ExecutionStateStore executionStateStore = CobblewareMod.executionStateStoreOrNull();
-        if (executionStateStore != null) {
-            executionStateStore.remove(this);
-        }
+        executionStateStore.remove(this);
         clearExecution();
         if (level instanceof net.minecraft.server.level.ServerLevel serverLevel) {
             WirelessObserverNetwork network = CobblewareMod.wirelessObserverNetworkOrNull();
@@ -368,10 +370,7 @@ public final class CobbleputerBlockEntity extends BlockEntity {
     }
 
     private void persistExecutionState(UUID priorOwner) {
-        ExecutionStateStore executionStateStore = CobblewareMod.executionStateStoreOrNull();
-        if (executionStateStore != null) {
-            executionStateStore.update(this, priorOwner);
-        }
+        executionStateStore.update(this, priorOwner);
     }
 
     private void clearExecution() {

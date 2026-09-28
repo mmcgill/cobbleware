@@ -21,41 +21,62 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerLevel;
+import net.minecraft.world.level.storage.LevelResource;
 import org.slf4j.Logger;
 
 /** Stores durable Cobbleputer execution records in one atomic-replacement file per owner. */
 public final class ExecutionStateStore implements AutoCloseable {
     public static final int CURRENT_EXECUTION_STATE_FORMAT_VERSION = 1;
 
-    private final Path directory;
-    private final MinecraftServer server;
     private final Logger logger;
-    private final ExecutorService ioExecutor;
     private final Map<UUID, PlayerState> players = new HashMap<>();
+    private Path directory;
+    private MinecraftServer server;
+    private ExecutorService ioExecutor;
     private boolean closing;
 
-    public ExecutionStateStore(Path worldDirectory, MinecraftServer server, Logger logger) {
-        if (worldDirectory == null || server == null || logger == null) {
-            throw new IllegalArgumentException("execution state store dependencies must not be null");
+    public ExecutionStateStore(Logger logger) {
+        if (logger == null) {
+            throw new IllegalArgumentException("execution state store logger must not be null");
         }
-        directory = worldDirectory.resolve("cobbleware-data").resolve("executions");
-        this.server = server;
         this.logger = logger;
-        ioExecutor = Executors.newSingleThreadExecutor(runnable -> {
+    }
+
+    /** Initializes this store for a server's current world. */
+    public synchronized void initialize(MinecraftServer server) {
+        if (server == null) {
+            throw new IllegalArgumentException("Minecraft server must not be null");
+        }
+        if (isInitialized() && !closing) {
+            throw new IllegalStateException("Execution state store is already initialized");
+        }
+        Path nextDirectory = server.getWorldPath(LevelResource.ROOT)
+                .resolve("cobbleware-data")
+                .resolve("executions");
+        try {
+            Files.createDirectories(nextDirectory);
+        } catch (IOException exception) {
+            throw new IllegalStateException(
+                    "Could not create Cobbleware execution-state directory " + nextDirectory, exception);
+        }
+        directory = nextDirectory;
+        this.server = server;
+        ioExecutor = newIoExecutor();
+        players.clear();
+        closing = false;
+    }
+
+    private static ExecutorService newIoExecutor() {
+        return Executors.newSingleThreadExecutor(runnable -> {
             Thread thread = new Thread(runnable, "Cobbleware execution-state writer");
             thread.setDaemon(true);
             return thread;
         });
-        try {
-            Files.createDirectories(directory);
-        } catch (IOException exception) {
-            throw new IllegalStateException(
-                    "Could not create Cobbleware execution-state directory " + directory, exception);
-        }
     }
 
     /** Attaches the external execution record to a loaded block entity without changing chunk persistence. */
     public synchronized void attach(CobbleputerBlockEntity blockEntity) {
+        requireInitialized();
         if (closing || blockEntity == null) {
             return;
         }
@@ -111,6 +132,7 @@ public final class ExecutionStateStore implements AutoCloseable {
 
     /** Records the block entity's current execution state, removing a prior owner's stale record if needed. */
     public synchronized void update(CobbleputerBlockEntity blockEntity, UUID priorOwner) {
+        requireInitialized();
         if (closing || blockEntity == null) {
             return;
         }
@@ -139,6 +161,7 @@ public final class ExecutionStateStore implements AutoCloseable {
 
     /** Removes the block entity's external execution record after physical Cobbleputer removal. */
     public synchronized void remove(CobbleputerBlockEntity blockEntity) {
+        requireInitialized();
         if (closing || blockEntity == null) {
             return;
         }
@@ -157,6 +180,7 @@ public final class ExecutionStateStore implements AutoCloseable {
      * The result treats this Cobbleputer's current record as replaceable and all other durable records as fixed.
      */
     public synchronized long stateSizeLimit(UUID owner, UUID cobbleputerId, long ownerLimit) {
+        requireInitialized();
         if (owner == null || cobbleputerId == null || ownerLimit < 0) {
             throw new IllegalArgumentException("owner, Cobbleputer id, and non-negative limit are required");
         }
@@ -180,6 +204,7 @@ public final class ExecutionStateStore implements AutoCloseable {
 
     /** Returns whether replacing one durable record's state with {@code candidate} fits the owner's cap. */
     public synchronized boolean fitsStateUpdate(UUID owner, UUID cobbleputerId, byte[] candidate, long ownerLimit) {
+        requireInitialized();
         if (candidate == null) {
             throw new IllegalArgumentException("candidate state must not be null");
         }
@@ -188,6 +213,7 @@ public final class ExecutionStateStore implements AutoCloseable {
 
     /** Returns a read-only census of every durable execution-state byte length, grouped by owner. */
     public synchronized Map<UUID, Map<UUID, Long>> stateSizeCensus() {
+        requireInitialized();
         Map<UUID, Map<UUID, Long>> census = new HashMap<>();
         for (Map.Entry<UUID, PlayerState> player : players.entrySet()) {
             Map<UUID, Long> records = new HashMap<>();
@@ -202,6 +228,7 @@ public final class ExecutionStateStore implements AutoCloseable {
 
     /** Queues asynchronous writes of each changed owner file before Minecraft saves its worlds. */
     public synchronized void beforeSave() {
+        requireInitialized();
         if (closing) {
             return;
         }
@@ -214,12 +241,15 @@ public final class ExecutionStateStore implements AutoCloseable {
     @Override
     public void close() {
         Map<UUID, PlayerState> snapshot;
+        ExecutorService executor;
         synchronized (this) {
+            requireInitialized();
             if (closing) {
                 return;
             }
             closing = true;
             snapshot = Map.copyOf(players);
+            executor = ioExecutor;
         }
         for (PlayerState player : snapshot.values()) {
             player.writeTail.join();
@@ -231,7 +261,17 @@ public final class ExecutionStateStore implements AutoCloseable {
                 logger.error("Could not synchronously save execution state for player {}", entry.getKey(), exception);
             }
         }
-        ioExecutor.shutdown();
+        executor.shutdown();
+    }
+
+    private void requireInitialized() {
+        if (!isInitialized()) {
+            throw new IllegalStateException("Execution state store has not been initialized");
+        }
+    }
+
+    private boolean isInitialized() {
+        return directory != null && server != null && ioExecutor != null;
     }
 
     private PlayerState load(UUID owner) {
