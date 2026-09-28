@@ -37,11 +37,47 @@ sourceSets {
             srcDir '../../protobuf'
         }
     }
+    callGraph {
+        java {
+            srcDir 'src/callgraph/java'
+        }
+    }
+}
+
+def callGraphClassName = providers.gradleProperty('callGraphClass').orElse('')
+def callGraphIncludeExternalCallees = providers.gradleProperty('callGraphIncludeExternalCallees').orElse('false')
+def callGraphOutput = layout.buildDirectory.file(callGraphClassName.map { className ->
+    "reports/call-graphs/${className.isEmpty() ? 'missing-class-name' : className}.dot"
+})
+
+tasks.register('buildCallGraph', JavaExec) {
+    group = 'verification'
+    description = 'Builds a call graph for -PcallGraphClass=<fully.qualified.ClassName>; external callees are opt-in.'
+    dependsOn(tasks.named('classes'), tasks.named('compileCallGraphJava'))
+    classpath = sourceSets.callGraph.runtimeClasspath
+    mainClass = 'io.github.mmcgill.cobbleware.tools.CallGraphBuilder'
+    inputs.property('callGraphClass', callGraphClassName)
+    inputs.property('callGraphIncludeExternalCallees', callGraphIncludeExternalCallees)
+    outputs.file(callGraphOutput)
+
+    doFirst {
+        String className = callGraphClassName.get()
+        if (className.isEmpty()) {
+            throw new GradleException('buildCallGraph requires -PcallGraphClass=<fully.qualified.ClassName>.')
+        }
+        args(
+                project.projectDir.absolutePath,
+                sourceSets.main.allJava.srcDirs.collect { it.absolutePath }.join(File.pathSeparator),
+                (sourceSets.main.compileClasspath + sourceSets.main.output).asPath,
+                callGraphOutput.get().asFile.absolutePath,
+                className,
+                callGraphIncludeExternalCallees.get())
+    }
 }
 
 spotless {
     java {
-        target 'src/main/java/**/*.java', 'src/test/java/**/*.java'
+        target 'src/main/java/**/*.java', 'src/test/java/**/*.java', 'src/callgraph/java/**/*.java'
         palantirJavaFormat '2.91.0'
     }
 }
