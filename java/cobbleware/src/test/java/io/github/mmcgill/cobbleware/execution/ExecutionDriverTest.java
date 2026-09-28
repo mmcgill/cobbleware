@@ -7,6 +7,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import cobbleware.effects.Effect;
 import cobbleware.effects.SendChat;
+import cobbleware.effects.SetRedstonePower;
 import cobbleware.events.ChatMessage;
 import cobbleware.events.Event;
 import cobbleware.internal.ExecutionResult;
@@ -32,11 +33,13 @@ import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 import net.minecraft.SharedConstants;
 import net.minecraft.core.BlockPos;
+import net.minecraft.core.GlobalPos;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.network.chat.Component;
 import net.minecraft.resources.Identifier;
 import net.minecraft.server.Bootstrap;
 import net.minecraft.world.item.DyeColor;
+import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.entity.BlockEntity;
 import net.minecraft.world.level.block.entity.BlockEntityType;
@@ -48,6 +51,7 @@ import org.slf4j.LoggerFactory;
 
 class ExecutionDriverTest {
     private static BlockEntityType<?> testCobbleputerBlockEntity;
+    private static BlockEntityType<?> testObserverBlockEntity;
     private static BlockState uninitializedState;
     private static BlockState runningState;
     private static BlockState stoppedState;
@@ -59,6 +63,8 @@ class ExecutionDriverTest {
         Bootstrap.bootStrap();
         testCobbleputerBlockEntity =
                 BuiltInRegistries.BLOCK_ENTITY_TYPE.getValue(Identifier.withDefaultNamespace("chest"));
+        testObserverBlockEntity =
+                BuiltInRegistries.BLOCK_ENTITY_TYPE.getValue(Identifier.withDefaultNamespace("dispenser"));
         uninitializedState = lifecycleState(CobbleputerState.UNINITIALIZED);
         runningState = lifecycleState(CobbleputerState.RUNNING);
         stoppedState = lifecycleState(CobbleputerState.STOPPED);
@@ -282,6 +288,89 @@ class ExecutionDriverTest {
         assertEquals(2, fixture.worker.syncRequests.get(1).getExecutions(0).getEffectSeqNum());
     }
 
+    @Test
+    void dispatchesAnObserverEventProducedByAnEffectInTheSubsequentSync() {
+        Fixture fixture = new Fixture(32);
+        CobbleputerBlockEntity cobbleputer = fixture.startNewExecution(new byte[] {1});
+        CompletableFuture<MainWorker.ExecutionSyncResult> first = fixture.worker.enqueueSyncResult();
+        fixture.worker.enqueueSyncResult();
+        fixture.minecraft.observedCobbleputer = Optional.of(cobbleputer);
+        WirelessObserverBlockEntity observer = new WirelessObserverBlockEntity(
+                testObserverBlockEntity, new BlockPos(10, 64, 0), Blocks.DISPENSER.defaultBlockState());
+        observer.setPairedCobbleputer(GlobalPos.of(Level.OVERWORLD, cobbleputer.getBlockPos()));
+        fixture.minecraft.observedStateChanges.addLast(observedStateChange(observer));
+        fixture.minecraft.onSetRedstonePower = () -> fixture.driver.registerObserverChange(observer);
+
+        fixture.serverTick();
+        ExecutionsRequest firstRequest = fixture.worker.syncRequests.getFirst();
+        Effect effect = Effect.newBuilder()
+                .setSetRedstonePower(SetRedstonePower.newBuilder().setPowerLevel(1))
+                .build();
+        first.complete(MainWorker.ExecutionSyncResult.success(ExecutionsResponse.newBuilder()
+                .addResults(resultFor(firstRequest.getExecutions(0), 1, new byte[] {2}).toBuilder()
+                        .addEffects(effect)
+                        .build())
+                .build()));
+
+        fixture.serverTick();
+
+        ExecutionsRequest secondRequest = fixture.worker.syncRequests.get(1);
+        assertEquals(1, secondRequest.getExecutions(0).getEventsCount());
+        assertEquals(
+                Event.EventCase.BLOCK_STATE_CHANGE,
+                secondRequest.getExecutions(0).getEvents(0).getEventCase());
+    }
+
+    @Test
+    void drainsObserverWorkOnEveryTickWhileExecutionSyncIsInFlight() {
+        Fixture fixture = new Fixture(32);
+        CobbleputerBlockEntity cobbleputer = fixture.startNewExecution(new byte[] {1});
+        CompletableFuture<MainWorker.ExecutionSyncResult> first = fixture.worker.enqueueSyncResult();
+        fixture.worker.enqueueSyncResult();
+        fixture.minecraft.observedCobbleputer = Optional.of(cobbleputer);
+        fixture.serverTick();
+        ExecutionsRequest firstRequest = fixture.worker.syncRequests.getFirst();
+
+        WirelessObserverBlockEntity initializedObserver = new WirelessObserverBlockEntity(
+                testObserverBlockEntity, new BlockPos(10, 64, 0), Blocks.DISPENSER.defaultBlockState());
+        WirelessObserverBlockEntity changedObserver = new WirelessObserverBlockEntity(
+                testObserverBlockEntity, new BlockPos(11, 64, 0), Blocks.DISPENSER.defaultBlockState());
+        changedObserver.setPairedCobbleputer(GlobalPos.of(Level.OVERWORLD, cobbleputer.getBlockPos()));
+
+        fixture.driver.registerObserverInitialization(initializedObserver);
+        fixture.minecraft.observedStateChanges.addLast(observedStateChange(changedObserver));
+        fixture.driver.registerObserverChange(changedObserver);
+        fixture.serverTick();
+
+        fixture.minecraft.observedStateChanges.addLast(observedStateChange(changedObserver));
+        fixture.driver.registerObserverChange(changedObserver);
+        fixture.serverTick();
+
+        assertEquals(List.of(initializedObserver), fixture.minecraft.initializedObservers);
+        assertEquals(List.of(changedObserver, changedObserver), fixture.minecraft.changedObservers);
+        assertEquals(1, fixture.worker.syncRequests.size());
+
+        first.complete(MainWorker.ExecutionSyncResult.success(ExecutionsResponse.newBuilder()
+                .addResults(resultFor(firstRequest.getExecutions(0), 1, new byte[] {2}))
+                .build()));
+        fixture.serverTick();
+
+        ExecutionsRequest secondRequest = fixture.worker.syncRequests.get(1);
+        assertEquals(2, secondRequest.getExecutions(0).getEventsCount());
+        assertEquals(
+                Event.EventCase.BLOCK_STATE_CHANGE,
+                secondRequest.getExecutions(0).getEvents(0).getEventCase());
+        assertEquals(
+                Event.EventCase.BLOCK_STATE_CHANGE,
+                secondRequest.getExecutions(0).getEvents(1).getEventCase());
+    }
+
+    private static WirelessObserverBlockEntity.ObservedBlockStateChange observedStateChange(
+            WirelessObserverBlockEntity observer) {
+        return new WirelessObserverBlockEntity.ObservedBlockStateChange(
+                observer.observedBlockPos(), Blocks.STONE.defaultBlockState(), Blocks.DIRT.defaultBlockState());
+    }
+
     private static ExecutionResult resultFor(
             cobbleware.internal.ExecutionState offered, long consumedEventSequence, byte[] finalState) {
         return ExecutionResult.newBuilder()
@@ -399,15 +488,21 @@ class ExecutionDriverTest {
 
     private static final class FakeMinecraft implements ExecutionDriver.Minecraft {
         private final List<String> nearbyMessages = new ArrayList<>();
+        private Optional<CobbleputerBlockEntity> observedCobbleputer = Optional.empty();
+        private final List<WirelessObserverBlockEntity> initializedObservers = new ArrayList<>();
+        private final List<WirelessObserverBlockEntity> changedObservers = new ArrayList<>();
+        private final Deque<WirelessObserverBlockEntity.ObservedBlockStateChange> observedStateChanges =
+                new ArrayDeque<>();
+        private Runnable onSetRedstonePower = () -> {};
 
         @Override
         public Optional<CobbleputerBlockEntity> loadedCobbleputer(net.minecraft.core.GlobalPos target) {
-            return Optional.empty();
+            return observedCobbleputer;
         }
 
         @Override
         public boolean isServerLevel(BlockEntity blockEntity) {
-            return false;
+            return true;
         }
 
         @Override
@@ -417,23 +512,30 @@ class ExecutionDriverTest {
 
         @Override
         public Optional<net.minecraft.core.GlobalPos> globalPos(BlockEntity blockEntity, BlockPos pos) {
-            return Optional.empty();
+            return Optional.of(net.minecraft.core.GlobalPos.of(Level.OVERWORLD, pos));
         }
 
         @Override
         public boolean isLoaded(BlockEntity blockEntity, BlockPos pos) {
-            return false;
+            return true;
         }
 
         @Override
         public Optional<WirelessObserverBlockEntity.ObservedBlockStateChange> takeObservedStateChange(
                 WirelessObserverBlockEntity observer) {
-            return Optional.empty();
+            changedObservers.add(observer);
+            return Optional.of(observedStateChanges.removeFirst());
         }
 
         @Override
         public boolean initializeObservedState(WirelessObserverBlockEntity observer) {
-            return false;
+            initializedObservers.add(observer);
+            return true;
+        }
+
+        @Override
+        public Optional<DyeColor> observerColor(WirelessObserverBlockEntity observer) {
+            return Optional.of(DyeColor.WHITE);
         }
 
         @Override
@@ -459,6 +561,8 @@ class ExecutionDriverTest {
                 CobbleputerBlockEntity blockEntity,
                 Optional<UUID> observerId,
                 Optional<DyeColor> observerColor,
-                int powerLevel) {}
+                int powerLevel) {
+            onSetRedstonePower.run();
+        }
     }
 }

@@ -14,6 +14,7 @@ import net.minecraft.resources.ResourceKey;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.DirectionalBlock;
 import net.minecraft.world.level.block.entity.BlockEntity;
+import net.minecraft.world.level.block.entity.BlockEntityType;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.storage.ValueInput;
 import net.minecraft.world.level.storage.ValueOutput;
@@ -30,7 +31,12 @@ public final class WirelessObserverBlockEntity extends BlockEntity {
     private BlockState observedState;
 
     public WirelessObserverBlockEntity(BlockPos pos, BlockState state) {
-        super(CobblewareBlockEntities.WIRELESS_OBSERVER, pos, state);
+        this(CobblewareBlockEntities.WIRELESS_OBSERVER, pos, state);
+    }
+
+    /** Constructs an observer with its block-entity type supplied by the caller. */
+    public WirelessObserverBlockEntity(BlockEntityType<?> blockEntityType, BlockPos pos, BlockState state) {
+        super(blockEntityType, pos, state);
         observerId = UUID.randomUUID();
     }
 

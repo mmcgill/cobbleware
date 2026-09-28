@@ -105,6 +105,9 @@ public final class ExecutionDriver {
         /** Initializes an observer's durable block-state baseline when its observed position is loaded. */
         boolean initializeObservedState(WirelessObserverBlockEntity observer);
 
+        /** Returns the color of a valid Wireless Observer block entity. */
+        Optional<DyeColor> observerColor(WirelessObserverBlockEntity observer);
+
         /** Updates the visible lifecycle state of a Cobbleputer. */
         boolean setCobbleputerState(CobbleputerBlockEntity blockEntity, CobbleputerState nextState);
 
@@ -415,11 +418,9 @@ public final class ExecutionDriver {
         drainChunkNonTickingTransitions(minecraft);
         drainChunkLoadResumes(minecraft);
         drainCompletedSyncMeasurements();
-        if (inFlight != null) {
-            if (!inFlight.isDone()) {
-                recordCobbleputerStateGaugeAndStream(minecraft);
-                return;
-            }
+        drainObserverInitializations(minecraft);
+        boolean syncStillPending = inFlight != null && !inFlight.isDone();
+        if (inFlight != null && !syncStillPending) {
             MainWorker.ExecutionSyncResult result;
             try {
                 result = inFlight.join();
@@ -438,24 +439,25 @@ public final class ExecutionDriver {
             }
             flight = null;
         }
-
-        drainObserverInitializations(minecraft);
+        // We drain observer changes after processing a previous sync response specifically to ensure
+        // that applied effects that produced block state change events go into the next sync request,
+        // minimizing end-to-end latency.
         drainObserverChanges(minecraft);
-        Flight nextFlight = buildFlight();
-        if (!nextFlight.hadExecutions() && !runtimeMayHaveExecutions) {
-            recordCobbleputerStateGaugeAndStream(minecraft);
-            return;
+        if (!syncStillPending) {
+            Flight nextFlight = buildFlight();
+            if (nextFlight.hadExecutions() || runtimeMayHaveExecutions) {
+                if (nextFlight.hadExecutions()) {
+                    runtimeMayHaveExecutions = true;
+                }
+                long dispatchedAt = System.nanoTime();
+                Flight dispatchedFlight = nextFlight.withDispatchNanos(dispatchedAt);
+                flight = dispatchedFlight;
+                recordEventsPerSync(minecraft, dispatchedFlight);
+                inFlight = mainWorker.syncExecutions(nextFlight.request);
+                inFlight.whenComplete((result, failure) -> completedSyncMeasurements.add(new SyncCompletion(
+                        System.nanoTime() - dispatchedFlight.dispatchNanos(), syncOutcome(result, failure))));
+            }
         }
-        if (nextFlight.hadExecutions()) {
-            runtimeMayHaveExecutions = true;
-        }
-        long dispatchedAt = System.nanoTime();
-        Flight dispatchedFlight = nextFlight.withDispatchNanos(dispatchedAt);
-        flight = dispatchedFlight;
-        recordEventsPerSync(minecraft, dispatchedFlight);
-        inFlight = mainWorker.syncExecutions(nextFlight.request);
-        inFlight.whenComplete((result, failure) -> completedSyncMeasurements.add(new SyncCompletion(
-                System.nanoTime() - dispatchedFlight.dispatchNanos(), syncOutcome(result, failure))));
         recordCobbleputerStateGaugeAndStream(minecraft);
     }
 
@@ -683,7 +685,8 @@ public final class ExecutionDriver {
             return;
         }
         BlockState observerState = observer.getBlockState();
-        if (!(observerState.getBlock() instanceof WirelessObserverBlock wirelessObserver)) {
+        Optional<DyeColor> observerColor = minecraft.observerColor(observer);
+        if (observerColor.isEmpty()) {
             return;
         }
         Optional<net.minecraft.core.GlobalPos> observerPosition = minecraft.globalPos(observer, observer.getBlockPos());
@@ -692,7 +695,7 @@ public final class ExecutionDriver {
             return;
         }
         BlockStateChange event = BlockStateChange.newBuilder()
-                .setObserverColor(protoDyeColor(wirelessObserver.color()))
+                .setObserverColor(protoDyeColor(observerColor.orElseThrow()))
                 .setObserverId(protoUuid(observer.observerId()))
                 .setObserverDir(protoDirection(observerState.getValue(DirectionalBlock.FACING)))
                 .setObserverPos(protoGlobalPos(observerPosition.orElseThrow()))
@@ -1283,6 +1286,13 @@ public final class ExecutionDriver {
         @Override
         public boolean initializeObservedState(WirelessObserverBlockEntity observer) {
             return isServerLevel(observer) && observer.initializeObservedState();
+        }
+
+        @Override
+        public Optional<DyeColor> observerColor(WirelessObserverBlockEntity observer) {
+            return observer.getBlockState().getBlock() instanceof WirelessObserverBlock wirelessObserver
+                    ? Optional.of(wirelessObserver.color())
+                    : Optional.empty();
         }
 
         @Override
