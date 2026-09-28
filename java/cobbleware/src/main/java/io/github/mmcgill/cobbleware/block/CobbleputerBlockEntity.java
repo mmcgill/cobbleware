@@ -2,6 +2,7 @@ package io.github.mmcgill.cobbleware.block;
 
 import io.github.mmcgill.cobbleware.CobblewareMod;
 import io.github.mmcgill.cobbleware.execution.ExecutionDriver;
+import io.github.mmcgill.cobbleware.execution.ExecutionStateAccess;
 import io.github.mmcgill.cobbleware.execution.ExecutionStateStore;
 import io.github.mmcgill.cobbleware.registry.CobblewareBlockEntities;
 import java.util.Arrays;
@@ -11,6 +12,7 @@ import net.minecraft.core.BlockPos;
 import net.minecraft.core.GlobalPos;
 import net.minecraft.core.UUIDUtil;
 import net.minecraft.world.level.block.entity.BlockEntity;
+import net.minecraft.world.level.block.entity.BlockEntityType;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.storage.ValueInput;
 import net.minecraft.world.level.storage.ValueOutput;
@@ -20,7 +22,7 @@ public final class CobbleputerBlockEntity extends BlockEntity {
     private static final String COBBLEPUTER_ID_TAG = "cobbleputer_id";
     private static final String OWNER_PLAYER_ID_TAG = "owner_player_id";
 
-    private final ExecutionStateStore executionStateStore;
+    private final ExecutionStateAccess executionStateStore;
     private UUID cobbleputerId = UUID.randomUUID();
     private UUID executionId;
     private UUID ownerPlayerId;
@@ -32,8 +34,17 @@ public final class CobbleputerBlockEntity extends BlockEntity {
     private boolean wasRunningWhenUnloaded;
     private boolean legacyExecutionStatePending;
 
-    public CobbleputerBlockEntity(BlockPos pos, BlockState state, ExecutionStateStore executionStateStore) {
-        super(CobblewareBlockEntities.COBBLEPUTER, pos, state);
+    public CobbleputerBlockEntity(BlockPos pos, BlockState state, ExecutionStateAccess executionStateStore) {
+        this(CobblewareBlockEntities.COBBLEPUTER, pos, state, executionStateStore);
+    }
+
+    /** Constructs a Cobbleputer with its block-entity type supplied by the caller. */
+    public CobbleputerBlockEntity(
+            BlockEntityType<?> blockEntityType,
+            BlockPos pos,
+            BlockState state,
+            ExecutionStateAccess executionStateStore) {
+        super(blockEntityType, pos, state);
         if (executionStateStore == null) {
             throw new IllegalArgumentException("execution state store must not be null");
         }
