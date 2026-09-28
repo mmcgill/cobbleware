@@ -66,10 +66,10 @@ public final class WirelessObserverBlockEntity extends BlockEntity {
 
     @Override
     public void preRemoveSideEffects(BlockPos pos, BlockState state) {
-        if (level instanceof net.minecraft.server.level.ServerLevel) {
+        if (level instanceof net.minecraft.server.level.ServerLevel serverLevel) {
             ExecutionDriver executionDriver = CobblewareMod.executionDriverOrNull();
             if (executionDriver != null) {
-                executionDriver.observerRemoved(this);
+                executionDriver.observerRemoved(ExecutionDriver.minecraft(serverLevel.getServer()), this);
             }
         }
         super.preRemoveSideEffects(pos, state);

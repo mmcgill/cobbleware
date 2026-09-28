@@ -18,6 +18,7 @@ import net.fabricmc.api.ModInitializer;
 import net.fabricmc.fabric.api.event.lifecycle.v1.ServerChunkEvents;
 import net.fabricmc.fabric.api.event.lifecycle.v1.ServerLifecycleEvents;
 import net.fabricmc.fabric.api.event.lifecycle.v1.ServerTickEvents;
+import net.fabricmc.fabric.api.message.v1.ServerMessageEvents;
 import net.minecraft.server.level.FullChunkStatus;
 import net.minecraft.world.level.storage.LevelResource;
 import org.slf4j.Logger;
@@ -74,6 +75,8 @@ public final class CobblewareMod implements ModInitializer {
                 config.maxRunningExecutionsPerPlayer(),
                 config.maxTotalExecutionStateBytesPerPlayer(),
                 LOGGER);
+        ServerMessageEvents.CHAT_MESSAGE.register(
+                (message, sender, parameters) -> executionDriver.dispatchChatMessage(sender, message.signedContent()));
         wirelessObserverNetwork = new WirelessObserverNetwork();
         ServerLifecycleEvents.SERVER_STARTING.register(server -> {
             executionStateStore = new ExecutionStateStore(server.getWorldPath(LevelResource.ROOT), server, LOGGER);
@@ -127,7 +130,7 @@ public final class CobblewareMod implements ModInitializer {
         ServerTickEvents.END_SERVER_TICK.register((server) -> {
             instrumentation.advanceTick();
             wirelessObserverNetwork.tick(server);
-            executionDriver.driveExecutions(server);
+            executionDriver.driveExecutions(ExecutionDriver.minecraft(server));
         });
         CobblewareCommands.register(mainWorkerClient, instrumentation, executionDriver);
     }

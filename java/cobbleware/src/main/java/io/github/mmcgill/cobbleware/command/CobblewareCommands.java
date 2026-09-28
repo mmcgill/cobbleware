@@ -273,9 +273,7 @@ public final class CobblewareCommands {
             return;
         }
         ExecutionDriver.ExecutionInitResult activation = executionDriver.startExecution(
-                serverLevel,
-                resolvedTarget.pos(),
-                resolvedTarget.state(),
+                ExecutionDriver.minecraft(serverLevel.getServer()),
                 resolvedTarget.blockEntity(),
                 player.getUUID(),
                 player.getGameProfile().name(),
@@ -350,10 +348,10 @@ public final class CobblewareCommands {
         ExecutionDriver.ExecutionInitResult activation;
         if (lifecycleState == CobbleputerState.STOPPED) {
             activation = executionDriver.resume(
-                    serverLevel, resolvedTarget.pos(), resolvedTarget.state(), resolvedTarget.blockEntity());
+                    ExecutionDriver.minecraft(serverLevel.getServer()), resolvedTarget.blockEntity());
         } else {
             activation = executionDriver.restartCrashedExecution(
-                    serverLevel, resolvedTarget.pos(), resolvedTarget.state(), resolvedTarget.blockEntity());
+                    ExecutionDriver.minecraft(serverLevel.getServer()), resolvedTarget.blockEntity());
         }
         if (activation == ExecutionDriver.ExecutionInitResult.LIMIT_REACHED) {
             sendRunningExecutionLimitReached(player, executionDriver.maxRunningExecutionsPerPlayer());
@@ -408,12 +406,10 @@ public final class CobblewareCommands {
         }
 
         if (requiredState == CobbleputerState.RUNNING) {
-            executionDriver.stop(
-                    serverLevel, resolvedTarget.pos(), resolvedTarget.state(), resolvedTarget.blockEntity());
+            executionDriver.stop(ExecutionDriver.minecraft(serverLevel.getServer()), resolvedTarget.blockEntity());
             player.sendSystemMessage(Component.literal("Paused your Cobbleputer execution."));
         } else {
-            executionDriver.resume(
-                    serverLevel, resolvedTarget.pos(), resolvedTarget.state(), resolvedTarget.blockEntity());
+            executionDriver.resume(ExecutionDriver.minecraft(serverLevel.getServer()), resolvedTarget.blockEntity());
             player.sendSystemMessage(Component.literal("Resumed your Cobbleputer execution."));
         }
         return 1;

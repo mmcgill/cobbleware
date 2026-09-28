@@ -41,7 +41,11 @@ public final class CobblemeterItem extends SimplePolymerItem {
                     Optional<GlobalPos> previousTarget = observer.setPairedCobbleputer(newTarget);
                     ExecutionDriver executionDriver = CobblewareMod.executionDriverOrNull();
                     if (executionDriver != null) {
-                        executionDriver.observerPaired(observer, previousTarget.orElse(null), newTarget);
+                        executionDriver.observerPaired(
+                                ExecutionDriver.minecraft(level.getServer()),
+                                observer,
+                                previousTarget.orElse(null),
+                                newTarget);
                     }
                     if (context.getPlayer() != null) {
                         context.getPlayer()

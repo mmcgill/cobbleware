@@ -18,7 +18,7 @@ import cobbleware.internal.ExecutionTransition;
 import cobbleware.internal.ExecutionsRequest;
 import cobbleware.internal.ExecutionsResponse;
 import io.github.mmcgill.cobbleware.CobblewareMod;
-import io.github.mmcgill.cobbleware.api.MainWorkerClient;
+import io.github.mmcgill.cobbleware.api.MainWorker;
 import io.github.mmcgill.cobbleware.block.CobbleputerBlock;
 import io.github.mmcgill.cobbleware.block.CobbleputerBlockEntity;
 import io.github.mmcgill.cobbleware.block.CobbleputerState;
@@ -35,11 +35,11 @@ import java.util.IdentityHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.OptionalLong;
 import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentLinkedQueue;
-import net.fabricmc.fabric.api.message.v1.ServerMessageEvents;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.core.registries.BuiltInRegistries;
@@ -51,6 +51,7 @@ import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.item.DyeColor;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.DirectionalBlock;
+import net.minecraft.world.level.block.entity.BlockEntity;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.block.state.properties.Property;
 import net.minecraft.world.phys.Vec3;
@@ -75,7 +76,60 @@ public final class ExecutionDriver {
         INVALID_STATE
     }
 
-    private final MainWorkerClient mainWorkerClient;
+    /**
+     * Minecraft services needed while advancing executions that cannot be obtained from an individual block entity.
+     *
+     * <p>The driver deliberately retains Minecraft value and block-entity types at this boundary: they are useful
+     * representations in unit tests and avoid duplicating Minecraft's data model. Implementations must not load a chunk
+     * while resolving a Cobbleputer.
+     */
+    public interface Minecraft {
+        Optional<CobbleputerBlockEntity> loadedCobbleputer(net.minecraft.core.GlobalPos target);
+
+        /** Returns whether the entity is attached to a server level. */
+        boolean isServerLevel(BlockEntity blockEntity);
+
+        /** Returns the game time for an entity attached to a server level. */
+        OptionalLong gameTime(CobbleputerBlockEntity blockEntity);
+
+        /** Returns a global position in an entity's server level. */
+        Optional<net.minecraft.core.GlobalPos> globalPos(BlockEntity blockEntity, BlockPos pos);
+
+        /** Returns whether a position in an entity's server level is already loaded. */
+        boolean isLoaded(BlockEntity blockEntity, BlockPos pos);
+
+        /** Captures and advances an observer's durable block-state baseline. */
+        Optional<WirelessObserverBlockEntity.ObservedBlockStateChange> takeObservedStateChange(
+                WirelessObserverBlockEntity observer);
+
+        /** Initializes an observer's durable block-state baseline when its observed position is loaded. */
+        boolean initializeObservedState(WirelessObserverBlockEntity observer);
+
+        /** Updates the visible lifecycle state of a Cobbleputer. */
+        boolean setCobbleputerState(CobbleputerBlockEntity blockEntity, CobbleputerState nextState);
+
+        void sendSystemMessage(UUID playerId, Component message);
+
+        /** Delivers a system message to players near a Cobbleputer. */
+        void sendNearbySystemMessage(CobbleputerBlockEntity blockEntity, Component message);
+
+        /** Applies a Wireless Observer redstone-power effect for a Cobbleputer. */
+        void setRedstonePower(
+                CobbleputerBlockEntity blockEntity,
+                Optional<UUID> observerId,
+                Optional<DyeColor> observerColor,
+                int powerLevel);
+    }
+
+    /** Returns the standard Minecraft-server-backed implementation used by the server tick callback. */
+    public static Minecraft minecraft(MinecraftServer server) {
+        if (server == null) {
+            throw new IllegalArgumentException("Minecraft server must not be null");
+        }
+        return new ServerMinecraft(server);
+    }
+
+    private final MainWorker mainWorker;
     private final Instrumentation instrumentation;
     private final int maxRunningExecutionsPerPlayer;
     private final long maxTotalExecutionStateBytesPerPlayer;
@@ -91,17 +145,17 @@ public final class ExecutionDriver {
             Collections.newSetFromMap(new IdentityHashMap<>());
     private final ConcurrentLinkedQueue<SyncCompletion> completedSyncMeasurements = new ConcurrentLinkedQueue<>();
 
-    private CompletableFuture<MainWorkerClient.ExecutionSyncResult> inFlight;
+    private CompletableFuture<MainWorker.ExecutionSyncResult> inFlight;
     private Flight flight;
     private boolean runtimeMayHaveExecutions;
 
     public ExecutionDriver(
-            MainWorkerClient mainWorkerClient,
+            MainWorker mainWorker,
             Instrumentation instrumentation,
             int maxRunningExecutionsPerPlayer,
             long maxTotalExecutionStateBytesPerPlayer,
             Logger logger) {
-        if (mainWorkerClient == null
+        if (mainWorker == null
                 || instrumentation == null
                 || logger == null
                 || maxRunningExecutionsPerPlayer <= 0
@@ -109,13 +163,11 @@ public final class ExecutionDriver {
             throw new IllegalArgumentException(
                     "ExecutionDriver dependencies must not be null and execution limits must be positive");
         }
-        this.mainWorkerClient = mainWorkerClient;
+        this.mainWorker = mainWorker;
         this.instrumentation = instrumentation;
         this.maxRunningExecutionsPerPlayer = maxRunningExecutionsPerPlayer;
         this.maxTotalExecutionStateBytesPerPlayer = maxTotalExecutionStateBytesPerPlayer;
         this.logger = logger;
-        ServerMessageEvents.CHAT_MESSAGE.register(
-                (message, sender, parameters) -> dispatchChatMessage(sender, message.signedContent()));
     }
 
     /** Adds a loaded Cobbleputer to the driver's loaded set. */
@@ -184,44 +236,41 @@ public final class ExecutionDriver {
 
     /** Delivers lifecycle events after an observer's durable pairing has been replaced. */
     public void observerPaired(
+            Minecraft minecraft,
             WirelessObserverBlockEntity observer,
             net.minecraft.core.GlobalPos previousTarget,
             net.minecraft.core.GlobalPos newTarget) {
-        if (observer == null
-                || newTarget == null
-                || observer.isRemoved()
-                || !(observer.getLevel() instanceof ServerLevel observerLevel)) {
+        if (minecraft == null || observer == null || newTarget == null || observer.isRemoved()) {
             return;
         }
-        MinecraftServer server = observerLevel.getServer();
         if (previousTarget != null && !previousTarget.equals(newTarget)) {
-            deliverObserverUnpaired(server, observer, observerLevel, previousTarget);
+            deliverObserverUnpaired(minecraft, observer, previousTarget);
         }
-        deliverObserverPaired(server, observer, observerLevel, newTarget);
+        deliverObserverPaired(minecraft, observer, newTarget);
     }
 
     /** Delivers the unpair lifecycle event before a paired observer block is discarded. */
-    public void observerRemoved(WirelessObserverBlockEntity observer) {
-        if (observer == null || observer.isRemoved() || !(observer.getLevel() instanceof ServerLevel observerLevel)) {
+    public void observerRemoved(Minecraft minecraft, WirelessObserverBlockEntity observer) {
+        if (minecraft == null || observer == null || observer.isRemoved()) {
             return;
         }
-        observer.pairedCobbleputer()
-                .ifPresent(
-                        target -> deliverObserverUnpaired(observerLevel.getServer(), observer, observerLevel, target));
+        observer.pairedCobbleputer().ifPresent(target -> deliverObserverUnpaired(minecraft, observer, target));
     }
 
     /** Starts a fresh execution and queues its first lifecycle event when the owner has capacity. */
     public ExecutionInitResult startExecution(
-            ServerLevel level,
-            BlockPos pos,
-            BlockState state,
+            Minecraft minecraft,
             CobbleputerBlockEntity blockEntity,
             UUID owner,
             String ownerName,
             byte[] initialState) {
-        if (owner == null || ownerName == null || ownerName.isEmpty() || initialState == null) {
+        if (minecraft == null || owner == null || ownerName == null || ownerName.isEmpty() || initialState == null) {
             throw new IllegalArgumentException(
-                    "execution owner, owner name, and initial state must not be null or empty");
+                    "execution dependencies, owner, owner name, and initial state must not be null or empty");
+        }
+        OptionalLong gameTime = minecraft.gameTime(blockEntity);
+        if (gameTime.isEmpty()) {
+            return ExecutionInitResult.INVALID_STATE;
         }
         activate(blockEntity);
         if (!hasRunningExecutionCapacity(owner)) {
@@ -229,11 +278,11 @@ public final class ExecutionDriver {
         }
         loadedCobbleputers.get(blockEntity).events.clear();
         blockEntity.startExecution(owner, ownerName, initialState);
-        if (CobbleputerBlock.setLifecycleState(level, pos, state, CobbleputerState.RUNNING)) {
+        if (minecraft.setCobbleputerState(blockEntity, CobbleputerState.RUNNING)) {
             enqueueEvent(
                     blockEntity,
                     Event.newBuilder()
-                            .setStarted(Started.newBuilder().setTick(level.getGameTime()))
+                            .setStarted(Started.newBuilder().setTick(gameTime.getAsLong()))
                             .build());
             reportExecutionTransition(blockEntity, ExecutionTransition.EXECUTION_TRANSITION_STARTED);
             return ExecutionInitResult.SUCCESS;
@@ -242,35 +291,41 @@ public final class ExecutionDriver {
     }
 
     /** Stops a running execution without discarding its execution record or queued events. */
-    public void stop(ServerLevel level, BlockPos pos, BlockState state, CobbleputerBlockEntity blockEntity) {
-        if (!blockEntity.hasExecution() || state.getValue(CobbleputerBlock.STATE) != CobbleputerState.RUNNING) {
+    public void stop(Minecraft minecraft, CobbleputerBlockEntity blockEntity) {
+        if (minecraft == null
+                || !blockEntity.hasExecution()
+                || blockEntity.getBlockState().getValue(CobbleputerBlock.STATE) != CobbleputerState.RUNNING) {
             return;
         }
         activate(blockEntity);
-        if (CobbleputerBlock.setLifecycleState(level, pos, state, CobbleputerState.STOPPED)) {
-            blockEntity.setStoppedAtTick(level.getGameTime());
+        OptionalLong gameTime = minecraft.gameTime(blockEntity);
+        if (gameTime.isPresent() && minecraft.setCobbleputerState(blockEntity, CobbleputerState.STOPPED)) {
+            blockEntity.setStoppedAtTick(gameTime.getAsLong());
             reportExecutionTransition(blockEntity, ExecutionTransition.EXECUTION_TRANSITION_STOPPED);
         }
     }
 
     /** Resumes a stopped execution and queues its resume lifecycle event when the owner has capacity. */
-    public ExecutionInitResult resume(
-            ServerLevel level, BlockPos pos, BlockState state, CobbleputerBlockEntity blockEntity) {
-        if (!blockEntity.hasExecution() || state.getValue(CobbleputerBlock.STATE) != CobbleputerState.STOPPED) {
+    public ExecutionInitResult resume(Minecraft minecraft, CobbleputerBlockEntity blockEntity) {
+        if (minecraft == null
+                || !blockEntity.hasExecution()
+                || blockEntity.getBlockState().getValue(CobbleputerBlock.STATE) != CobbleputerState.STOPPED) {
             return ExecutionInitResult.INVALID_STATE;
         }
         activate(blockEntity);
         if (!hasRunningExecutionCapacity(blockEntity.ownerPlayerId().orElseThrow())) {
             return ExecutionInitResult.LIMIT_REACHED;
         }
-        return transitionToRunningAndQueueResumed(level, pos, state, blockEntity);
+        return transitionToRunningAndQueueResumed(minecraft, blockEntity);
     }
 
     /** Restarts a crashed execution with its retained state when the owner has capacity. */
-    public ExecutionInitResult restartCrashedExecution(
-            ServerLevel level, BlockPos pos, BlockState state, CobbleputerBlockEntity blockEntity) {
+    public ExecutionInitResult restartCrashedExecution(Minecraft minecraft, CobbleputerBlockEntity blockEntity) {
         if (!blockEntity.hasRecoverableCrashedExecution()
-                || state.getValue(CobbleputerBlock.STATE) != CobbleputerState.CRASHED) {
+                || blockEntity.getBlockState().getValue(CobbleputerBlock.STATE) != CobbleputerState.CRASHED) {
+            return ExecutionInitResult.INVALID_STATE;
+        }
+        if (minecraft == null || minecraft.gameTime(blockEntity).isEmpty()) {
             return ExecutionInitResult.INVALID_STATE;
         }
         activate(blockEntity);
@@ -280,11 +335,13 @@ public final class ExecutionDriver {
         EphemeralCobbleputerState active = loadedCobbleputers.get(blockEntity);
         active.events.clear();
         blockEntity.restartCrashedExecution();
-        if (CobbleputerBlock.setLifecycleState(level, pos, state, CobbleputerState.RUNNING)) {
+        if (minecraft.setCobbleputerState(blockEntity, CobbleputerState.RUNNING)) {
             enqueueEvent(
                     blockEntity,
                     Event.newBuilder()
-                            .setStarted(Started.newBuilder().setTick(level.getGameTime()))
+                            .setStarted(Started.newBuilder()
+                                    .setTick(minecraft.gameTime(blockEntity).orElseThrow())
+                                    .build())
                             .build());
             reportExecutionTransition(blockEntity, ExecutionTransition.EXECUTION_TRANSITION_STARTED);
             return ExecutionInitResult.SUCCESS;
@@ -306,7 +363,7 @@ public final class ExecutionDriver {
     }
 
     /** Delivers raw player chat to every eligible active Cobbleputer in the sender's level and range. */
-    private void dispatchChatMessage(ServerPlayer sender, String message) {
+    public void dispatchChatMessage(ServerPlayer sender, String message) {
         Event event = Event.newBuilder()
                 .setChatMessage(ChatMessage.newBuilder().setMessage(message))
                 .build();
@@ -350,25 +407,28 @@ public final class ExecutionDriver {
     }
 
     /** Call once per server tick to advance execution state. */
-    public void driveExecutions(MinecraftServer server) {
-        drainChunkNonTickingTransitions();
-        drainChunkLoadResumes(server);
+    public void driveExecutions(Minecraft minecraft) {
+        if (minecraft == null) {
+            throw new IllegalArgumentException("Minecraft services must not be null");
+        }
+        drainChunkNonTickingTransitions(minecraft);
+        drainChunkLoadResumes(minecraft);
         drainCompletedSyncMeasurements();
         if (inFlight != null) {
             if (!inFlight.isDone()) {
-                recordCobbleputerStateGaugeAndStream(server);
+                recordCobbleputerStateGaugeAndStream(minecraft);
                 return;
             }
-            MainWorkerClient.ExecutionSyncResult result;
+            MainWorker.ExecutionSyncResult result;
             try {
                 result = inFlight.join();
             } catch (RuntimeException exception) {
                 logger.warn("Execution sync completion failed: {}", exception.toString());
-                result = MainWorkerClient.ExecutionSyncResult.unavailable("Main Worker request failed");
+                result = MainWorker.ExecutionSyncResult.unavailable("Main Worker request failed");
             }
             inFlight = null;
-            if (result.status() == MainWorkerClient.ExecutionSyncStatus.SUCCESS) {
-                applyResponse(result.response(), flight);
+            if (result.status() == MainWorker.ExecutionSyncStatus.SUCCESS) {
+                applyResponse(minecraft, result.response(), flight);
                 if (!flight.hadExecutions()) {
                     runtimeMayHaveExecutions = false;
                 }
@@ -378,11 +438,11 @@ public final class ExecutionDriver {
             flight = null;
         }
 
-        drainObserverInitializations();
-        drainObserverChanges(server);
+        drainObserverInitializations(minecraft);
+        drainObserverChanges(minecraft);
         Flight nextFlight = buildFlight();
         if (!nextFlight.hadExecutions() && !runtimeMayHaveExecutions) {
-            recordCobbleputerStateGaugeAndStream(server);
+            recordCobbleputerStateGaugeAndStream(minecraft);
             return;
         }
         if (nextFlight.hadExecutions()) {
@@ -391,11 +451,11 @@ public final class ExecutionDriver {
         long dispatchedAt = System.nanoTime();
         Flight dispatchedFlight = nextFlight.withDispatchNanos(dispatchedAt);
         flight = dispatchedFlight;
-        recordEventsPerSync(dispatchedFlight);
-        inFlight = mainWorkerClient.syncExecutions(nextFlight.request);
+        recordEventsPerSync(minecraft, dispatchedFlight);
+        inFlight = mainWorker.syncExecutions(nextFlight.request);
         inFlight.whenComplete((result, failure) -> completedSyncMeasurements.add(new SyncCompletion(
                 System.nanoTime() - dispatchedFlight.dispatchNanos(), syncOutcome(result, failure))));
-        recordCobbleputerStateGaugeAndStream(server);
+        recordCobbleputerStateGaugeAndStream(minecraft);
     }
 
     private void drainCompletedSyncMeasurements() {
@@ -406,22 +466,21 @@ public final class ExecutionDriver {
     }
 
     /** Performs durable state changes deferred from the distance manager's chunk-status callback. */
-    private void drainChunkNonTickingTransitions() {
+    private void drainChunkNonTickingTransitions(Minecraft minecraft) {
         if (pendingChunkNonTickingTransitions.isEmpty()) {
             return;
         }
         List<CobbleputerBlockEntity> cobbleputers = List.copyOf(pendingChunkNonTickingTransitions);
         pendingChunkNonTickingTransitions.clear();
         for (CobbleputerBlockEntity cobbleputer : cobbleputers) {
-            if (cobbleputer.isRemoved() || !(cobbleputer.getLevel() instanceof ServerLevel level)) {
+            OptionalLong gameTime = minecraft.gameTime(cobbleputer);
+            if (cobbleputer.isRemoved() || gameTime.isEmpty()) {
                 continue;
             }
             boolean wasRunning = isRunningExecution(cobbleputer);
             cobbleputer.recordChunkUnloadResumeIntent(wasRunning);
-            if (wasRunning
-                    && CobbleputerBlock.setLifecycleState(
-                            level, cobbleputer.getBlockPos(), cobbleputer.getBlockState(), CobbleputerState.STOPPED)) {
-                cobbleputer.setStoppedAtTick(level.getGameTime());
+            if (wasRunning && minecraft.setCobbleputerState(cobbleputer, CobbleputerState.STOPPED)) {
+                cobbleputer.setStoppedAtTick(gameTime.getAsLong());
                 reportExecutionTransition(cobbleputer, ExecutionTransition.EXECUTION_TRANSITION_STOPPED);
             }
         }
@@ -432,7 +491,7 @@ public final class ExecutionDriver {
      * This deliberately runs on the normal server tick rather than {@link #activate}, because both changing
      * lifecycle state and consuming durable resume intent call {@code setChanged}.
      */
-    private void drainChunkLoadResumes(MinecraftServer server) {
+    private void drainChunkLoadResumes(Minecraft minecraft) {
         if (pendingChunkLoadResumes.isEmpty()) {
             return;
         }
@@ -441,7 +500,7 @@ public final class ExecutionDriver {
         for (CobbleputerBlockEntity blockEntity : pendingChunkLoadResumes) {
             if (loadedCobbleputers.containsKey(blockEntity)
                     && isChunkLoadResumeCandidate(blockEntity)
-                    && blockEntity.getLevel() instanceof ServerLevel) {
+                    && minecraft.gameTime(blockEntity).isPresent()) {
                 candidates.add(blockEntity);
             }
         }
@@ -461,17 +520,18 @@ public final class ExecutionDriver {
         for (Map.Entry<UUID, List<CobbleputerBlockEntity>> entry : candidatesByOwner.entrySet()) {
             int remainingCapacity = maxRunningExecutionsPerPlayer - runningExecutionCount(entry.getKey(), candidateSet);
             for (CobbleputerBlockEntity candidate : entry.getValue()) {
-                if (remainingCapacity > 0 && resumeAfterChunkLoad(candidate) == ExecutionInitResult.SUCCESS) {
+                if (remainingCapacity > 0
+                        && resumeAfterChunkLoad(minecraft, candidate) == ExecutionInitResult.SUCCESS) {
                     remainingCapacity -= 1;
                     continue;
                 }
-                rejectChunkLoadResumeForRunningExecutionLimit(server, candidate, entry.getKey());
+                rejectChunkLoadResumeForRunningExecutionLimit(minecraft, candidate, entry.getKey());
             }
         }
     }
 
-    private ExecutionInitResult resumeAfterChunkLoad(CobbleputerBlockEntity blockEntity) {
-        if (!(blockEntity.getLevel() instanceof ServerLevel level)
+    private ExecutionInitResult resumeAfterChunkLoad(Minecraft minecraft, CobbleputerBlockEntity blockEntity) {
+        if (minecraft.gameTime(blockEntity).isEmpty()
                 || !blockEntity.hasExecution()
                 || !blockEntity.shouldResumeAfterChunkLoad()) {
             return ExecutionInitResult.INVALID_STATE;
@@ -480,21 +540,24 @@ public final class ExecutionDriver {
         if (state != CobbleputerState.STOPPED && state != CobbleputerState.RUNNING) {
             return ExecutionInitResult.INVALID_STATE;
         }
-        return transitionToRunningAndQueueResumed(
-                level, blockEntity.getBlockPos(), blockEntity.getBlockState(), blockEntity);
+        return transitionToRunningAndQueueResumed(minecraft, blockEntity);
     }
 
     private ExecutionInitResult transitionToRunningAndQueueResumed(
-            ServerLevel level, BlockPos pos, BlockState state, CobbleputerBlockEntity blockEntity) {
-        CobbleputerState lifecycleState = state.getValue(CobbleputerBlock.STATE);
+            Minecraft minecraft, CobbleputerBlockEntity blockEntity) {
+        OptionalLong gameTime = minecraft.gameTime(blockEntity);
+        if (gameTime.isEmpty()) {
+            return ExecutionInitResult.INVALID_STATE;
+        }
+        CobbleputerState lifecycleState = blockEntity.getBlockState().getValue(CobbleputerBlock.STATE);
         if (lifecycleState == CobbleputerState.STOPPED) {
-            if (!CobbleputerBlock.setLifecycleState(level, pos, state, CobbleputerState.RUNNING)) {
+            if (!minecraft.setCobbleputerState(blockEntity, CobbleputerState.RUNNING)) {
                 return ExecutionInitResult.INVALID_STATE;
             }
         } else if (lifecycleState != CobbleputerState.RUNNING) {
             return ExecutionInitResult.INVALID_STATE;
         }
-        long resumeTick = level.getGameTime();
+        long resumeTick = gameTime.getAsLong();
         blockEntity.takeChunkUnloadResumeIntent();
         long stopTick = blockEntity.takeStoppedAtTick().orElse(resumeTick);
         enqueueEvent(
@@ -507,23 +570,21 @@ public final class ExecutionDriver {
     }
 
     private void rejectChunkLoadResumeForRunningExecutionLimit(
-            MinecraftServer server, CobbleputerBlockEntity blockEntity, UUID owner) {
-        if (!(blockEntity.getLevel() instanceof ServerLevel level) || !blockEntity.shouldResumeAfterChunkLoad()) {
+            Minecraft minecraft, CobbleputerBlockEntity blockEntity, UUID owner) {
+        if (minecraft.gameTime(blockEntity).isEmpty() || !blockEntity.shouldResumeAfterChunkLoad()) {
             return;
         }
         if (isRunningExecution(blockEntity)) {
-            stop(level, blockEntity.getBlockPos(), blockEntity.getBlockState(), blockEntity);
+            stop(minecraft, blockEntity);
         }
         if (blockEntity.getBlockState().getValue(CobbleputerBlock.STATE) != CobbleputerState.STOPPED) {
             return;
         }
         blockEntity.takeChunkUnloadResumeIntent();
-        ServerPlayer player = server.getPlayerList().getPlayer(owner);
-        if (player != null) {
-            player.sendSystemMessage(
-                    Component.literal("Paused your Cobbleputer execution: the running-executions-per-player limit is "
-                            + maxRunningExecutionsPerPlayer + "."));
-        }
+        minecraft.sendSystemMessage(
+                owner,
+                Component.literal("Paused your Cobbleputer execution: the running-executions-per-player limit is "
+                        + maxRunningExecutionsPerPlayer + "."));
     }
 
     /** Returns the configured maximum number of loaded running executions for one player. */
@@ -573,52 +634,52 @@ public final class ExecutionDriver {
                 : "";
     }
 
-    private void drainObserverChanges(MinecraftServer server) {
+    private void drainObserverChanges(Minecraft minecraft) {
         if (pendingObserverChanges.isEmpty()) {
             return;
         }
         List<WirelessObserverBlockEntity> observers = List.copyOf(pendingObserverChanges);
         pendingObserverChanges.clear();
         for (WirelessObserverBlockEntity observer : observers) {
-            if (observer.isRemoved() || !(observer.getLevel() instanceof ServerLevel observerLevel)) {
+            if (observer.isRemoved() || !minecraft.isServerLevel(observer)) {
                 continue;
             }
-            if (!observerLevel.isLoaded(observer.observedBlockPos())) {
+            if (!minecraft.isLoaded(observer, observer.observedBlockPos())) {
                 pendingObserverChanges.add(observer);
                 continue;
             }
-            observer.takeObservedStateChange()
-                    .ifPresent(change -> deliverBlockStateChange(server, observer, observerLevel, change));
+            minecraft
+                    .takeObservedStateChange(observer)
+                    .ifPresent(change -> deliverBlockStateChange(minecraft, observer, change));
         }
     }
 
-    private void drainObserverInitializations() {
+    private void drainObserverInitializations(Minecraft minecraft) {
         if (pendingObserverInitializations.isEmpty()) {
             return;
         }
         List<WirelessObserverBlockEntity> observers = List.copyOf(pendingObserverInitializations);
         pendingObserverInitializations.clear();
         for (WirelessObserverBlockEntity observer : observers) {
-            if (observer.isRemoved() || !(observer.getLevel() instanceof ServerLevel)) {
+            if (observer.isRemoved() || !minecraft.isServerLevel(observer)) {
                 continue;
             }
-            if (!observer.initializeObservedState()) {
+            if (!minecraft.initializeObservedState(observer)) {
                 pendingObserverInitializations.add(observer);
             }
         }
     }
 
     private void deliverBlockStateChange(
-            MinecraftServer server,
+            Minecraft minecraft,
             WirelessObserverBlockEntity observer,
-            ServerLevel observerLevel,
             WirelessObserverBlockEntity.ObservedBlockStateChange change) {
         Optional<net.minecraft.core.GlobalPos> pairedTarget = observer.pairedCobbleputer();
         if (pairedTarget.isEmpty()) {
             return;
         }
         net.minecraft.core.GlobalPos target = pairedTarget.orElseThrow();
-        Optional<CobbleputerBlockEntity> targetCobbleputer = resolveCobbleputer(server, target);
+        Optional<CobbleputerBlockEntity> targetCobbleputer = minecraft.loadedCobbleputer(target);
         if (targetCobbleputer.isEmpty()) {
             return;
         }
@@ -626,12 +687,17 @@ public final class ExecutionDriver {
         if (!(observerState.getBlock() instanceof WirelessObserverBlock wirelessObserver)) {
             return;
         }
+        Optional<net.minecraft.core.GlobalPos> observerPosition = minecraft.globalPos(observer, observer.getBlockPos());
+        Optional<net.minecraft.core.GlobalPos> observedPosition = minecraft.globalPos(observer, change.pos());
+        if (observerPosition.isEmpty() || observedPosition.isEmpty()) {
+            return;
+        }
         BlockStateChange event = BlockStateChange.newBuilder()
                 .setObserverColor(protoDyeColor(wirelessObserver.color()))
                 .setObserverId(protoUuid(observer.observerId()))
                 .setObserverDir(protoDirection(observerState.getValue(DirectionalBlock.FACING)))
-                .setObserverPos(protoGlobalPos(observerLevel, observer.getBlockPos()))
-                .setBlockPos(protoGlobalPos(observerLevel, change.pos()))
+                .setObserverPos(protoGlobalPos(observerPosition.orElseThrow()))
+                .setBlockPos(protoGlobalPos(observedPosition.orElseThrow()))
                 .setOldState(protoBlockInfo(change.oldState()))
                 .setNewState(protoBlockInfo(change.newState()))
                 .build();
@@ -641,20 +707,21 @@ public final class ExecutionDriver {
     }
 
     private void deliverObserverPaired(
-            MinecraftServer server,
-            WirelessObserverBlockEntity observer,
-            ServerLevel observerLevel,
-            net.minecraft.core.GlobalPos target) {
-        Optional<CobbleputerBlockEntity> targetCobbleputer = resolveCobbleputer(server, target);
+            Minecraft minecraft, WirelessObserverBlockEntity observer, net.minecraft.core.GlobalPos target) {
+        Optional<CobbleputerBlockEntity> targetCobbleputer = minecraft.loadedCobbleputer(target);
         if (targetCobbleputer.isEmpty()
                 || !(observer.getBlockState().getBlock() instanceof WirelessObserverBlock wirelessObserver)) {
+            return;
+        }
+        Optional<net.minecraft.core.GlobalPos> observerPosition = minecraft.globalPos(observer, observer.getBlockPos());
+        if (observerPosition.isEmpty()) {
             return;
         }
         WirelessObserverPaired event = WirelessObserverPaired.newBuilder()
                 .setObserverColor(protoDyeColor(wirelessObserver.color()))
                 .setObserverId(protoUuid(observer.observerId()))
                 .setObserverDir(protoDirection(observer.getBlockState().getValue(DirectionalBlock.FACING)))
-                .setObserverPos(protoGlobalPos(observerLevel, observer.getBlockPos()))
+                .setObserverPos(protoGlobalPos(observerPosition.orElseThrow()))
                 .build();
         enqueueEvent(
                 targetCobbleputer.orElseThrow(),
@@ -662,36 +729,26 @@ public final class ExecutionDriver {
     }
 
     private void deliverObserverUnpaired(
-            MinecraftServer server,
-            WirelessObserverBlockEntity observer,
-            ServerLevel observerLevel,
-            net.minecraft.core.GlobalPos target) {
-        Optional<CobbleputerBlockEntity> targetCobbleputer = resolveCobbleputer(server, target);
+            Minecraft minecraft, WirelessObserverBlockEntity observer, net.minecraft.core.GlobalPos target) {
+        Optional<CobbleputerBlockEntity> targetCobbleputer = minecraft.loadedCobbleputer(target);
         BlockState observerState = observer.getBlockState();
         if (targetCobbleputer.isEmpty()
                 || !(observerState.getBlock() instanceof WirelessObserverBlock wirelessObserver)) {
+            return;
+        }
+        Optional<net.minecraft.core.GlobalPos> observerPosition = minecraft.globalPos(observer, observer.getBlockPos());
+        if (observerPosition.isEmpty()) {
             return;
         }
         WirelessObserverUnpaired event = WirelessObserverUnpaired.newBuilder()
                 .setObserverColor(protoDyeColor(wirelessObserver.color()))
                 .setObserverId(protoUuid(observer.observerId()))
                 .setObserverDir(protoDirection(observerState.getValue(DirectionalBlock.FACING)))
-                .setObserverPos(protoGlobalPos(observerLevel, observer.getBlockPos()))
+                .setObserverPos(protoGlobalPos(observerPosition.orElseThrow()))
                 .build();
         enqueueEvent(
                 targetCobbleputer.orElseThrow(),
                 Event.newBuilder().setWirelessObserverUnpaired(event).build());
-    }
-
-    private static Optional<CobbleputerBlockEntity> resolveCobbleputer(
-            MinecraftServer server, net.minecraft.core.GlobalPos target) {
-        ServerLevel targetLevel = server.getLevel(target.dimension());
-        if (targetLevel == null
-                || !targetLevel.isLoaded(target.pos())
-                || !(targetLevel.getBlockEntity(target.pos()) instanceof CobbleputerBlockEntity cobbleputer)) {
-            return Optional.empty();
-        }
-        return Optional.of(cobbleputer);
     }
 
     private Flight buildFlight() {
@@ -738,7 +795,7 @@ public final class ExecutionDriver {
                 ExecutionsRequest.newBuilder().addAllExecutions(executions).build(), offered);
     }
 
-    private void applyResponse(ExecutionsResponse response, Flight completedFlight) {
+    private void applyResponse(Minecraft minecraft, ExecutionsResponse response, Flight completedFlight) {
         if (completedFlight == null || !hasExpectedResults(response, completedFlight)) {
             logger.warn("Discarding invalid execution-sync response");
             return;
@@ -751,7 +808,7 @@ public final class ExecutionDriver {
                     || executionStatus(offered.blockEntity.getBlockState()) != offered.lifecycleState) {
                 continue;
             }
-            applyResult(offered, result);
+            applyResult(minecraft, offered, result);
         }
     }
 
@@ -769,7 +826,7 @@ public final class ExecutionDriver {
         return true;
     }
 
-    private void applyResult(OfferedExecution offered, ExecutionResult result) {
+    private void applyResult(Minecraft minecraft, OfferedExecution offered, ExecutionResult result) {
         ExecutionStatus status = result.getState();
         if (status != ExecutionStatus.EXECUTION_STATUS_RUNNING
                 && status != ExecutionStatus.EXECUTION_STATUS_STOPPED
@@ -794,16 +851,16 @@ public final class ExecutionDriver {
         while (!active.events.isEmpty() && active.events.getFirst().sequenceNum <= result.getEventSeqNum()) {
             active.events.removeFirst();
         }
-        applyEffects(offered.blockEntity, result);
+        applyEffects(minecraft, offered.blockEntity, result);
         if (status == ExecutionStatus.EXECUTION_STATUS_CRASHED) {
             active.events.clear();
             UUID owner = offered.blockEntity.ownerPlayerId().orElseThrow();
             UUID executionId = offered.blockEntity.executionId().orElseThrow();
             if (result.getFailureReason() == ExecutionFailureReason.EXECUTION_FAILURE_REASON_STATE_SIZE_LIMIT) {
-                mainWorkerClient.reportLimitExceeded(owner, executionId, "TotalExecutionStateSize");
+                mainWorker.reportLimitExceeded(owner, executionId, "TotalExecutionStateSize");
             }
             offered.blockEntity.crashExecution();
-            updateVisibleState(offered.blockEntity, CobbleputerState.CRASHED);
+            updateVisibleState(minecraft, offered.blockEntity, CobbleputerState.CRASHED);
             reportExecutionTransition(owner, executionId, ExecutionTransition.EXECUTION_TRANSITION_CRASHED);
             return;
         }
@@ -812,9 +869,9 @@ public final class ExecutionDriver {
         UUID executionId = offered.blockEntity.executionId().orElseThrow();
         if (!fitsStateUpdate(owner, offered.blockEntity.cobbleputerId(), finalState)) {
             active.events.clear();
-            mainWorkerClient.reportLimitExceeded(owner, executionId, "TotalExecutionStateSize");
+            mainWorker.reportLimitExceeded(owner, executionId, "TotalExecutionStateSize");
             offered.blockEntity.crashExecution();
-            updateVisibleState(offered.blockEntity, CobbleputerState.CRASHED);
+            updateVisibleState(minecraft, offered.blockEntity, CobbleputerState.CRASHED);
             reportExecutionTransition(owner, executionId, ExecutionTransition.EXECUTION_TRANSITION_CRASHED);
             return;
         }
@@ -823,7 +880,7 @@ public final class ExecutionDriver {
         CobbleputerState nextState = status == ExecutionStatus.EXECUTION_STATUS_RUNNING
                 ? CobbleputerState.RUNNING
                 : CobbleputerState.STOPPED;
-        updateVisibleState(offered.blockEntity, nextState);
+        updateVisibleState(minecraft, offered.blockEntity, nextState);
         if (previousState != nextState) {
             reportExecutionTransition(
                     offered.blockEntity,
@@ -833,13 +890,13 @@ public final class ExecutionDriver {
         }
     }
 
-    private void applyEffects(CobbleputerBlockEntity blockEntity, ExecutionResult result) {
+    private void applyEffects(Minecraft minecraft, CobbleputerBlockEntity blockEntity, ExecutionResult result) {
         long sequence = result.getEffectSeqNum();
         for (Effect effect : result.getEffectsList()) {
             boolean failed = false;
             long startedAt = System.nanoTime();
             try {
-                applyEffect(blockEntity, effect);
+                applyEffect(minecraft, blockEntity, effect);
             } catch (RuntimeException exception) {
                 failed = true;
                 logger.warn(
@@ -847,18 +904,18 @@ public final class ExecutionDriver {
                         blockEntity.getBlockPos().toShortString(),
                         exception.toString());
             } finally {
-                recordEffect(blockEntity, effect, System.nanoTime() - startedAt, failed);
+                recordEffect(minecraft, blockEntity, effect, System.nanoTime() - startedAt, failed);
             }
             blockEntity.acknowledgeEffect(sequence);
             sequence += 1;
         }
     }
 
-    private void applyEffect(CobbleputerBlockEntity blockEntity, Effect effect) {
+    private void applyEffect(Minecraft minecraft, CobbleputerBlockEntity blockEntity, Effect effect) {
         String message =
                 switch (effect.getEffectCase()) {
                     case SET_REDSTONE_POWER -> {
-                        applyRedstonePower(blockEntity, effect.getSetRedstonePower());
+                        applyRedstonePower(minecraft, blockEntity, effect.getSetRedstonePower());
                         yield null;
                     }
                     case EMIT_BEEP -> {
@@ -882,28 +939,11 @@ public final class ExecutionDriver {
                     blockEntity.getBlockPos().toShortString());
             return;
         }
-        Level level = blockEntity.getLevel();
-        if (!(level instanceof ServerLevel serverLevel)) {
-            return;
-        }
-        Vec3 position = Vec3.atCenterOf(blockEntity.getBlockPos());
-        for (ServerPlayer player : serverLevel.players()) {
-            if (player.distanceToSqr(position) <= CHAT_RADIUS_SQUARED) {
-                player.sendSystemMessage(Component.literal(message));
-            }
-        }
+        minecraft.sendNearbySystemMessage(blockEntity, Component.literal(message));
     }
 
     private static void applyRedstonePower(
-            CobbleputerBlockEntity blockEntity, cobbleware.effects.SetRedstonePower effect) {
-        if (!(blockEntity.getLevel() instanceof ServerLevel level)) {
-            return;
-        }
-        io.github.mmcgill.cobbleware.block.WirelessObserverNetwork network =
-                CobblewareMod.wirelessObserverNetworkOrNull();
-        if (network == null) {
-            return;
-        }
+            Minecraft minecraft, CobbleputerBlockEntity blockEntity, cobbleware.effects.SetRedstonePower effect) {
         Optional<UUID> observerId = effect.hasObserverId()
                 ? Optional.of(new UUID(
                         effect.getObserverId().getHigh(), effect.getObserverId().getLow()))
@@ -913,11 +953,7 @@ public final class ExecutionDriver {
         if (effect.hasObserverColor() && observerColor.isEmpty()) {
             return;
         }
-        network.setRedstonePower(
-                net.minecraft.core.GlobalPos.of(level.dimension(), blockEntity.getBlockPos()),
-                observerId,
-                observerColor,
-                effect.getPowerLevel());
+        minecraft.setRedstonePower(blockEntity, observerId, observerColor, effect.getPowerLevel());
     }
 
     private static ExecutionStatus executionStatus(BlockState blockState) {
@@ -928,13 +964,9 @@ public final class ExecutionDriver {
         };
     }
 
-    private static void updateVisibleState(CobbleputerBlockEntity blockEntity, CobbleputerState nextState) {
-        Level level = blockEntity.getLevel();
-        if (level == null) {
-            return;
-        }
-        BlockState current = blockEntity.getBlockState();
-        CobbleputerBlock.setLifecycleState(level, blockEntity.getBlockPos(), current, nextState);
+    private static void updateVisibleState(
+            Minecraft minecraft, CobbleputerBlockEntity blockEntity, CobbleputerState nextState) {
+        minecraft.setCobbleputerState(blockEntity, nextState);
     }
 
     private static boolean sameExecutionId(CobbleputerBlockEntity blockEntity, Uuid resultId) {
@@ -969,16 +1001,16 @@ public final class ExecutionDriver {
         return property.getName(state.getValue(property));
     }
 
-    private static cobbleware.common.GlobalPos protoGlobalPos(ServerLevel level, BlockPos pos) {
-        Identifier dimension = level.dimension().identifier();
+    private static cobbleware.common.GlobalPos protoGlobalPos(net.minecraft.core.GlobalPos globalPos) {
+        Identifier dimension = globalPos.dimension().identifier();
         return cobbleware.common.GlobalPos.newBuilder()
                 .setDimension(cobbleware.common.Identifier.newBuilder()
                         .setNs(dimension.getNamespace())
                         .setPath(dimension.getPath()))
                 .setPosition(cobbleware.common.Vec3i.newBuilder()
-                        .setX(pos.getX())
-                        .setY(pos.getY())
-                        .setZ(pos.getZ()))
+                        .setX(globalPos.pos().getX())
+                        .setY(globalPos.pos().getY())
+                        .setZ(globalPos.pos().getZ()))
                 .build();
     }
 
@@ -1049,9 +1081,9 @@ public final class ExecutionDriver {
                 .ifPresent(target -> instrumentation.recordEvent(target, event.getEventCase(), accepted));
     }
 
-    private void recordEventsPerSync(Flight dispatchedFlight) {
+    private void recordEventsPerSync(Minecraft minecraft, Flight dispatchedFlight) {
         for (OfferedExecution offered : dispatchedFlight.offered.values()) {
-            instrumentationKey(offered.blockEntity)
+            instrumentationKey(minecraft, offered.blockEntity)
                     .ifPresent(target -> instrumentation.recordEventsPerSync(target, offered.offeredEventCount));
         }
     }
@@ -1071,19 +1103,37 @@ public final class ExecutionDriver {
         return lifecycleState != CobbleputerState.STOPPED;
     }
 
-    private void recordEffect(CobbleputerBlockEntity blockEntity, Effect effect, long elapsedNanos, boolean failed) {
-        instrumentationKey(blockEntity)
+    private void recordEffect(
+            Minecraft minecraft, CobbleputerBlockEntity blockEntity, Effect effect, long elapsedNanos, boolean failed) {
+        instrumentationKey(minecraft, blockEntity)
                 .ifPresent(
                         target -> instrumentation.recordEffect(target, effect.getEffectCase(), elapsedNanos, failed));
     }
 
     private static Optional<Instrumentation.PlayerCobbleputerKey> instrumentationKey(
-            CobbleputerBlockEntity blockEntity) {
-        Optional<UUID> owner = blockEntity.ownerPlayerId();
-        if (owner.isEmpty() || !(blockEntity.getLevel() instanceof ServerLevel level)) {
+            Minecraft minecraft, CobbleputerBlockEntity blockEntity) {
+        Optional<net.minecraft.core.GlobalPos> globalPos = minecraft.globalPos(blockEntity, blockEntity.getBlockPos());
+        if (globalPos.isEmpty()) {
             return Optional.empty();
         }
-        Identifier dimension = level.dimension().identifier();
+        return instrumentationKey(
+                blockEntity, globalPos.orElseThrow().dimension().identifier());
+    }
+
+    private static Optional<Instrumentation.PlayerCobbleputerKey> instrumentationKey(
+            CobbleputerBlockEntity blockEntity) {
+        if (!(blockEntity.getLevel() instanceof ServerLevel level)) {
+            return Optional.empty();
+        }
+        return instrumentationKey(blockEntity, level.dimension().identifier());
+    }
+
+    private static Optional<Instrumentation.PlayerCobbleputerKey> instrumentationKey(
+            CobbleputerBlockEntity blockEntity, Identifier dimension) {
+        Optional<UUID> owner = blockEntity.ownerPlayerId();
+        if (owner.isEmpty()) {
+            return Optional.empty();
+        }
         BlockPos pos = blockEntity.getBlockPos();
         return Optional.of(new Instrumentation.PlayerCobbleputerKey(
                 owner.orElseThrow(),
@@ -1092,7 +1142,7 @@ public final class ExecutionDriver {
                         blockEntity.cobbleputerId(), dimension.toString(), pos.getX(), pos.getY(), pos.getZ())));
     }
 
-    private void recordCobbleputerStateGauge() {
+    private void recordCobbleputerStateGauge(Minecraft minecraft) {
         Map<Instrumentation.PlayerCobbleputerKey, Instrumentation.CobbleputerStateMeasurement> states = new HashMap<>();
         for (CobbleputerBlockEntity blockEntity : loadedCobbleputers.keySet()) {
             Instrumentation.LifecycleState lifecycle =
@@ -1108,17 +1158,17 @@ public final class ExecutionDriver {
                     .executionState()
                     .map(state -> (long) state.length)
                     .orElse(0L);
-            instrumentationKey(blockEntity)
+            instrumentationKey(minecraft, blockEntity)
                     .ifPresent(key ->
                             states.put(key, new Instrumentation.CobbleputerStateMeasurement(lifecycle, stateSize)));
         }
         instrumentation.recordCobbleputerStates(states);
     }
 
-    private void recordCobbleputerStateGaugeAndStream(MinecraftServer server) {
-        recordCobbleputerStateGauge();
+    private void recordCobbleputerStateGaugeAndStream(Minecraft minecraft) {
+        recordCobbleputerStateGauge(minecraft);
         ExecutionStateStore store = CobblewareMod.executionStateStoreOrNull();
-        mainWorkerClient.reportExecutionStats(ExecutionStatsReporter.report(
+        mainWorker.reportExecutionStats(ExecutionStatsReporter.report(
                 instrumentation.currentTickSnapshot(),
                 System.currentTimeMillis(),
                 store == null ? Map.of() : store.stateSizeCensus()));
@@ -1132,7 +1182,7 @@ public final class ExecutionDriver {
     }
 
     private void reportExecutionTransition(UUID owner, UUID executionId, ExecutionTransition transition) {
-        mainWorkerClient.reportExecutionTransition(
+        mainWorker.reportExecutionTransition(
                 owner,
                 executionId,
                 transition,
@@ -1145,8 +1195,7 @@ public final class ExecutionDriver {
         return blockEntity.ownerPlayerName().filter(name -> !name.isEmpty()).orElse(ownerId.toString());
     }
 
-    private static Instrumentation.SyncOutcome syncOutcome(
-            MainWorkerClient.ExecutionSyncResult result, Throwable failure) {
+    private static Instrumentation.SyncOutcome syncOutcome(MainWorker.ExecutionSyncResult result, Throwable failure) {
         if (failure != null || result == null) {
             return Instrumentation.SyncOutcome.EXCEPTION;
         }
@@ -1184,6 +1233,113 @@ public final class ExecutionDriver {
 
         private boolean hadExecutions() {
             return !offered.isEmpty();
+        }
+    }
+
+    private static final class ServerMinecraft implements Minecraft {
+        private final MinecraftServer server;
+
+        private ServerMinecraft(MinecraftServer server) {
+            this.server = server;
+        }
+
+        @Override
+        public Optional<CobbleputerBlockEntity> loadedCobbleputer(net.minecraft.core.GlobalPos target) {
+            ServerLevel targetLevel = server.getLevel(target.dimension());
+            if (targetLevel == null
+                    || !targetLevel.isLoaded(target.pos())
+                    || !(targetLevel.getBlockEntity(target.pos()) instanceof CobbleputerBlockEntity cobbleputer)) {
+                return Optional.empty();
+            }
+            return Optional.of(cobbleputer);
+        }
+
+        @Override
+        public boolean isServerLevel(BlockEntity blockEntity) {
+            return serverLevel(blockEntity).isPresent();
+        }
+
+        @Override
+        public OptionalLong gameTime(CobbleputerBlockEntity blockEntity) {
+            return serverLevel(blockEntity).isPresent()
+                    ? OptionalLong.of(serverLevel(blockEntity).orElseThrow().getGameTime())
+                    : OptionalLong.empty();
+        }
+
+        @Override
+        public Optional<net.minecraft.core.GlobalPos> globalPos(BlockEntity blockEntity, BlockPos pos) {
+            return serverLevel(blockEntity).map(level -> net.minecraft.core.GlobalPos.of(level.dimension(), pos));
+        }
+
+        @Override
+        public boolean isLoaded(BlockEntity blockEntity, BlockPos pos) {
+            return serverLevel(blockEntity).map(level -> level.isLoaded(pos)).orElse(false);
+        }
+
+        @Override
+        public Optional<WirelessObserverBlockEntity.ObservedBlockStateChange> takeObservedStateChange(
+                WirelessObserverBlockEntity observer) {
+            return isServerLevel(observer) ? observer.takeObservedStateChange() : Optional.empty();
+        }
+
+        @Override
+        public boolean initializeObservedState(WirelessObserverBlockEntity observer) {
+            return isServerLevel(observer) && observer.initializeObservedState();
+        }
+
+        @Override
+        public boolean setCobbleputerState(CobbleputerBlockEntity blockEntity, CobbleputerState nextState) {
+            return serverLevel(blockEntity)
+                    .map(level -> CobbleputerBlock.setLifecycleState(
+                            level, blockEntity.getBlockPos(), blockEntity.getBlockState(), nextState))
+                    .orElse(false);
+        }
+
+        @Override
+        public void sendSystemMessage(UUID playerId, Component message) {
+            ServerPlayer player = server.getPlayerList().getPlayer(playerId);
+            if (player != null) {
+                player.sendSystemMessage(message);
+            }
+        }
+
+        @Override
+        public void sendNearbySystemMessage(CobbleputerBlockEntity blockEntity, Component message) {
+            Optional<ServerLevel> level = serverLevel(blockEntity);
+            if (level.isEmpty()) {
+                return;
+            }
+            Vec3 position = Vec3.atCenterOf(blockEntity.getBlockPos());
+            for (ServerPlayer player : level.orElseThrow().players()) {
+                if (player.distanceToSqr(position) <= CHAT_RADIUS_SQUARED) {
+                    player.sendSystemMessage(message);
+                }
+            }
+        }
+
+        @Override
+        public void setRedstonePower(
+                CobbleputerBlockEntity blockEntity,
+                Optional<UUID> observerId,
+                Optional<DyeColor> observerColor,
+                int powerLevel) {
+            Optional<ServerLevel> level = serverLevel(blockEntity);
+            io.github.mmcgill.cobbleware.block.WirelessObserverNetwork network =
+                    CobblewareMod.wirelessObserverNetworkOrNull();
+            if (level.isEmpty() || network == null) {
+                return;
+            }
+            network.setRedstonePower(
+                    net.minecraft.core.GlobalPos.of(level.orElseThrow().dimension(), blockEntity.getBlockPos()),
+                    observerId,
+                    observerColor,
+                    powerLevel);
+        }
+
+        private static Optional<ServerLevel> serverLevel(BlockEntity blockEntity) {
+            return blockEntity != null && blockEntity.getLevel() instanceof ServerLevel level
+                    ? Optional.of(level)
+                    : Optional.empty();
         }
     }
 }

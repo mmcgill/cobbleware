@@ -33,8 +33,8 @@ import java.util.concurrent.ScheduledFuture;
 import java.util.concurrent.TimeUnit;
 import org.slf4j.Logger;
 
-/** Asynchronous client for the Main Worker's Mod API. */
-public final class MainWorkerClient {
+/** Asynchronous HTTP client for the Main Worker's Mod API. */
+public final class MainWorkerClient implements MainWorker {
     private static final Duration CONNECT_TIMEOUT = Duration.ofSeconds(5);
     private static final Duration REQUEST_TIMEOUT = Duration.ofSeconds(10);
 
@@ -629,32 +629,6 @@ public final class MainWorkerClient {
         CONFIGURATION_ERROR,
         UNAUTHORIZED,
         PROGRAM_ERROR,
-        UNAVAILABLE
-    }
-
-    /** Result of an asynchronous execution-sync request. */
-    public record ExecutionSyncResult(ExecutionSyncStatus status, ExecutionsResponse response, String detail) {
-        public static ExecutionSyncResult success(ExecutionsResponse response) {
-            return new ExecutionSyncResult(ExecutionSyncStatus.SUCCESS, response, null);
-        }
-
-        public static ExecutionSyncResult configurationError(String detail) {
-            return new ExecutionSyncResult(ExecutionSyncStatus.CONFIGURATION_ERROR, null, detail);
-        }
-
-        public static ExecutionSyncResult unauthorized() {
-            return new ExecutionSyncResult(ExecutionSyncStatus.UNAUTHORIZED, null, null);
-        }
-
-        public static ExecutionSyncResult unavailable(String detail) {
-            return new ExecutionSyncResult(ExecutionSyncStatus.UNAVAILABLE, null, detail);
-        }
-    }
-
-    public enum ExecutionSyncStatus {
-        SUCCESS,
-        CONFIGURATION_ERROR,
-        UNAUTHORIZED,
         UNAVAILABLE
     }
 }
