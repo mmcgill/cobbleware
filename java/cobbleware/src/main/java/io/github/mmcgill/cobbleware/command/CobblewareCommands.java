@@ -10,6 +10,7 @@ import io.github.mmcgill.cobbleware.block.CobbleputerBlock;
 import io.github.mmcgill.cobbleware.block.CobbleputerBlockEntity;
 import io.github.mmcgill.cobbleware.block.CobbleputerState;
 import io.github.mmcgill.cobbleware.execution.ExecutionDriver;
+import io.github.mmcgill.cobbleware.instrumentation.Instrumentation;
 import io.github.mmcgill.cobbleware.instrumentation.StatsFormatter;
 import io.github.mmcgill.cobbleware.registry.CobblewareBlocks;
 import java.util.Optional;
@@ -40,12 +41,13 @@ public final class CobblewareCommands {
 
     private CobblewareCommands() {}
 
-    public static void register(MainWorkerClient mainWorkerClient, ExecutionDriver executionDriver) {
+    public static void register(
+            MainWorkerClient mainWorkerClient, Instrumentation instrumentation, ExecutionDriver executionDriver) {
         CommandRegistrationCallback.EVENT.register((dispatcher, registryAccess, environment) ->
                 dispatcher.register(Commands.literal("cobbleware")
                         .then(Commands.literal("auth")
                                 .then(Commands.argument("code", StringArgumentType.word())
-                                        .executes(context -> authenticate(context, mainWorkerClient, executionDriver))))
+                                        .executes(context -> authenticate(context, mainWorkerClient))))
                         .then(Commands.literal("program").executes(context -> program(context, mainWorkerClient)))
                         .then(Commands.literal("exec")
                                 .then(Commands.argument("start-state", StringArgumentType.word())
@@ -56,29 +58,23 @@ public final class CobblewareCommands {
                         .then(Commands.literal("resume").executes(context -> resume(context, executionDriver)))
                         .then(Commands.literal("stats")
                                 .requires(source -> source.permissions().hasPermission(Permissions.COMMANDS_GAMEMASTER))
-                                .executes(context -> stats(context, executionDriver))
+                                .executes(context -> stats(context, instrumentation))
                                 .then(Commands.argument("qualifier", StringArgumentType.word())
                                         .suggests((context, builder) -> SharedSuggestionProvider.suggest(
-                                                StatsFormatter.qualifiers(executionDriver
-                                                        .instrumentation()
-                                                        .snapshot()),
-                                                builder))
-                                        .executes(context -> stats(context, executionDriver))))));
+                                                StatsFormatter.qualifiers(instrumentation.snapshot()), builder))
+                                        .executes(context -> stats(context, instrumentation))))));
     }
 
-    private static int stats(CommandContext<CommandSourceStack> context, ExecutionDriver executionDriver) {
+    private static int stats(CommandContext<CommandSourceStack> context, Instrumentation instrumentation) {
         String qualifier;
         try {
             qualifier = StringArgumentType.getString(context, "qualifier");
         } catch (IllegalArgumentException ignored) {
-            sendStats(
-                    context.getSource(),
-                    StatsFormatter.all(executionDriver.instrumentation().snapshot()));
+            sendStats(context.getSource(), StatsFormatter.all(instrumentation.snapshot()));
             return 1;
         }
 
-        io.github.mmcgill.cobbleware.instrumentation.Instrumentation.Snapshot snapshot =
-                executionDriver.instrumentation().snapshot();
+        io.github.mmcgill.cobbleware.instrumentation.Instrumentation.Snapshot snapshot = instrumentation.snapshot();
         try {
             UUID cobbleputerId = UUID.fromString(qualifier);
             Optional<java.util.List<StatsFormatter.Line>> stats = StatsFormatter.cobbleputer(snapshot, cobbleputerId);
@@ -119,10 +115,7 @@ public final class CobblewareCommands {
         }
     }
 
-    private static int authenticate(
-            CommandContext<CommandSourceStack> context,
-            MainWorkerClient mainWorkerClient,
-            ExecutionDriver executionDriver) {
+    private static int authenticate(CommandContext<CommandSourceStack> context, MainWorkerClient mainWorkerClient) {
         CommandSourceStack source = context.getSource();
         ServerPlayer player;
         try {

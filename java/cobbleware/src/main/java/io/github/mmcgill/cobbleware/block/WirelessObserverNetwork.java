@@ -9,7 +9,6 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
-import net.fabricmc.fabric.api.event.lifecycle.v1.ServerTickEvents;
 import net.minecraft.core.GlobalPos;
 import net.minecraft.core.particles.DustParticleOptions;
 import net.minecraft.server.MinecraftServer;
@@ -32,9 +31,7 @@ public final class WirelessObserverNetwork {
     private final Set<WirelessObserverBlockEntity> pendingPairingValidations =
             Collections.newSetFromMap(new IdentityHashMap<>());
 
-    public WirelessObserverNetwork() {
-        ServerTickEvents.END_SERVER_TICK.register(this::tick);
-    }
+    public WirelessObserverNetwork() {}
 
     public void activate(WirelessObserverBlockEntity observer) {
         reindex(observer);
@@ -143,7 +140,8 @@ public final class WirelessObserverNetwork {
         }
     }
 
-    private void tick(MinecraftServer server) {
+    /** Per-tick processing of the Wirless Observer network. */
+    public void tick(MinecraftServer server) {
         validatePairings(server);
         if (server.overworld().getGameTime() % VISUALIZATION_INTERVAL_TICKS != 0) {
             return;

@@ -20,7 +20,7 @@ class InstrumentationTest {
     void aggregatesRetainedTicksAndEvictsTheOldestBucket() {
         Instrumentation instrumentation = new Instrumentation(2);
 
-        instrumentation.advanceTick(1);
+        instrumentation.advanceTick();
         instrumentation.recordSyncCompletion(3, Instrumentation.SyncOutcome.SUCCESS);
         instrumentation.recordEvent(TARGET, Event.EventCase.CHAT_MESSAGE, true);
         instrumentation.recordEventsPerSync(TARGET, 2);
@@ -28,7 +28,7 @@ class InstrumentationTest {
         instrumentation.recordCobbleputerStates(Map.of(
                 TARGET, new Instrumentation.CobbleputerStateMeasurement(Instrumentation.LifecycleState.RUNNING, 3)));
 
-        instrumentation.advanceTick(2);
+        instrumentation.advanceTick();
         instrumentation.recordSyncCompletion(7, Instrumentation.SyncOutcome.UNAVAILABLE);
         instrumentation.recordEvent(TARGET, Event.EventCase.CHAT_MESSAGE, false);
         instrumentation.recordEventsPerSync(TARGET, 4);
@@ -68,7 +68,7 @@ class InstrumentationTest {
                 UnsupportedOperationException.class,
                 () -> fullWindow.events().put(eventKey, new Instrumentation.EventCounts(0, 0)));
 
-        instrumentation.advanceTick(3);
+        instrumentation.advanceTick();
         instrumentation.recordCobbleputerStates(Map.of(
                 TARGET, new Instrumentation.CobbleputerStateMeasurement(Instrumentation.LifecycleState.RUNNING, 5)));
 

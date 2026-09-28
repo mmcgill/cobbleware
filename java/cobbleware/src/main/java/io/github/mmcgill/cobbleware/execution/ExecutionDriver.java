@@ -39,7 +39,6 @@ import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentLinkedQueue;
-import net.fabricmc.fabric.api.event.lifecycle.v1.ServerTickEvents;
 import net.fabricmc.fabric.api.message.v1.ServerMessageEvents;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
@@ -95,7 +94,6 @@ public final class ExecutionDriver {
     private CompletableFuture<MainWorkerClient.ExecutionSyncResult> inFlight;
     private Flight flight;
     private boolean runtimeMayHaveExecutions;
-    private long instrumentationTick;
 
     public ExecutionDriver(
             MainWorkerClient mainWorkerClient,
@@ -116,7 +114,6 @@ public final class ExecutionDriver {
         this.maxRunningExecutionsPerPlayer = maxRunningExecutionsPerPlayer;
         this.maxTotalExecutionStateBytesPerPlayer = maxTotalExecutionStateBytesPerPlayer;
         this.logger = logger;
-        ServerTickEvents.END_SERVER_TICK.register(this::tick);
         ServerMessageEvents.CHAT_MESSAGE.register(
                 (message, sender, parameters) -> dispatchChatMessage(sender, message.signedContent()));
     }
@@ -183,11 +180,6 @@ public final class ExecutionDriver {
     public void deactivate(WirelessObserverBlockEntity observer) {
         pendingObserverInitializations.remove(observer);
         pendingObserverChanges.remove(observer);
-    }
-
-    /** Returns the Mod's read-only in-memory instrumentation collector. */
-    public Instrumentation instrumentation() {
-        return instrumentation;
     }
 
     /** Delivers lifecycle events after an observer's durable pairing has been replaced. */
@@ -357,9 +349,8 @@ public final class ExecutionDriver {
         }
     }
 
-    private void tick(MinecraftServer server) {
-        instrumentationTick += 1;
-        instrumentation.advanceTick(instrumentationTick);
+    /** Call once per server tick to advance execution state. */
+    public void driveExecutions(MinecraftServer server) {
         drainChunkNonTickingTransitions();
         drainChunkLoadResumes(server);
         drainCompletedSyncMeasurements();

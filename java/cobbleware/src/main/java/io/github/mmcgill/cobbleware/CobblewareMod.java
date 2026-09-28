@@ -17,6 +17,7 @@ import io.github.mmcgill.cobbleware.registry.CobblewareItems;
 import net.fabricmc.api.ModInitializer;
 import net.fabricmc.fabric.api.event.lifecycle.v1.ServerChunkEvents;
 import net.fabricmc.fabric.api.event.lifecycle.v1.ServerLifecycleEvents;
+import net.fabricmc.fabric.api.event.lifecycle.v1.ServerTickEvents;
 import net.minecraft.server.level.FullChunkStatus;
 import net.minecraft.world.level.storage.LevelResource;
 import org.slf4j.Logger;
@@ -66,9 +67,10 @@ public final class CobblewareMod implements ModInitializer {
                     + " configured");
         }
         MainWorkerClient mainWorkerClient = new MainWorkerClient(config, LOGGER);
+        Instrumentation instrumentation = new Instrumentation(config.instrumentationWindowTicks());
         executionDriver = new ExecutionDriver(
                 mainWorkerClient,
-                new Instrumentation(config.instrumentationWindowTicks()),
+                instrumentation,
                 config.maxRunningExecutionsPerPlayer(),
                 config.maxTotalExecutionStateBytesPerPlayer(),
                 LOGGER);
@@ -122,6 +124,11 @@ public final class CobblewareMod implements ModInitializer {
                         wirelessObserverNetwork.deactivate(observer);
                     }
                 }));
-        CobblewareCommands.register(mainWorkerClient, executionDriver);
+        ServerTickEvents.END_SERVER_TICK.register((server) -> {
+            instrumentation.advanceTick();
+            wirelessObserverNetwork.tick(server);
+            executionDriver.driveExecutions(server);
+        });
+        CobblewareCommands.register(mainWorkerClient, instrumentation, executionDriver);
     }
 }

@@ -24,7 +24,7 @@ class StatsFormatterTest {
                 new Instrumentation.CobbleputerKey(COBBLEPUTER_ID, "minecraft:overworld", 12, 64, -5);
         Instrumentation.PlayerCobbleputerKey target =
                 new Instrumentation.PlayerCobbleputerKey(PLAYER_ID, "Alice", cobbleputer);
-        instrumentation.advanceTick(1);
+        instrumentation.advanceTick();
         instrumentation.recordSyncCompletion(2_000_000, Instrumentation.SyncOutcome.SUCCESS);
         instrumentation.recordEvent(target, Event.EventCase.CHAT_MESSAGE, true);
         instrumentation.recordEvent(target, Event.EventCase.CHAT_MESSAGE, false);

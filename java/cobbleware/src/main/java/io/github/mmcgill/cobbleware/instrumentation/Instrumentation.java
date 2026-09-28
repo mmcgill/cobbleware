@@ -14,7 +14,7 @@ import java.util.UUID;
  */
 public final class Instrumentation {
     private final TickBucket[] buckets;
-    private long currentTick;
+    private long currentTick = 0;
 
     public Instrumentation(int windowTicks) {
         if (windowTicks <= 0) {
@@ -26,12 +26,9 @@ public final class Instrumentation {
         }
     }
 
-    /** Advances the collector's server-tick clock. Repeated calls for one tick are harmless. */
-    public synchronized void advanceTick(long tick) {
-        if (tick < currentTick) {
-            throw new IllegalArgumentException("instrumentation tick cannot move backwards");
-        }
-        currentTick = tick;
+    /** Advances the collector's server-tick clock. */
+    public synchronized void advanceTick() {
+        currentTick += 1;
         currentBucket();
     }
 

@@ -193,11 +193,6 @@ public final class StatsFormatter {
     }
 
     private static void appendEvents(
-            List<Line> lines, Map<Instrumentation.EventMetricKey, Instrumentation.EventCounts> events) {
-        appendEvents(lines, events.entrySet());
-    }
-
-    private static void appendEvents(
             List<Line> lines,
             java.util.Collection<Map.Entry<Instrumentation.EventMetricKey, Instrumentation.EventCounts>> events) {
         if (events.isEmpty()) {
@@ -223,11 +218,6 @@ public final class StatsFormatter {
                         Long.toString(entry.getValue().accepted()),
                         "dropped",
                         Long.toString(entry.getValue().dropped()))));
-    }
-
-    private static void appendEffects(
-            List<Line> lines, Map<Instrumentation.EffectMetricKey, Instrumentation.EffectCounts> effects) {
-        appendEffects(lines, effects.entrySet());
     }
 
     private static void appendEventsPerSync(
@@ -281,12 +271,6 @@ public final class StatsFormatter {
                         Long.toString(entry.getValue().attempted()),
                         "failed",
                         Long.toString(entry.getValue().failed()))));
-    }
-
-    private static void appendStates(
-            List<Line> lines,
-            Map<Instrumentation.PlayerCobbleputerKey, Instrumentation.CobbleputerStateMeasurement> states) {
-        appendStates(lines, states.entrySet());
     }
 
     private static void appendStates(

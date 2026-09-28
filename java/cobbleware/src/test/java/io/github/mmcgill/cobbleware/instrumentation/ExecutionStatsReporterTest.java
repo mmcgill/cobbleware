@@ -20,7 +20,7 @@ class ExecutionStatsReporterTest {
     @Test
     void reportsRawPlayerMeasurementsFromOneTick() {
         Instrumentation instrumentation = new Instrumentation(20);
-        instrumentation.advanceTick(1);
+        instrumentation.advanceTick();
         instrumentation.recordEvent(TARGET, Event.EventCase.CHAT_MESSAGE, true);
         instrumentation.recordEvent(TARGET, Event.EventCase.CHAT_MESSAGE, false);
         instrumentation.recordEventsPerSync(TARGET, 3);
