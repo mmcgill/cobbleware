@@ -1,5 +1,6 @@
 package io.github.mmcgill.cobbleware.command;
 
+import com.mojang.brigadier.arguments.IntegerArgumentType;
 import com.mojang.brigadier.arguments.StringArgumentType;
 import com.mojang.brigadier.context.CommandContext;
 import com.mojang.brigadier.exceptions.CommandSyntaxException;
@@ -10,9 +11,12 @@ import io.github.mmcgill.cobbleware.block.CobbleputerBlock;
 import io.github.mmcgill.cobbleware.block.CobbleputerBlockEntity;
 import io.github.mmcgill.cobbleware.block.CobbleputerState;
 import io.github.mmcgill.cobbleware.execution.ExecutionDriver;
+import io.github.mmcgill.cobbleware.execution.PlayerPriorityStore;
+import io.github.mmcgill.cobbleware.execution.PlayerPriorityStore.PriorityTarget;
 import io.github.mmcgill.cobbleware.instrumentation.Instrumentation;
 import io.github.mmcgill.cobbleware.instrumentation.StatsFormatter;
 import io.github.mmcgill.cobbleware.registry.CobblewareBlocks;
+import java.util.Collection;
 import java.util.Optional;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
@@ -21,6 +25,7 @@ import net.fabricmc.fabric.api.command.v2.CommandRegistrationCallback;
 import net.minecraft.commands.CommandSourceStack;
 import net.minecraft.commands.Commands;
 import net.minecraft.commands.SharedSuggestionProvider;
+import net.minecraft.commands.arguments.GameProfileArgument;
 import net.minecraft.core.BlockPos;
 import net.minecraft.network.chat.Component;
 import net.minecraft.network.chat.FontDescription;
@@ -29,6 +34,7 @@ import net.minecraft.resources.Identifier;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.server.permissions.Permissions;
+import net.minecraft.server.players.NameAndId;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.phys.Vec3;
@@ -42,7 +48,10 @@ public final class CobblewareCommands {
     private CobblewareCommands() {}
 
     public static void register(
-            MainWorkerClient mainWorkerClient, Instrumentation instrumentation, ExecutionDriver executionDriver) {
+            MainWorkerClient mainWorkerClient,
+            Instrumentation instrumentation,
+            ExecutionDriver executionDriver,
+            PlayerPriorityStore playerPriorityStore) {
         CommandRegistrationCallback.EVENT.register((dispatcher, registryAccess, environment) ->
                 dispatcher.register(Commands.literal("cobbleware")
                         .then(Commands.literal("auth")
@@ -56,6 +65,33 @@ public final class CobblewareCommands {
                                         .executes(context -> execute(context, mainWorkerClient, executionDriver))))
                         .then(Commands.literal("pause").executes(context -> pause(context, executionDriver)))
                         .then(Commands.literal("resume").executes(context -> resume(context, executionDriver)))
+                        .then(Commands.literal("setpriority")
+                                .requires(source -> source.permissions().hasPermission(Permissions.COMMANDS_GAMEMASTER))
+                                .then(Commands.argument("player", GameProfileArgument.gameProfile())
+                                        .then(Commands.literal("online")
+                                                .then(Commands.argument(
+                                                                "priority",
+                                                                IntegerArgumentType.integer(
+                                                                        PlayerPriorityStore.MIN_PRIORITY,
+                                                                        PlayerPriorityStore.MAX_PRIORITY))
+                                                        .executes(context -> setPriority(
+                                                                context, playerPriorityStore, PriorityTarget.ONLINE))))
+                                        .then(Commands.literal("offline")
+                                                .then(Commands.argument(
+                                                                "priority",
+                                                                IntegerArgumentType.integer(
+                                                                        PlayerPriorityStore.MIN_PRIORITY,
+                                                                        PlayerPriorityStore.MAX_PRIORITY))
+                                                        .executes(context -> setPriority(
+                                                                context,
+                                                                playerPriorityStore,
+                                                                PriorityTarget.OFFLINE))))))
+                        .then(Commands.literal("priority")
+                                .executes(context -> ownPriority(context, playerPriorityStore))
+                                .then(Commands.argument("player", GameProfileArgument.gameProfile())
+                                        .requires(source ->
+                                                source.permissions().hasPermission(Permissions.COMMANDS_GAMEMASTER))
+                                        .executes(context -> targetPriority(context, playerPriorityStore))))
                         .then(Commands.literal("stats")
                                 .requires(source -> source.permissions().hasPermission(Permissions.COMMANDS_GAMEMASTER))
                                 .executes(context -> stats(context, instrumentation))
@@ -63,6 +99,84 @@ public final class CobblewareCommands {
                                         .suggests((context, builder) -> SharedSuggestionProvider.suggest(
                                                 StatsFormatter.qualifiers(instrumentation.snapshot()), builder))
                                         .executes(context -> stats(context, instrumentation))))));
+    }
+
+    private static int ownPriority(
+            CommandContext<CommandSourceStack> context, PlayerPriorityStore playerPriorityStore) {
+        ServerPlayer player;
+        try {
+            player = context.getSource().getPlayerOrException();
+        } catch (CommandSyntaxException exception) {
+            context.getSource().sendFailure(Component.literal("Specify a player to view execution priorities."));
+            return 0;
+        }
+        return sendPriorities(
+                context.getSource(), player.getGameProfile().name(), player.getUUID(), playerPriorityStore);
+    }
+
+    private static int targetPriority(
+            CommandContext<CommandSourceStack> context, PlayerPriorityStore playerPriorityStore)
+            throws CommandSyntaxException {
+        Optional<NameAndId> target = priorityTarget(context);
+        if (target.isEmpty()) {
+            return 0;
+        }
+        NameAndId profile = target.orElseThrow();
+        return sendPriorities(context.getSource(), profile.name(), profile.id(), playerPriorityStore);
+    }
+
+    private static int setPriority(
+            CommandContext<CommandSourceStack> context,
+            PlayerPriorityStore playerPriorityStore,
+            PriorityTarget priorityTarget)
+            throws CommandSyntaxException {
+        Optional<NameAndId> target = priorityTarget(context);
+        if (target.isEmpty()) {
+            return 0;
+        }
+        if (!playerPriorityStore.isAvailable()) {
+            context.getSource().sendFailure(Component.literal(playerPriorityStore.unavailableReason()));
+            return 0;
+        }
+
+        NameAndId profile = target.orElseThrow();
+        int priority = IntegerArgumentType.getInteger(context, "priority");
+        PlayerPriorityStore.Priorities priorities =
+                playerPriorityStore.setPriority(profile.id(), priorityTarget, priority);
+        String selected = priorityTarget == PriorityTarget.ONLINE ? "online" : "offline";
+        context.getSource()
+                .sendSuccess(
+                        () -> Component.literal("Set " + profile.name() + "'s " + selected + " execution priority to "
+                                + priority + ". " + formatPriorities(priorities)),
+                        false);
+        return 1;
+    }
+
+    private static Optional<NameAndId> priorityTarget(CommandContext<CommandSourceStack> context)
+            throws CommandSyntaxException {
+        Collection<NameAndId> profiles = GameProfileArgument.getGameProfiles(context, "player");
+        if (profiles.size() != 1) {
+            context.getSource().sendFailure(Component.literal("Specify exactly one player."));
+            return Optional.empty();
+        }
+        return profiles.stream().findFirst();
+    }
+
+    private static int sendPriorities(
+            CommandSourceStack source, String playerName, UUID playerId, PlayerPriorityStore playerPriorityStore) {
+        if (!playerPriorityStore.isAvailable()) {
+            source.sendFailure(Component.literal(playerPriorityStore.unavailableReason()));
+            return 0;
+        }
+        source.sendSuccess(
+                () -> Component.literal(playerName + "'s execution priorities: "
+                        + formatPriorities(playerPriorityStore.priorities(playerId))),
+                false);
+        return 1;
+    }
+
+    private static String formatPriorities(PlayerPriorityStore.Priorities priorities) {
+        return "online " + priorities.onlinePriority() + "; offline " + priorities.offlinePriority();
     }
 
     private static int stats(CommandContext<CommandSourceStack> context, Instrumentation instrumentation) {

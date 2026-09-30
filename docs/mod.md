@@ -50,6 +50,27 @@ is published as a limit-exceeded log entry before the crash transition.
 This command is run with a `<code>` provided to the user through their web browser. It serves
 to tie a browser session to an already-authenticated Player logged into the Minecraft server.
 
+### Execution Priority
+
+At any given time each player has an _execution priority_ that is used to determine which
+pool their executions are assigned to. The valid priority values are 1, 2, 3. By default,
+online players have priority 2 and offline players have priority 3.
+
+```
+/cobbleware setpriority <player> <online|offline> <priority>
+```
+
+The `setpriority` command (which requires permission level 2 or higher) can be used to
+persistently set the online or offline priority of a specific player.
+
+```
+/cobbleware priority [player]
+```
+
+The `priority <player>` command can be used to check the online and offline priorities of a player.
+Users with permission level 2 or higher can check the priorities of any player.
+Users with lower-level permission can check only their own priorities.
+
 ### Program
 
 ```
