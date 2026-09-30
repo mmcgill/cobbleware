@@ -359,9 +359,29 @@ public final class ExecutionDriver {
             throw new IllegalArgumentException("Cobbleputer event arguments must not be null");
         }
         EphemeralCobbleputerState ephemeralState = loadedCobbleputers.get(blockEntity);
-        if (ephemeralState != null) {
-            enqueueActiveEvent(blockEntity, ephemeralState, event);
-        } else {
+        if (ephemeralState == null || !blockEntity.hasExecution()) {
+            recordRejectedEvent(blockEntity, event);
+            return;
+        }
+        if (blockEntity.getBlockState().getValue(CobbleputerBlock.STATE) != CobbleputerState.RUNNING) {
+            recordRejectedEvent(blockEntity, event);
+            return;
+        }
+        if (ephemeralState.events.size() >= MAX_PENDING_EVENTS_PER_EXECUTION) {
+            logger.debug(
+                    "Dropping Cobbleputer event at {} because its pending queue is full",
+                    blockEntity.getBlockPos().toShortString());
+            recordRejectedEvent(blockEntity, event);
+            return;
+        }
+        try {
+            ephemeralState.events.addLast(new QueuedEvent(blockEntity.claimNextEventSequenceNum(), event));
+            recordEvent(blockEntity, event, true);
+        } catch (RuntimeException exception) {
+            logger.error(
+                    "Could not enqueue Cobbleputer event at {}: {}",
+                    blockEntity.getBlockPos().toShortString(),
+                    exception.toString());
             recordRejectedEvent(blockEntity, event);
         }
     }
@@ -372,41 +392,12 @@ public final class ExecutionDriver {
                 .setChatMessage(ChatMessage.newBuilder().setMessage(message))
                 .build();
         Level senderLevel = sender.level();
-        for (Map.Entry<CobbleputerBlockEntity, EphemeralCobbleputerState> entry : loadedCobbleputers.entrySet()) {
-            CobbleputerBlockEntity blockEntity = entry.getKey();
+        for (CobbleputerBlockEntity blockEntity : loadedCobbleputers.keySet()) {
             if (blockEntity.getLevel() != senderLevel
                     || sender.distanceToSqr(Vec3.atCenterOf(blockEntity.getBlockPos())) > CHAT_RADIUS_SQUARED) {
                 continue;
             }
-            enqueueActiveEvent(blockEntity, entry.getValue(), event);
-        }
-    }
-
-    private void enqueueActiveEvent(CobbleputerBlockEntity blockEntity, EphemeralCobbleputerState active, Event event) {
-        if (active == null || !blockEntity.hasExecution()) {
-            recordRejectedEvent(blockEntity, event);
-            return;
-        }
-        if (blockEntity.getBlockState().getValue(CobbleputerBlock.STATE) != CobbleputerState.RUNNING) {
-            recordRejectedEvent(blockEntity, event);
-            return;
-        }
-        if (active.events.size() >= MAX_PENDING_EVENTS_PER_EXECUTION) {
-            logger.debug(
-                    "Dropping Cobbleputer event at {} because its pending queue is full",
-                    blockEntity.getBlockPos().toShortString());
-            recordRejectedEvent(blockEntity, event);
-            return;
-        }
-        try {
-            active.events.addLast(new QueuedEvent(blockEntity.claimNextEventSequenceNum(), event));
-            recordEvent(blockEntity, event, true);
-        } catch (RuntimeException exception) {
-            logger.error(
-                    "Could not enqueue Cobbleputer event at {}: {}",
-                    blockEntity.getBlockPos().toShortString(),
-                    exception.toString());
-            recordRejectedEvent(blockEntity, event);
+            enqueueEvent(blockEntity, event);
         }
     }
 
