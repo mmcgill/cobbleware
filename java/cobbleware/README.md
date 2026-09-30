@@ -38,6 +38,14 @@ Generation is also wired into Java compilation. Gradle regenerates bindings when
 .\gradlew.bat runServer
 ```
 
+The development server continues to use `run` and is configured with `online-mode=false`, so the named development clients
+can join without Mojang authentication. Start each client in its own run directory with:
+
+```powershell
+.\gradlew.bat runAlice
+.\gradlew.bat runBob
+```
+
 On a fresh development server, Minecraft creates `run/eula.txt`. Accept Mojang's EULA by setting `eula=true` before
 starting the server again. The scaffold's `/cobbleware startstates` command currently responds with `hello world`.
 

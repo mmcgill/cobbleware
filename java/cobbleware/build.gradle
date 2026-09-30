@@ -31,6 +31,54 @@ dependencies {
     testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
 }
 
+loom {
+    runs {
+        server {
+            runDir 'run'
+        }
+        alice {
+            client()
+            name 'Alice'
+            runDir 'run/alice'
+            programArgs '--username', 'Alice'
+        }
+        bob {
+            client()
+            name 'Bob'
+            runDir 'run/bob'
+            programArgs '--username', 'Bob'
+        }
+    }
+}
+
+def developmentServerProperties = layout.projectDirectory.file('run/server.properties')
+
+tasks.register('configureDevelopmentServer') {
+    group = 'fabric'
+    description = 'Configures the development server to accept offline-mode players.'
+    outputs.file(developmentServerProperties)
+
+    doLast {
+        File propertiesFile = developmentServerProperties.asFile
+        if (!propertiesFile.isFile()) {
+            propertiesFile.parentFile.mkdirs()
+        }
+
+        String contents = propertiesFile.isFile() ? propertiesFile.getText('UTF-8') : ''
+        if (contents =~ /(?m)^online-mode=[^\r\n]*/) {
+            contents = contents.replaceFirst(/(?m)^online-mode=[^\r\n]*/, 'online-mode=false')
+        } else {
+            String newline = contents.contains('\r\n') ? '\r\n' : '\n'
+            contents += (contents.isEmpty() || contents.endsWith(newline) ? '' : newline) + 'online-mode=false' + newline
+        }
+        propertiesFile.setText(contents, 'UTF-8')
+    }
+}
+
+tasks.named('runServer') {
+    dependsOn(tasks.named('configureDevelopmentServer'))
+}
+
 sourceSets {
     main {
         proto {
