@@ -28,6 +28,7 @@ class CobblewareConfigLoaderTest {
         assertEquals("", config.mainWorkerApiKey());
         assertEquals(600, config.instrumentationWindowTicks());
         assertEquals(10, config.maxRunningExecutionsPerPlayer());
+        assertEquals(200, config.maxQueuedEventsPerPlayer());
         assertEquals(1_048_576, config.maxTotalExecutionStateBytesPerPlayer());
         assertNull(config.configurationError());
         assertFalse(config.isEnabled());
@@ -37,6 +38,7 @@ class CobblewareConfigLoaderTest {
                 "{\n  \"mainWorkerUrl\": \"http://localhost:9000\",\n  \"mainWorkerApiKey\": \"\",\n"
                         + "  \"instrumentationWindowTicks\": 600,\n"
                         + "  \"maxRunningExecutionsPerPlayer\": 10,\n"
+                        + "  \"maxQueuedEventsPerPlayer\": 200,\n"
                         + "  \"maxTotalExecutionStateBytesPerPlayer\": 1048576\n}\n",
                 Files.readString(configPath));
     }
@@ -49,7 +51,8 @@ class CobblewareConfigLoaderTest {
               "mainWorkerUrl": "https://example.test/cobbleware",
               "mainWorkerApiKey": "secret",
               "instrumentationWindowTicks": 42,
-              "maxRunningExecutionsPerPlayer": 7
+              "maxRunningExecutionsPerPlayer": 7,
+              "maxQueuedEventsPerPlayer": 123
             }
             """);
 
@@ -60,6 +63,7 @@ class CobblewareConfigLoaderTest {
                 configured.mainWorkerBaseUri().toString());
         assertEquals(42, configured.instrumentationWindowTicks());
         assertEquals(7, configured.maxRunningExecutionsPerPlayer());
+        assertEquals(123, configured.maxQueuedEventsPerPlayer());
         assertEquals(1_048_576, configured.maxTotalExecutionStateBytesPerPlayer());
         assertTrue(configured.isEnabled());
 
@@ -119,6 +123,7 @@ class CobblewareConfigLoaderTest {
 
         assertEquals(600, config.instrumentationWindowTicks());
         assertEquals(10, config.maxRunningExecutionsPerPlayer());
+        assertEquals(200, config.maxQueuedEventsPerPlayer());
         assertEquals(1_048_576, config.maxTotalExecutionStateBytesPerPlayer());
         assertTrue(config.isEnabled());
     }
@@ -148,6 +153,22 @@ class CobblewareConfigLoaderTest {
               "mainWorkerUrl": "http://localhost:9000",
               "mainWorkerApiKey": "secret",
               "maxTotalExecutionStateBytesPerPlayer": 1.5
+            }
+            """);
+
+        CobblewareConfig config = CobblewareConfigLoader.load(configPath, LOGGER);
+
+        assertFalse(config.isEnabled());
+    }
+
+    @Test
+    void rejectsInvalidQueuedEventLimit() throws Exception {
+        Path configPath = tempDir.resolve(CobblewareConfigLoader.FILE_NAME);
+        Files.writeString(configPath, """
+            {
+              "mainWorkerUrl": "http://localhost:9000",
+              "mainWorkerApiKey": "secret",
+              "maxQueuedEventsPerPlayer": 1.5
             }
             """);
 

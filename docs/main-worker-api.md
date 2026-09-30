@@ -544,8 +544,8 @@ It contains, for each active execution:
 * A bounded queue of events to be processed.
 * A bounded queue of effects emitted by the execution and not yet acknowledged by the Mod.
 
-The Runtime currently hard-codes an event-window limit of 10 events per execution. If the Mod's
-authoritative snapshot contains more pending events, the Runtime retains only the first 10. Once the
+The Runtime currently hard-codes an event-window limit of 50 events per execution. If the Mod's
+authoritative snapshot contains more pending events, the Runtime retains only the first 50. Once the
 Mod accepts a consumed prefix and advances its in-memory queue, a later sync fills the newly
 available window slots from the remaining suffix. The Mod must therefore retain the suffix until the
 Runtime reports it consumed.

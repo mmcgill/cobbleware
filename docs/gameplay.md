@@ -58,11 +58,12 @@ be arbitrarily modified by that event handler. Its maximum returned-state size i
 derived from its owner's remaining total execution-state capacity. If an event handler returns a
 state value larger than that allowance, the 'puter crashes and the returned state value is discarded.
 
-Each 'puter has an associated in-memory event queue with a current maximum length of 10.
-If events are produced faster than the 'puter can process them, the queue will eventually fill.
-When the event queue is full, new events are dropped.
-Events produced while a 'puter is `STOPPED` are not enqueued and are not replayed when it resumes;
-events already in its queue remain there until the 'puter resumes.
+Each player has one shared, in-memory allowance of 200 queued events by default across all of
+their active 'puters. If events are produced faster than that player's programs can process them,
+the allowance eventually fills and new events for their running 'puters are dropped. Events
+produced while a 'puter is `STOPPED` are not enqueued and are not replayed when it resumes;
+events already in its queue remain there and continue to use the owner's allowance until they are
+processed or lost.
 
 ### State Durability
 
@@ -82,7 +83,7 @@ this behavior.
 
 Pending events and received effects are held only by the Mod while the Cobbleputer is active;
 they are best-effort and can be lost on server restart or chunk unload. A queued event can be
-dropped when the in-memory queue is full (currently 10 events) or when the Cobbleputer becomes
+dropped when its owner's shared in-memory allowance is full or when the Cobbleputer becomes
 inactive. An event produced while a Cobbleputer is stopped is not enqueued, rather than being
 dropped. Similarly, an effect is considered processed once the Mod attempts to apply it, but
 an attempt can be missed or repeated around failures. When a 'puter is reset or a new Program
@@ -112,6 +113,14 @@ releases its slot. When the chunk becomes block-ticking again, the Mod considers
 against the owner's current limit before it runs, so the returning Cobbleputer never temporarily exceeds
 that limit. If the limit is full, the Cobbleputer remains stopped and the player receives an error message
 via chat.
+
+#### Queued Events Per Player
+
+Each player has an administrator-configurable limit on the total number of in-memory events
+queued across their active Cobbleputers. It defaults to 200. Stopped Cobbleputers retain their
+previously queued events and continue to count against this limit, but newly produced events for
+them are rejected immediately. Acknowledged events, crashes and resets, and a Cobbleputer becoming
+inactive free its share of the allowance.
 
 #### Total Execution State Per Player
 
@@ -148,7 +157,7 @@ When the block in front of a Wireless Observer changes type or block state, the 
 Cobbleputer receives a `BlockStateChange` event. Changes occurring during one server tick
 are combined into one event containing the state before the first change and the final
 state. Delivery is best-effort: changes can be dropped while the paired Cobbleputer is
-unloaded or has a full event queue; changes produced while it is stopped are not enqueued.
+unloaded or its owner's queued-event allowance is full; changes produced while it is stopped are not enqueued.
 Neither case is replayed later. Observers
 continue tracking their facing block while unpaired so pairing does not produce stale
 changes.

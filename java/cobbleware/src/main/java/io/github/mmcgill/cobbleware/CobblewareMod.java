@@ -80,6 +80,7 @@ public final class CobblewareMod implements ModInitializer {
                 executionStateStore,
                 instrumentation,
                 config.maxRunningExecutionsPerPlayer(),
+                config.maxQueuedEventsPerPlayer(),
                 config.maxTotalExecutionStateBytesPerPlayer(),
                 LOGGER);
         ServerMessageEvents.CHAT_MESSAGE.register(

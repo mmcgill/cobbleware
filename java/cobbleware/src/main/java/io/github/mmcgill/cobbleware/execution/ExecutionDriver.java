@@ -59,7 +59,7 @@ import org.slf4j.Logger;
 
 /** Drives the best-effort synchronization of active Cobbleputer executions. */
 public final class ExecutionDriver {
-    private static final int MAX_PENDING_EVENTS_PER_EXECUTION = 50;
+    private static final int MAX_OFFERED_EVENTS_PER_EXECUTION = 50;
     private static final double CHAT_RADIUS = 16.0;
     private static final double CHAT_RADIUS_SQUARED = CHAT_RADIUS * CHAT_RADIUS;
     private static final Comparator<CobbleputerBlockEntity> RUNNING_LIMIT_CANDIDATE_ORDER = Comparator.comparing(
@@ -136,9 +136,11 @@ public final class ExecutionDriver {
     private final ExecutionStateAccess executionStateAccess;
     private final Instrumentation instrumentation;
     private final int maxRunningExecutionsPerPlayer;
+    private final int maxQueuedEventsPerPlayer;
     private final long maxTotalExecutionStateBytesPerPlayer;
     private final Logger logger;
     private final Map<CobbleputerBlockEntity, EphemeralCobbleputerState> loadedCobbleputers = new IdentityHashMap<>();
+    private final Map<UUID, Integer> queuedEventsByOwner = new HashMap<>();
     private final Set<WirelessObserverBlockEntity> pendingObserverInitializations =
             Collections.newSetFromMap(new IdentityHashMap<>());
     private final Set<CobbleputerBlockEntity> pendingChunkLoadResumes =
@@ -158,6 +160,7 @@ public final class ExecutionDriver {
             ExecutionStateAccess executionStateAccess,
             Instrumentation instrumentation,
             int maxRunningExecutionsPerPlayer,
+            int maxQueuedEventsPerPlayer,
             long maxTotalExecutionStateBytesPerPlayer,
             Logger logger) {
         if (mainWorker == null
@@ -165,6 +168,7 @@ public final class ExecutionDriver {
                 || instrumentation == null
                 || logger == null
                 || maxRunningExecutionsPerPlayer <= 0
+                || maxQueuedEventsPerPlayer <= 0
                 || maxTotalExecutionStateBytesPerPlayer <= 0) {
             throw new IllegalArgumentException(
                     "ExecutionDriver dependencies must not be null and execution limits must be positive");
@@ -173,6 +177,7 @@ public final class ExecutionDriver {
         this.executionStateAccess = executionStateAccess;
         this.instrumentation = instrumentation;
         this.maxRunningExecutionsPerPlayer = maxRunningExecutionsPerPlayer;
+        this.maxQueuedEventsPerPlayer = maxQueuedEventsPerPlayer;
         this.maxTotalExecutionStateBytesPerPlayer = maxTotalExecutionStateBytesPerPlayer;
         this.logger = logger;
     }
@@ -198,7 +203,7 @@ public final class ExecutionDriver {
 
     /** Removes a Cobbleputer and intentionally drops its ephemeral pending events. */
     public void deactivate(CobbleputerBlockEntity blockEntity) {
-        loadedCobbleputers.remove(blockEntity);
+        discardPendingEvents(blockEntity, loadedCobbleputers.remove(blockEntity));
         pendingChunkLoadResumes.remove(blockEntity);
         pendingChunkNonTickingTransitions.remove(blockEntity);
     }
@@ -213,7 +218,7 @@ public final class ExecutionDriver {
                 dimensionKey(blockEntity),
                 blockEntity.getBlockState().getValue(CobbleputerBlock.STATE).getSerializedName(),
                 blockEntity.ownerPlayerId().map(UUID::toString).orElse("none"));
-        loadedCobbleputers.remove(blockEntity);
+        discardPendingEvents(blockEntity, loadedCobbleputers.remove(blockEntity));
         pendingChunkLoadResumes.remove(blockEntity);
         pendingChunkNonTickingTransitions.add(blockEntity);
     }
@@ -280,7 +285,7 @@ public final class ExecutionDriver {
         if (!hasRunningExecutionCapacity(owner)) {
             return ExecutionInitResult.LIMIT_REACHED;
         }
-        loadedCobbleputers.get(blockEntity).events.clear();
+        discardPendingEvents(blockEntity, loadedCobbleputers.get(blockEntity));
         blockEntity.startExecution(owner, ownerName, initialState);
         if (minecraft.setCobbleputerState(blockEntity, CobbleputerState.RUNNING)) {
             enqueueEvent(
@@ -337,7 +342,7 @@ public final class ExecutionDriver {
             return ExecutionInitResult.LIMIT_REACHED;
         }
         EphemeralCobbleputerState active = loadedCobbleputers.get(blockEntity);
-        active.events.clear();
+        discardPendingEvents(blockEntity, active);
         blockEntity.restartCrashedExecution();
         if (minecraft.setCobbleputerState(blockEntity, CobbleputerState.RUNNING)) {
             enqueueEvent(
@@ -353,7 +358,7 @@ public final class ExecutionDriver {
         return ExecutionInitResult.INVALID_STATE;
     }
 
-    /** Queues an event for a running active Cobbleputer when it can be accepted. */
+    /** Queues an event for a running active Cobbleputer when its owner's allowance has capacity. */
     public void enqueueEvent(CobbleputerBlockEntity blockEntity, Event event) {
         if (blockEntity == null || event == null) {
             throw new IllegalArgumentException("Cobbleputer event arguments must not be null");
@@ -367,15 +372,18 @@ public final class ExecutionDriver {
             recordRejectedEvent(blockEntity, event);
             return;
         }
-        if (ephemeralState.events.size() >= MAX_PENDING_EVENTS_PER_EXECUTION) {
+        UUID owner = blockEntity.ownerPlayerId().orElseThrow();
+        if (queuedEventCount(owner) >= maxQueuedEventsPerPlayer) {
             logger.debug(
-                    "Dropping Cobbleputer event at {} because its pending queue is full",
-                    blockEntity.getBlockPos().toShortString());
+                    "Dropping Cobbleputer event at {} because player {} has reached the queued-event limit of {}",
+                    blockEntity.getBlockPos().toShortString(),
+                    owner,
+                    maxQueuedEventsPerPlayer);
             recordRejectedEvent(blockEntity, event);
             return;
         }
         try {
-            ephemeralState.events.addLast(new QueuedEvent(blockEntity.claimNextEventSequenceNum(), event));
+            appendPendingEvent(ephemeralState, owner, new QueuedEvent(blockEntity.claimNextEventSequenceNum(), event));
             recordEvent(blockEntity, event, true);
         } catch (RuntimeException exception) {
             logger.error(
@@ -406,6 +414,7 @@ public final class ExecutionDriver {
         if (minecraft == null) {
             throw new IllegalArgumentException("Minecraft services must not be null");
         }
+        reconcileQueuedEventCounts();
         drainChunkNonTickingTransitions(minecraft);
         drainChunkLoadResumes(minecraft);
         drainCompletedSyncMeasurements();
@@ -611,6 +620,106 @@ public final class ExecutionDriver {
         return count;
     }
 
+    private int queuedEventCount(UUID owner) {
+        return queuedEventsByOwner.getOrDefault(owner, 0);
+    }
+
+    private void appendPendingEvent(EphemeralCobbleputerState state, UUID owner, QueuedEvent event) {
+        if (state.eventOwner != null && !state.eventOwner.equals(owner)) {
+            throw new IllegalStateException("pending events cannot change owners without being discarded");
+        }
+        state.events.addLast(event);
+        state.eventOwner = owner;
+        incrementQueuedEventCount(owner);
+    }
+
+    private void removeConsumedEvents(
+            CobbleputerBlockEntity blockEntity, EphemeralCobbleputerState state, long consumedSequenceNum) {
+        int removed = 0;
+        while (!state.events.isEmpty() && state.events.getFirst().sequenceNum <= consumedSequenceNum) {
+            state.events.removeFirst();
+            removed += 1;
+        }
+        removeQueuedEvents(blockEntity, state, removed);
+    }
+
+    private void discardPendingEvents(CobbleputerBlockEntity blockEntity, EphemeralCobbleputerState state) {
+        if (state == null) {
+            return;
+        }
+        int removed = state.events.size();
+        state.events.clear();
+        removeQueuedEvents(blockEntity, state, removed);
+    }
+
+    private void removeQueuedEvents(CobbleputerBlockEntity blockEntity, EphemeralCobbleputerState state, int removed) {
+        if (removed == 0) {
+            return;
+        }
+        UUID owner = state.eventOwner;
+        if (owner == null) {
+            throw new IllegalStateException(
+                    "Cobbleputer " + blockEntity.cobbleputerId() + " has pending events without an owner");
+        }
+        decrementQueuedEventCount(owner, removed);
+        if (state.events.isEmpty()) {
+            state.eventOwner = null;
+        }
+    }
+
+    private void incrementQueuedEventCount(UUID owner) {
+        queuedEventsByOwner.merge(owner, 1, Math::addExact);
+    }
+
+    private void decrementQueuedEventCount(UUID owner, int removed) {
+        int current = queuedEventCount(owner);
+        if (removed <= 0 || current < removed) {
+            throw new IllegalStateException("queued-event count is inconsistent for player " + owner);
+        }
+        if (current == removed) {
+            queuedEventsByOwner.remove(owner);
+        } else {
+            queuedEventsByOwner.put(owner, current - removed);
+        }
+    }
+
+    private void reconcileQueuedEventCounts() {
+        Map<UUID, Integer> actual = new HashMap<>();
+        for (Map.Entry<CobbleputerBlockEntity, EphemeralCobbleputerState> entry : loadedCobbleputers.entrySet()) {
+            EphemeralCobbleputerState state = entry.getValue();
+            if (state.events.isEmpty()) {
+                if (state.eventOwner != null) {
+                    logger.warn(
+                            "Clearing stale pending-event owner for Cobbleputer {}",
+                            entry.getKey().cobbleputerId());
+                    state.eventOwner = null;
+                }
+                continue;
+            }
+            if (state.eventOwner == null) {
+                state.eventOwner = entry.getKey().ownerPlayerId().orElse(null);
+                if (state.eventOwner == null) {
+                    logger.error(
+                            "Dropping {} pending events for ownerless Cobbleputer {}",
+                            state.events.size(),
+                            entry.getKey().cobbleputerId());
+                    state.events.clear();
+                    continue;
+                }
+                logger.warn(
+                        "Recovered missing pending-event owner {} for Cobbleputer {}",
+                        state.eventOwner,
+                        entry.getKey().cobbleputerId());
+            }
+            actual.merge(state.eventOwner, state.events.size(), Math::addExact);
+        }
+        if (!queuedEventsByOwner.equals(actual)) {
+            logger.warn("Reconciling per-player queued-event counts");
+            queuedEventsByOwner.clear();
+            queuedEventsByOwner.putAll(actual);
+        }
+    }
+
     private static boolean isRunningExecution(CobbleputerBlockEntity blockEntity) {
         return blockEntity.hasExecution()
                 && blockEntity.getBlockState().getValue(CobbleputerBlock.STATE) == CobbleputerState.RUNNING;
@@ -761,7 +870,7 @@ public final class ExecutionDriver {
             byte[] executionState = blockEntity.executionState().orElseThrow();
             List<Event> events = new ArrayList<>();
             for (QueuedEvent queued : entry.getValue().events) {
-                if (events.size() == MAX_PENDING_EVENTS_PER_EXECUTION) {
+                if (events.size() == MAX_OFFERED_EVENTS_PER_EXECUTION) {
                     break;
                 }
                 events.add(queued.event);
@@ -841,14 +950,12 @@ public final class ExecutionDriver {
         }
 
         EphemeralCobbleputerState active = loadedCobbleputers.get(offered.blockEntity);
-        while (!active.events.isEmpty() && active.events.getFirst().sequenceNum <= result.getEventSeqNum()) {
-            active.events.removeFirst();
-        }
+        removeConsumedEvents(offered.blockEntity, active, result.getEventSeqNum());
         applyEffects(minecraft, offered.blockEntity, result);
         if (status == ExecutionStatus.EXECUTION_STATUS_CRASHED) {
-            active.events.clear();
             UUID owner = offered.blockEntity.ownerPlayerId().orElseThrow();
             UUID executionId = offered.blockEntity.executionId().orElseThrow();
+            discardPendingEvents(offered.blockEntity, active);
             if (result.getFailureReason() == ExecutionFailureReason.EXECUTION_FAILURE_REASON_STATE_SIZE_LIMIT) {
                 mainWorker.reportLimitExceeded(owner, executionId, "TotalExecutionStateSize");
             }
@@ -861,7 +968,7 @@ public final class ExecutionDriver {
         UUID owner = offered.blockEntity.ownerPlayerId().orElseThrow();
         UUID executionId = offered.blockEntity.executionId().orElseThrow();
         if (!fitsStateUpdate(owner, offered.blockEntity.cobbleputerId(), finalState)) {
-            active.events.clear();
+            discardPendingEvents(offered.blockEntity, active);
             mainWorker.reportLimitExceeded(owner, executionId, "TotalExecutionStateSize");
             offered.blockEntity.crashExecution();
             updateVisibleState(minecraft, offered.blockEntity, CobbleputerState.CRASHED);
@@ -1205,6 +1312,7 @@ public final class ExecutionDriver {
 
     private static final class EphemeralCobbleputerState {
         private final ArrayDeque<QueuedEvent> events = new ArrayDeque<>();
+        private UUID eventOwner;
     }
 
     private record OfferedExecution(

@@ -136,6 +136,111 @@ class ExecutionDriverTest {
     }
 
     @Test
+    void limitsQueuedEventsAcrossOnePlayersCobbleputers() {
+        Fixture fixture = new Fixture(32, 2);
+        UUID owner = UUID.randomUUID();
+        CobbleputerBlockEntity first = fixture.startNewExecution(owner, new byte[] {1});
+        CobbleputerBlockEntity second = fixture.startNewExecution(owner, new byte[] {2});
+
+        fixture.driver.enqueueEvent(
+                first,
+                Event.newBuilder()
+                        .setChatMessage(ChatMessage.newBuilder().setMessage("dropped"))
+                        .build());
+
+        assertEquals(2, first.nextEventSequenceNum());
+        assertEquals(2, second.nextEventSequenceNum());
+    }
+
+    @Test
+    void givesEachPlayerAnIndependentQueuedEventLimit() {
+        Fixture fixture = new Fixture(32, 1);
+        CobbleputerBlockEntity first = fixture.startNewExecution(UUID.randomUUID(), new byte[] {1});
+        CobbleputerBlockEntity second = fixture.startNewExecution(UUID.randomUUID(), new byte[] {2});
+
+        assertEquals(2, first.nextEventSequenceNum());
+        assertEquals(2, second.nextEventSequenceNum());
+    }
+
+    @Test
+    void retainedStoppedEventsContinueToUseTheOwnersQueuedEventLimit() {
+        Fixture fixture = new Fixture(32, 1);
+        UUID owner = UUID.randomUUID();
+        CobbleputerBlockEntity stopped = fixture.startNewExecution(owner, new byte[] {1});
+        fixture.driver.stop(fixture.minecraft, stopped);
+        CobbleputerBlockEntity running = fixture.startNewExecution(owner, new byte[] {2});
+
+        fixture.driver.enqueueEvent(
+                stopped,
+                Event.newBuilder()
+                        .setChatMessage(ChatMessage.newBuilder().setMessage("ignored"))
+                        .build());
+
+        assertEquals(2, stopped.nextEventSequenceNum());
+        assertEquals(1, running.nextEventSequenceNum());
+    }
+
+    @Test
+    void deactivationFreesTheOwnersQueuedEventCapacity() {
+        Fixture fixture = new Fixture(32, 1);
+        UUID owner = UUID.randomUUID();
+        CobbleputerBlockEntity first = fixture.startNewExecution(owner, new byte[] {1});
+        fixture.driver.deactivate(first);
+        CobbleputerBlockEntity second = fixture.startNewExecution(owner, new byte[] {2});
+
+        assertEquals(2, second.nextEventSequenceNum());
+    }
+
+    @Test
+    void consumingEventsFreesTheOwnersQueuedEventCapacity() {
+        Fixture fixture = new Fixture(32, 1);
+        UUID owner = UUID.randomUUID();
+        CobbleputerBlockEntity cobbleputer = fixture.startNewExecution(owner, new byte[] {1});
+        CompletableFuture<MainWorker.ExecutionSyncResult> first = fixture.worker.enqueueSyncResult();
+        CompletableFuture<MainWorker.ExecutionSyncResult> second = fixture.worker.enqueueSyncResult();
+        fixture.worker.enqueueSyncResult();
+
+        fixture.serverTick();
+        ExecutionsRequest firstRequest = fixture.worker.syncRequests.getFirst();
+        first.complete(MainWorker.ExecutionSyncResult.success(ExecutionsResponse.newBuilder()
+                .addResults(resultFor(firstRequest.getExecutions(0), 1, new byte[] {2}))
+                .build()));
+        fixture.serverTick();
+
+        fixture.driver.enqueueEvent(
+                cobbleputer,
+                Event.newBuilder()
+                        .setChatMessage(ChatMessage.newBuilder().setMessage("accepted"))
+                        .build());
+        second.complete(MainWorker.ExecutionSyncResult.success(ExecutionsResponse.newBuilder()
+                .addResults(resultFor(fixture.worker.syncRequests.get(1).getExecutions(0), 1, new byte[] {2}))
+                .build()));
+        fixture.serverTick();
+
+        assertEquals(
+                Event.EventCase.CHAT_MESSAGE,
+                fixture.worker.syncRequests.get(2).getExecutions(0).getEvents(0).getEventCase());
+    }
+
+    @Test
+    void offersNoMoreThanFiftyEventsForOneExecutionSync() {
+        Fixture fixture = new Fixture(32, 200);
+        CobbleputerBlockEntity cobbleputer = fixture.startNewExecution(new byte[] {1});
+        for (int index = 1; index < 200; index += 1) {
+            fixture.driver.enqueueEvent(
+                    cobbleputer,
+                    Event.newBuilder()
+                            .setChatMessage(ChatMessage.newBuilder().setMessage("event " + index))
+                            .build());
+        }
+        fixture.worker.enqueueSyncResult();
+
+        fixture.serverTick();
+
+        assertEquals(50, fixture.worker.syncRequests.getFirst().getExecutions(0).getEventsCount());
+    }
+
+    @Test
     void serializesOneFlightAndRetainsEventsQueuedAfterDispatch() {
         Fixture fixture = new Fixture(32);
         CobbleputerBlockEntity cobbleputer = fixture.startNewExecution(new byte[] {1});
@@ -391,22 +496,31 @@ class ExecutionDriverTest {
         private int nextPos;
 
         private Fixture(long stateLimit) {
+            this(stateLimit, 200);
+        }
+
+        private Fixture(long stateLimit, int queuedEventLimit) {
             stateStore = new FakeExecutionStateAccess(stateLimit);
             driver = new ExecutionDriver(
                     worker,
                     stateStore,
                     instrumentation,
                     10,
+                    queuedEventLimit,
                     stateLimit,
                     LoggerFactory.getLogger(ExecutionDriverTest.class));
         }
 
         private CobbleputerBlockEntity startNewExecution(byte[] initialState) {
+            return startNewExecution(UUID.randomUUID(), initialState);
+        }
+
+        private CobbleputerBlockEntity startNewExecution(UUID owner, byte[] initialState) {
             CobbleputerBlockEntity cobbleputer = new CobbleputerBlockEntity(
                     testCobbleputerBlockEntity, new BlockPos(nextPos++, 64, 0), uninitializedState, stateStore);
             assertEquals(
                     ExecutionDriver.ExecutionInitResult.SUCCESS,
-                    driver.startExecution(minecraft, cobbleputer, UUID.randomUUID(), "owner", initialState));
+                    driver.startExecution(minecraft, cobbleputer, owner, "owner", initialState));
             return cobbleputer;
         }
 

@@ -8,6 +8,7 @@ public record CobblewareConfig(
         String mainWorkerApiKey,
         int instrumentationWindowTicks,
         int maxRunningExecutionsPerPlayer,
+        int maxQueuedEventsPerPlayer,
         long maxTotalExecutionStateBytesPerPlayer,
         String configurationError) {
     public CobblewareConfig {
@@ -19,6 +20,9 @@ public record CobblewareConfig(
         }
         if (maxRunningExecutionsPerPlayer <= 0) {
             throw new IllegalArgumentException("maxRunningExecutionsPerPlayer must be positive");
+        }
+        if (maxQueuedEventsPerPlayer <= 0) {
+            throw new IllegalArgumentException("maxQueuedEventsPerPlayer must be positive");
         }
         if (maxTotalExecutionStateBytesPerPlayer <= 0) {
             throw new IllegalArgumentException("maxTotalExecutionStateBytesPerPlayer must be positive");
@@ -47,6 +51,7 @@ public record CobblewareConfig(
                 "",
                 CobblewareConfigLoader.DEFAULT_INSTRUMENTATION_WINDOW_TICKS,
                 CobblewareConfigLoader.DEFAULT_MAX_RUNNING_EXECUTIONS_PER_PLAYER,
+                CobblewareConfigLoader.DEFAULT_MAX_QUEUED_EVENTS_PER_PLAYER,
                 CobblewareConfigLoader.DEFAULT_MAX_TOTAL_EXECUTION_STATE_BYTES_PER_PLAYER,
                 reason);
     }

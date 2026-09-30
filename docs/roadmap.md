@@ -28,7 +28,7 @@ Here's a rough sketch of the current plan to getting something working end-to-en
   * [ ] Per-player effects per tick
   * [x] Per-player memory utilization (via runtime)
   * [x] Per-player total execution state size
-  * [ ] Per-execution pending events
+  * [x] Per-player queued events
 * [ ] Drop events for Players not online (configurable)
 * [ ] Cobbleputer art assets
 * [ ] Wireless Observer art assets

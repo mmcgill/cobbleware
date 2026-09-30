@@ -14,6 +14,9 @@ connection settings, it accepts these positive integer settings:
   Cobbleputer executions that can be `RUNNING` across all dimensions. Existing configuration files
   that omit any setting receive its default; zero, negative, fractional, or non-numeric values
   make the configuration invalid.
+* `maxQueuedEventsPerPlayer`, which defaults to 200 and caps the total ephemeral events queued
+  across all of one player's active Cobbleputers. Queued events on stopped Cobbleputers count;
+  events intended for stopped Cobbleputers are dropped immediately.
 * `maxTotalExecutionStateBytesPerPlayer`, which defaults to 1,048,576 and caps the sum of all durable
   execution-state byte arrays owned by one player. Stopped, crashed, and unloaded records count; protobuf
   storage overhead, events, and effects do not.
@@ -145,16 +148,19 @@ event will be processed, and there is no guarantee that every effect will be app
 
 The currently emitted lifecycle events are `Started` after `/cobbleware exec` or after a crashed Cobbleputer
 is restarted with `/cobbleware resume`, and `Resumed` after its owner resumes a stopped Cobbleputer or a
-Cobbleputer in a newly block-ticking chunk is successfully admitted back to running. The driver retains at most 10 pending events
-per active Cobbleputer and offers at most 10 to the Runtime in each execution-sync request. Currently `EmitBeep` sends nearby players a
+Cobbleputer in a newly block-ticking chunk is successfully admitted back to running. The driver retains at most the configured
+number of pending events across a player's active Cobbleputers and offers at most 50 to the Runtime for each active Cobbleputer in each
+execution-sync request. Currently `EmitBeep` sends nearby players a
 `beep` system-chat message and `SendChat` sends its message to those same nearby players; neither effect
 has audio or durable delivery semantics yet.
 
 The heart of the Mod is the `ExecutionDriver` singleton. It is owned by the main server thread.
 
 It presents an API for enqueueing events by cobbleputer block entity, assigning each event a sequence id
-and incrementing the block entity's sequence id in the process. Events produced while a Cobbleputer
-is `STOPPED` are not enqueued; its existing pending events remain queued for when it resumes.
+and incrementing the block entity's sequence id in the process. The driver maintains a per-player
+count of pending events so admission is constant-time, and reconciles that count from the active queues
+once per server tick. Events produced while a Cobbleputer is `STOPPED` are not enqueued; its existing
+pending events remain queued for when it resumes and count toward their owner's allowance.
 
 It presents an API for activating/deactivating Cobbleputer block entities. That API is used by
 execution commands and by full-chunk block-ticking transitions, to ensure that the `ExecutionDriver`
@@ -171,7 +177,7 @@ At most once per tick (via `ServerTickEvents.END_SERVER_TICK`), the `ExecutionDr
 * Update active Cobbleputer execution records with new states/sequence numbers.
     * If a Cobbleputer block entity goes inactive before in-flight events are processed, the resulting state is discarded.
 * Construct and send a new `/modapi/v1/executions` request.
-  * Include up to `MAX_OFFERED_EVENTS_PER_EXECUTION` events for each active Cobbleputer.
+  * Include up to 50 events for each active Cobbleputer.
 
 ### Wireless Observers
 
@@ -188,7 +194,7 @@ new target. Re-pairing to the same target emits only `WirelessObserverPaired`. B
 otherwise replacing a paired observer emits `WirelessObserverUnpaired` to its target before its
 block entity is removed; chunk unloading does not emit that event. These lifecycle events are
 best-effort just like block-state changes: the pairing remains durable, while delivery is dropped
-when the target is unloaded, unavailable, or has a full event queue. Events produced while the
+when the target is unloaded, unavailable, or its owner's queued-event allowance is full. Events produced while the
 target is stopped are not enqueued and are not replayed when it resumes.
 
 Breaking a Cobbleputer unpairs all currently loaded observers indexed for its global position.
@@ -250,8 +256,8 @@ The recorded measurements are:
   player, physical Cobbleputer, and effect type; and
 * the current count of loaded running and stopped Cobbleputers, per player.
 
-An event is accepted when it enters the Cobbleputer's pending queue. A failed admission is
-recorded as dropped, except that an event produced while the Cobbleputer is `STOPPED` is not
+An event is accepted when it enters the owner's shared pending-event allowance. A failed admission is
+recorded as dropped when that allowance is full, except that an event produced while the Cobbleputer is `STOPPED` is not
 an admission and is recorded as neither accepted nor dropped. An effect is attempted whenever
 the Mod calls its existing effect-application path and is failed only when that
 path throws. Metrics do not alter the existing best-effort event/effect

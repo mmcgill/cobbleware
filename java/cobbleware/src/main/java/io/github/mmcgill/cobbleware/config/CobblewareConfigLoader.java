@@ -21,6 +21,7 @@ public final class CobblewareConfigLoader {
     public static final String DEFAULT_MAIN_WORKER_URL = "http://localhost:9000";
     public static final int DEFAULT_INSTRUMENTATION_WINDOW_TICKS = 600;
     public static final int DEFAULT_MAX_RUNNING_EXECUTIONS_PER_PLAYER = 10;
+    public static final int DEFAULT_MAX_QUEUED_EVENTS_PER_PLAYER = 200;
     public static final long DEFAULT_MAX_TOTAL_EXECUTION_STATE_BYTES_PER_PLAYER = 1024L * 1024L;
 
     private CobblewareConfigLoader() {}
@@ -73,6 +74,8 @@ public final class CobblewareConfigLoader {
                 optionalPositiveInt(object, "instrumentationWindowTicks", DEFAULT_INSTRUMENTATION_WINDOW_TICKS);
         int maxRunningExecutionsPerPlayer =
                 optionalPositiveInt(object, "maxRunningExecutionsPerPlayer", DEFAULT_MAX_RUNNING_EXECUTIONS_PER_PLAYER);
+        int maxQueuedEventsPerPlayer =
+                optionalPositiveInt(object, "maxQueuedEventsPerPlayer", DEFAULT_MAX_QUEUED_EVENTS_PER_PLAYER);
         long maxTotalExecutionStateBytesPerPlayer = optionalPositiveLong(
                 object, "maxTotalExecutionStateBytesPerPlayer", DEFAULT_MAX_TOTAL_EXECUTION_STATE_BYTES_PER_PLAYER);
         URI baseUri = normalizeBaseUri(mainWorkerUrl);
@@ -81,6 +84,7 @@ public final class CobblewareConfigLoader {
                 mainWorkerApiKey,
                 instrumentationWindowTicks,
                 maxRunningExecutionsPerPlayer,
+                maxQueuedEventsPerPlayer,
                 maxTotalExecutionStateBytesPerPlayer,
                 null);
     }
@@ -160,6 +164,7 @@ public final class CobblewareConfigLoader {
                 + "  \"instrumentationWindowTicks\": " + DEFAULT_INSTRUMENTATION_WINDOW_TICKS + ",\n"
                 + "  \"maxRunningExecutionsPerPlayer\": "
                 + DEFAULT_MAX_RUNNING_EXECUTIONS_PER_PLAYER + ",\n"
+                + "  \"maxQueuedEventsPerPlayer\": " + DEFAULT_MAX_QUEUED_EVENTS_PER_PLAYER + ",\n"
                 + "  \"maxTotalExecutionStateBytesPerPlayer\": "
                 + DEFAULT_MAX_TOTAL_EXECUTION_STATE_BYTES_PER_PLAYER + "\n"
                 + "}\n";
