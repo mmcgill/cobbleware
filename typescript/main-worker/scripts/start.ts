@@ -3,6 +3,7 @@ const defaultRuntimeBinary = Deno.build.os === 'windows'
   : 'mc-edge-runtime/target/debug/edge-runtime';
 
 const runtimeBinary = Deno.env.get('EDGE_RUNTIME_BIN') ?? defaultRuntimeBinary;
+const developmentServerWorldDir = 'java/cobbleware/run/world';
 
 const command = new Deno.Command(runtimeBinary, {
   args: [
@@ -19,6 +20,10 @@ const command = new Deno.Command(runtimeBinary, {
   stdin: 'inherit',
   stdout: 'inherit',
   stderr: 'inherit',
+  env: {
+    ...Deno.env.toObject(),
+    COBBLEWARE_GAME_DIR: developmentServerWorldDir,
+  },
   cwd: '../..',
 });
 

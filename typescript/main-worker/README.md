@@ -23,6 +23,10 @@ bytes. It expects
 but this is primarily to facilitate local testing. The per-player program quota is configured with
 `COBBLEWARE_PLAYER_PROGRAM_QUOTA_BYTES` and defaults to 10 MiB.
 
+For repository development, `deno task start` sets `COBBLEWARE_GAME_DIR` to
+`java/cobbleware/run/world`, so the bundled Main Worker shares the development server's
+`cobbleware-data` directory.
+
 The per-player User Worker memory limit is configured with
 `COBBLEWARE_PLAYER_MEMORY_QUOTA_BYTES` and defaults to 256 MiB. It must be a positive whole
 number of MiB. The Main Worker passes this limit to Edge Runtime for every User Worker and reports
