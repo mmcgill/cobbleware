@@ -1228,6 +1228,7 @@ markBundledUi(document.documentElement);
       const response = await request('/playerapi/v1/whoami');
       const identity = parsePlayerIdentity(await response.json());
       elements.playerProfileName.textContent = identity.playerProfileName;
+      document.title = `${identity.playerProfileName} - Cobbleware Dashboard`;
       return true;
     } catch (error) {
       displayError(error);
