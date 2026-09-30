@@ -4,6 +4,7 @@ interface CobblewareUserWorkerClosed {
 
 interface CobblewareUserWorker {
   readonly closed: Promise<CobblewareUserWorkerClosed>;
+  retire(shutdownMs: number): void;
   fetch(request: Request): Promise<Response>;
 }
 
