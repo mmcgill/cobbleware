@@ -1,4 +1,9 @@
+interface CobblewareUserWorkerClosed {
+  // Reserved for future worker-termination metadata.
+}
+
 interface CobblewareUserWorker {
+  readonly closed: Promise<CobblewareUserWorkerClosed>;
   fetch(request: Request): Promise<Response>;
 }
 
