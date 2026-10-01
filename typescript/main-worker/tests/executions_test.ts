@@ -191,7 +191,7 @@ Deno.test('Execution sync asynchronously advances state and acknowledges effect 
   let resolveStep: ((response: Response) => void) | undefined;
   let receivedStep: Uint8Array | undefined;
   let receivedPlayer: string | undefined;
-  const app = await createTestApp((_request, player, _program, body) => {
+  const app = await createTestApp((player, _program, body) => {
     receivedPlayer = player;
     receivedStep = body;
     return new Promise<Response>((resolve) => {
@@ -453,7 +453,7 @@ Deno.test('Execution sync advertises the remaining effect capacity for each step
   });
   const effectLimits: number[] = [];
   let calls = 0;
-  const app = await createTestApp((_request, _player, _program, body) => {
+  const app = await createTestApp((_player, _program, body) => {
     const step = fromBinary(Program.StepRequestSchema, body);
     effectLimits.push(step.effectLimit);
     const effectCount = calls++ === 0 ? 49 : 2;

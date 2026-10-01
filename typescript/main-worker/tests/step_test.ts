@@ -177,11 +177,10 @@ Deno.test('Player program step executes the active program and returns binary ou
   let receivedBody: Uint8Array | undefined;
   const app = await createTestApp(
     () => Promise.resolve(activeProgram),
-    (request, playerUUID, program, body) => {
+    (playerUUID, program, body) => {
       receivedPlayer = playerUUID;
       receivedProgram = program;
       receivedBody = body;
-      assertEquals(request.method, 'POST', 'runner should receive the player request method');
       return Promise.resolve(binaryResponse(encodeStepResponse(), 200));
     },
   );
@@ -223,7 +222,7 @@ Deno.test('Player program step accepts and returns ProtoJSON', async () => {
   let receivedBody: Uint8Array | undefined;
   const app = await createTestApp(
     () => Promise.resolve(activeProgram),
-    (_request, _playerUUID, _program, body) => {
+    (_playerUUID, _program, body) => {
       receivedBody = body;
       return Promise.resolve(binaryResponse(encodeStepResponse(), 200));
     },

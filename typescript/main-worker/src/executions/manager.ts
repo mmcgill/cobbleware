@@ -41,7 +41,7 @@ export class ExecutionManager {
     private readonly programRunner: ProgramRunner,
   ) {}
 
-  sync(sourceRequest: Request, request: Internal.ExecutionsRequest): Internal.ExecutionsResponse {
+  sync(request: Internal.ExecutionsRequest): Internal.ExecutionsResponse {
     validateRequest(request, this.entries);
 
     const requestedIds = new Set(
@@ -65,7 +65,7 @@ export class ExecutionManager {
     }
 
     for (const entry of entries) {
-      this.schedule(sourceRequest, entry);
+      this.schedule(entry);
     }
 
     return create(Internal.ExecutionsResponseSchema, {
@@ -87,7 +87,7 @@ export class ExecutionManager {
     return entry;
   }
 
-  private schedule(sourceRequest: Request, entry: CachedExecution): void {
+  private schedule(entry: CachedExecution): void {
     if (entry.state !== Internal.ExecutionStatus.RUNNING || entry.inFlight !== undefined) {
       return;
     }
@@ -101,11 +101,10 @@ export class ExecutionManager {
     const eventSeqNum = entry.lastConsumedEventSeqNum + 1n;
     const generation = entry.generation;
     entry.inFlight = { eventSeqNum, generation };
-    void this.runInvocation(sourceRequest, entry, event, eventSeqNum, generation);
+    void this.runInvocation(entry, event, eventSeqNum, generation);
   }
 
   private async runInvocation(
-    sourceRequest: Request,
     entry: CachedExecution,
     event: Events.Event,
     eventSeqNum: bigint,
@@ -118,7 +117,7 @@ export class ExecutionManager {
       }
 
       const effectLimit = Math.max(0, MAX_EFFECTS_PER_EXECUTION - entry.outbox.length);
-      const response = await this.runProgram(sourceRequest, entry, event, program, effectLimit);
+      const response = await this.runProgram(entry, event, program, effectLimit);
       const step = await decodeStepResponse(response);
       if (!this.isCurrent(entry, generation, eventSeqNum)) {
         return;
@@ -137,7 +136,7 @@ export class ExecutionManager {
         entry.nextEffectSeqNum += 1n;
       }
       entry.inFlight = undefined;
-      this.schedule(sourceRequest, entry);
+      this.schedule(entry);
     } catch (error) {
       if (!this.isCurrent(entry, generation, eventSeqNum)) {
         return;
@@ -160,7 +159,6 @@ export class ExecutionManager {
   }
 
   private async runProgram(
-    sourceRequest: Request,
     entry: CachedExecution,
     event: Events.Event,
     program: ActiveProgram,
@@ -174,7 +172,6 @@ export class ExecutionManager {
       stateSizeLimit: entry.stateSizeLimit,
     });
     return await this.programRunner.step(
-      sourceRequest,
       entry.ownerKey,
       program,
       toBinary(Program.StepRequestSchema, request),

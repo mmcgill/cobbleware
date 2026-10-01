@@ -26,7 +26,6 @@ interface CobblewareWorkerHeapStatisticsWithServicePath {
 }
 
 declare const EdgeRuntime: {
-  applySupabaseTag(source: Request, destination: Request): void;
   userWorkers: {
     create(options: CobblewareUserWorkerOptions): Promise<CobblewareUserWorker>;
     memStats(): Promise<

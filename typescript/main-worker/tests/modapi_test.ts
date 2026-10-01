@@ -88,7 +88,7 @@ Deno.test('Mod program query returns active program metadata and states', async 
       requestedPlayer = playerUUID;
       return Promise.resolve(activeProgram);
     },
-    (_request, playerUUID, program) => {
+    (playerUUID, program) => {
       requestedPlayer = playerUUID;
       executedProgram = program;
       return Promise.resolve({ one: [1], two: [2] });

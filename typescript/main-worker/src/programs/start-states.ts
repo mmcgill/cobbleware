@@ -15,9 +15,8 @@ const START_STATES_CONTENT_TYPE = PROGRAM_BINARY_CONTENT_TYPE;
 export type StartStates = Record<string, number[]>;
 
 export type ProgramRunner = {
-  startStates(request: Request, playerUUID: string, program: ActiveProgram): Promise<StartStates>;
+  startStates(playerUUID: string, program: ActiveProgram): Promise<StartStates>;
   step(
-    request: Request,
     playerUUID: string,
     program: ActiveProgram,
     body: Uint8Array,
@@ -28,7 +27,6 @@ export class RuntimeProgramRunner implements ProgramRunner {
   constructor(private readonly playerMemoryQuotaBytes: number) {}
 
   async startStates(
-    request: Request,
     playerUUID: string,
     program: ActiveProgram,
   ): Promise<StartStates> {
@@ -37,13 +35,11 @@ export class RuntimeProgramRunner implements ProgramRunner {
     );
 
     const programRequest = new Request(START_STATES_PATH, { method: 'GET' });
-    EdgeRuntime.applySupabaseTag(request, programRequest);
     const response = await worker.fetch(programRequest);
     return await decodeStartStatesResponse(response);
   }
 
   async step(
-    request: Request,
     playerUUID: string,
     program: ActiveProgram,
     body: Uint8Array,
@@ -57,7 +53,6 @@ export class RuntimeProgramRunner implements ProgramRunner {
       headers: { 'content-type': PROGRAM_BINARY_CONTENT_TYPE },
       body: new Blob([body.slice().buffer as ArrayBuffer]),
     });
-    EdgeRuntime.applySupabaseTag(request, programRequest);
     return await worker.fetch(programRequest);
   }
 }

@@ -111,7 +111,7 @@ export async function handleProgram(
   try {
     return jsonResponse({
       ...program.metadata,
-      startStates: await runner.startStates(request, playerUUID, program),
+      startStates: await runner.startStates(playerUUID, program),
     });
   } catch (error) {
     return programErrorResponse(error);
@@ -143,7 +143,7 @@ export async function handlePlayerProgramStartStates(
 
   try {
     return jsonResponse({
-      startStates: Object.keys(await runner.startStates(request, playerUUID, program)),
+      startStates: Object.keys(await runner.startStates(playerUUID, program)),
     });
   } catch (error) {
     const detail = error instanceof Error ? error.message : String(error);
@@ -201,7 +201,7 @@ export async function handleProgramStep(
     return emptyResponse(404);
   }
 
-  const response = await runner.step(request, playerUUID, program, body);
+  const response = await runner.step(playerUUID, program, body);
   if (!acceptsJsonResponse(request) || response.status !== 200) {
     return response;
   }
