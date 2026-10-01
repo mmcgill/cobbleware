@@ -114,7 +114,10 @@ public final class CobblewareCommands {
                                 .then(Commands.argument("qualifier", StringArgumentType.word())
                                         .suggests((context, builder) -> SharedSuggestionProvider.suggest(
                                                 StatsFormatter.qualifiers(instrumentation.snapshot()), builder))
-                                        .executes(context -> stats(context, instrumentation))))));
+                                        .executes(context -> stats(context, instrumentation))))
+                        .then(Commands.literal("owner")
+                                .requires(source -> source.permissions().hasPermission(Permissions.COMMANDS_GAMEMASTER))
+                                .executes(CobblewareCommands::owner))));
     }
 
     private static int ownPriority(
@@ -596,6 +599,43 @@ public final class CobblewareCommands {
             executionDriver.resume(ExecutionDriver.minecraft(serverLevel.getServer()), resolvedTarget.blockEntity());
             player.sendSystemMessage(Component.literal("Resumed your Cobbleputer execution."));
         }
+        return 1;
+    }
+
+    private static int owner(CommandContext<CommandSourceStack> context) {
+        CommandSourceStack source = context.getSource();
+        ServerPlayer player;
+        try {
+            player = source.getPlayerOrException();
+        } catch (CommandSyntaxException exception) {
+            source.sendFailure(Component.literal("Only a player can identify a Cobbleputer owner."));
+            return 0;
+        }
+
+        Optional<CobbleputerTarget> target = findNearestCobbleputer(player);
+        if (target.isEmpty()) {
+            player.sendSystemMessage(Component.literal("No Cobbleputer is within 3m."));
+            return 0;
+        }
+
+        CobbleputerTarget resolvedTarget = target.orElseThrow();
+        CobbleputerState lifecycleState = resolvedTarget.state().getValue(CobbleputerBlock.STATE);
+        if (lifecycleState != CobbleputerState.RUNNING
+                && lifecycleState != CobbleputerState.STOPPED
+                && lifecycleState != CobbleputerState.CRASHED) {
+            player.sendSystemMessage(Component.literal("The nearest Cobbleputer is not running, paused, or crashed."));
+            return 0;
+        }
+
+        Optional<UUID> ownerId = resolvedTarget.blockEntity().ownerPlayerId();
+        Optional<String> ownerName = resolvedTarget.blockEntity().ownerPlayerName();
+        if (ownerId.isEmpty() || ownerName.isEmpty()) {
+            player.sendSystemMessage(Component.literal("The nearest Cobbleputer has no owner."));
+            return 0;
+        }
+
+        player.sendSystemMessage(Component.literal("The nearest Cobbleputer is owned by " + ownerName.orElseThrow()
+                + " (" + ownerId.orElseThrow() + ")."));
         return 1;
     }
 

@@ -138,6 +138,16 @@ error message when there is no Cobbleputer within 3m, the nearest Cobbleputer is
 not in the required lifecycle state, or its execution belongs to another Player.
 Right-clicking a Cobbleputer does not change its lifecycle state.
 
+### Cobbleputer Ownership
+
+```
+/cobbleware owner
+```
+
+The `owner` command identifies the owner (by player name and UUID) of the closest Cobbleputer within 3m, if
+that 'puter is running/paused/crashed. The command requires permission level 2
+or higher.
+
 ## Program Execution Design
 
 A placed Cobbleputer block has an associated block entity that stores:
