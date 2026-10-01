@@ -17,7 +17,11 @@ Deno.test('Player limits endpoint returns the cached running-execution snapshot'
   const body = await response.json();
   assertEquals(body, {
     runningExecutions: { used: 2, limit: 10 },
-    totalExecutionStateBytes: { used: 42, limit: 1024, updatedAt: body.totalExecutionStateBytes.updatedAt },
+    totalExecutionStateBytes: {
+      used: 42,
+      limit: 1024,
+      updatedAt: body.totalExecutionStateBytes.updatedAt,
+    },
     updatedAt: body.updatedAt,
   }, 'limits response should preserve the authoritative snapshot');
 });

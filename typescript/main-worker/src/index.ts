@@ -21,7 +21,7 @@ import { PROGRAM_ID_PATTERN, type ProgramStore } from './programs/types.ts';
 import { type ProgramRunner, RuntimeProgramRunner } from './programs/start-states.ts';
 import { normalizePlayerUUID } from './auth/validation.ts';
 import { handleExecutions } from './executions/handlers.ts';
-import { type ExecutionCoordinator, ExecutionManager } from './executions/manager.ts';
+import { ExecutionManager } from './executions/manager.ts';
 import {
   ExecutionStatsHub,
   handleModExecutionStats,
@@ -41,7 +41,7 @@ export type AppOptions = {
   store?: AuthStore;
   programStore?: ProgramStore;
   programRunner?: ProgramRunner;
-  executionCoordinator?: ExecutionCoordinator;
+  executionManager?: ExecutionManager;
   executionStatsHub?: ExecutionStatsHub;
   executionLogHub?: ExecutionLogHub;
 };
@@ -54,7 +54,7 @@ export async function createHandler(
   const programStore = options.programStore ?? new DurableProgramStore(config);
   const programRunner = options.programRunner ??
     new RuntimeProgramRunner(config.playerMemoryQuotaBytes);
-  const executionCoordinator = options.executionCoordinator ?? new ExecutionManager(
+  const executionManager = options.executionManager ?? new ExecutionManager(
     programStore,
     programRunner,
   );
@@ -71,7 +71,7 @@ export async function createHandler(
         store,
         programStore,
         programRunner,
-        executionCoordinator,
+        executionManager,
         executionStatsHub,
         executionLogHub,
       );
@@ -87,7 +87,7 @@ async function routeRequest(
   store: AuthStore,
   programStore: ProgramStore,
   programRunner: ProgramRunner,
-  executionCoordinator: ExecutionCoordinator,
+  executionManager: ExecutionManager,
   executionStatsHub: ExecutionStatsHub,
   executionLogHub: ExecutionLogHub,
 ): Promise<Response> {
@@ -162,7 +162,8 @@ async function routeRequest(
   if (pathname === '/playerapi/v1/limits') {
     const context: RequestContext = {};
     const authError = await requirePlayerAuth(request, config, store, context, 'api');
-    return authError ?? handlePlayerLimits(request, context.player!.playerUUID, executionLogHub, executionStatsHub);
+    return authError ??
+      handlePlayerLimits(request, context.player!.playerUUID, executionLogHub, executionStatsHub);
   }
 
   if (pathname === '/playerapi/v1/programs') {
@@ -230,7 +231,7 @@ async function routeRequest(
       return handleModAuthentication(request, config, store);
     }
     if (pathname === '/modapi/v1/executions') {
-      return await handleExecutions(request, config, executionCoordinator);
+      return await handleExecutions(request, config, executionManager);
     }
     if (pathname === '/modapi/v1/execution-stats') {
       return handleModExecutionStats(request, config, executionStatsHub);

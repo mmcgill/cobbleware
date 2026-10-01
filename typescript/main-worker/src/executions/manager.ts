@@ -29,15 +29,11 @@ type CachedExecution = {
   generation: number;
 };
 
-export type ExecutionCoordinator = {
-  sync(sourceRequest: Request, request: Internal.ExecutionsRequest): Internal.ExecutionsResponse;
-};
-
 export class ExecutionRequestError extends Error {
   override name = 'ExecutionRequestError';
 }
 
-export class ExecutionManager implements ExecutionCoordinator {
+export class ExecutionManager {
   private readonly entries = new Map<string, CachedExecution>();
 
   constructor(

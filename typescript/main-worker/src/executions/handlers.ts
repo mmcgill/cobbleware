@@ -2,14 +2,14 @@ import { create, fromBinary, toBinary } from '@cobbleware/core';
 import * as Internal from '@cobbleware/core/internal';
 import type { AppConfig } from '../config.ts';
 import { hasBearerToken } from '../auth/http.ts';
-import { type ExecutionCoordinator, ExecutionRequestError } from './manager.ts';
+import { type ExecutionManager, ExecutionRequestError } from './manager.ts';
 
 export const EXECUTIONS_CONTENT_TYPE = 'application/octet-stream';
 
 export async function handleExecutions(
   request: Request,
   config: AppConfig,
-  coordinator: ExecutionCoordinator,
+  manager: ExecutionManager,
 ): Promise<Response> {
   if (request.method !== 'POST') {
     return executionError('method must be POST', 405, { allow: 'POST' });
@@ -35,7 +35,7 @@ export async function handleExecutions(
   }
 
   try {
-    const response = coordinator.sync(request, decoded);
+    const response = manager.sync(request, decoded);
     return binaryResponse(toBinary(Internal.ExecutionsResponseSchema, response));
   } catch (error) {
     if (error instanceof ExecutionRequestError) {

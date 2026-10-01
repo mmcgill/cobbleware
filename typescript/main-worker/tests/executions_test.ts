@@ -310,7 +310,11 @@ Deno.test('Execution sync rejects an oversized final state before it reaches the
       Internal.ExecutionFailureReason.STATE_SIZE_LIMIT,
       'crash should identify the state-size limit',
     );
-    assertEquals(JSON.stringify([...result.finalState]), JSON.stringify([4]), 'old state should remain');
+    assertEquals(
+      JSON.stringify([...result.finalState]),
+      JSON.stringify([4]),
+      'old state should remain',
+    );
     assertEquals(result.effects.length, 0, 'oversized response effects should be discarded');
   } finally {
     await app.cleanup();
@@ -374,17 +378,21 @@ Deno.test('Execution sync retains at most ten events and refills after the Mod a
     assertEquals(calls, maxEvents, 'only the event window should be dispatched');
 
     const remainingEvent = execution({
-      initialState: new Uint8Array([maxEvents-1]),
-      events: [startedEvent(BigInt(maxEvents+1))],
-      eventSeqNum: BigInt(maxEvents+1),
+      initialState: new Uint8Array([maxEvents - 1]),
+      events: [startedEvent(BigInt(maxEvents + 1))],
+      eventSeqNum: BigInt(maxEvents + 1),
     });
     for (let attempt = 0; attempt < 100; attempt += 1) {
       result = (await decodeResponse(await app.handler(request([remainingEvent])))).results[0];
-      if (result?.eventSeqNum === BigInt(maxEvents+1)) break;
+      if (result?.eventSeqNum === BigInt(maxEvents + 1)) break;
       await new Promise((resolve) => setTimeout(resolve, 0));
     }
-    assertEquals(result?.eventSeqNum, BigInt(maxEvents+1), 'the next sync should refill and dispatch event eleven');
-    assertEquals(calls, maxEvents+1, 'the refilled event should dispatch once');
+    assertEquals(
+      result?.eventSeqNum,
+      BigInt(maxEvents + 1),
+      'the next sync should refill and dispatch event eleven',
+    );
+    assertEquals(calls, maxEvents + 1, 'the refilled event should dispatch once');
   } finally {
     await app.cleanup();
   }

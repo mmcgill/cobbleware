@@ -357,7 +357,9 @@ function validatePlayer(player: Internal.ExecutionStatsTick_PlayerStats): void {
   }
 }
 
-function cobbleputerStateKey(value: Internal.ExecutionStatsTick_CobbleputerRef | undefined): string {
+function cobbleputerStateKey(
+  value: Internal.ExecutionStatsTick_CobbleputerRef | undefined,
+): string {
   if (value?.cobbleputerId === undefined) {
     throw new Error('Cobbleputer state must contain a Cobbleputer id');
   }
