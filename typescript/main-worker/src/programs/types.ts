@@ -1,3 +1,5 @@
+/// <reference path="../runtime.d.ts" />
+
 import { z } from 'zod';
 
 export const PROGRAM_ID_PATTERN = /^[A-Z2-7]{52}$/;
@@ -26,6 +28,10 @@ export type UploadProgramResult = {
   created: boolean;
 };
 
+export type RunOptions = {
+  memoryQuotaBytes: number;
+};
+
 export type ProgramStore = {
   list(playerUUID: string): Promise<ProgramList>;
   readActive(playerUUID: string): Promise<ActiveProgram | null>;
@@ -34,6 +40,7 @@ export type ProgramStore = {
     content: Uint8Array,
     name: string,
   ): Promise<UploadProgramResult>;
+  run(playerUUID: string, opts: RunOptions): Promise<CobblewareUserWorker>;
 };
 
 const ProgramMetadataSchema = z.strictObject({
@@ -57,3 +64,5 @@ export class ProgramQuotaExceededError extends Error {
 export class ProgramOperationConflictError extends Error {
   override name = 'ProgramOperationConflictError';
 }
+
+export type StartStates = Record<string, number[]>;

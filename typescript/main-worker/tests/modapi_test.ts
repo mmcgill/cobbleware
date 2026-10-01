@@ -1,8 +1,8 @@
+import { create, Program, toBinary } from '@cobbleware/core';
 import { type AppConfig, configFromEnv } from '../src/config.ts';
 import { DurableAuthStore } from '../src/auth/store.ts';
 import { createHandler } from '../src/index.ts';
 import type { ActiveProgram, ProgramStore } from '../src/programs/types.ts';
-import type { ProgramRunner } from '../src/programs/start-states.ts';
 
 const API_KEY = 'test-api-key';
 const PROGRAM_PATH = 'http://localhost/modapi/v1/players/ABC-Player/program';
@@ -25,7 +25,7 @@ const activeProgram: ActiveProgram = {
 
 async function createTestApp(
   readActive: ProgramStore['readActive'],
-  startStates: ProgramRunner['startStates'],
+  fetch: CobblewareUserWorker['fetch'],
 ): Promise<TestApp> {
   const storageDir = await Deno.makeTempDir({ prefix: 'cobbleware-modapi-test-' });
   const config: AppConfig = configFromEnv({ apiKey: API_KEY, storageDir });
@@ -34,16 +34,29 @@ async function createTestApp(
     list: () => Promise.resolve({ programs: [], quotaBytes: 0, usedBytes: 0, remainingBytes: 0 }),
     readActive,
     upload: () => Promise.resolve({ metadata: activeProgram.metadata, created: false }),
-  };
-  const runner: ProgramRunner = {
-    startStates,
-    step: () => Promise.reject(new Error('step is not used by Mod API tests')),
+    run: () => Promise.resolve(worker(fetch)),
   };
 
   return {
-    handler: await createHandler({ config, store: authStore, programStore, programRunner: runner }),
+    handler: await createHandler({ config, store: authStore, programStore }),
     cleanup: () => Deno.remove(storageDir, { recursive: true }),
   };
+}
+
+function worker(fetch: CobblewareUserWorker['fetch']): CobblewareUserWorker {
+  return { closed: Promise.resolve({}), retire: () => {}, fetch };
+}
+
+function startStatesResponse(startStates: Record<string, number[]>): Response {
+  const content = toBinary(
+    Program.StartStatesResponseSchema,
+    create(Program.StartStatesResponseSchema, {
+      startStates: Object.entries(startStates).map(([stateName, state]) =>
+        create(Program.StartStateSchema, { stateName, state: new Uint8Array(state) })
+      ),
+    }),
+  );
+  return new Response(content, { headers: { 'content-type': 'application/octet-stream' } });
 }
 
 function authorizedRequest(method = 'GET'): Request {
@@ -70,7 +83,7 @@ function assertEquals<T>(actual: T, expected: T, message: string): void {
 Deno.test('Mod program query requires bearer authentication', async () => {
   const app = await createTestApp(
     () => Promise.resolve(activeProgram),
-    () => Promise.resolve({ one: [1] }),
+    () => Promise.resolve(startStatesResponse({ one: [1] })),
   );
   try {
     const response = await app.handler(new Request(PROGRAM_PATH));
@@ -82,16 +95,14 @@ Deno.test('Mod program query requires bearer authentication', async () => {
 
 Deno.test('Mod program query returns active program metadata and states', async () => {
   let requestedPlayer: string | undefined;
-  let executedProgram: ActiveProgram | undefined;
   const app = await createTestApp(
     (playerUUID) => {
       requestedPlayer = playerUUID;
       return Promise.resolve(activeProgram);
     },
-    (playerUUID, program) => {
-      requestedPlayer = playerUUID;
-      executedProgram = program;
-      return Promise.resolve({ one: [1], two: [2] });
+    (request) => {
+      assertEquals(request.url, 'http://cobbleware.local/startStates', 'program API path');
+      return Promise.resolve(startStatesResponse({ one: [1], two: [2] }));
     },
   );
   try {
@@ -109,9 +120,6 @@ Deno.test('Mod program query returns active program metadata and states', async 
       'program metadata and start states should be returned as JSON',
     );
     assertEquals(requestedPlayer, PLAYER_UUID, 'player UUID should be normalized');
-    if (executedProgram !== activeProgram) {
-      throw new Error('runner did not receive the active program');
-    }
   } finally {
     await app.cleanup();
   }
@@ -123,7 +131,7 @@ Deno.test('Mod program query returns 404 without an active program', async () =>
     () => Promise.resolve(null),
     () => {
       called = true;
-      return Promise.resolve({});
+      return Promise.resolve(startStatesResponse({}));
     },
   );
   try {
@@ -142,7 +150,7 @@ Deno.test('Mod program query rejects methods other than GET', async () => {
       called = true;
       return Promise.resolve(activeProgram);
     },
-    () => Promise.resolve({ one: [1] }),
+    () => Promise.resolve(startStatesResponse({ one: [1] })),
   );
   try {
     const response = await app.handler(authorizedRequest('POST'));
@@ -169,7 +177,7 @@ Deno.test('Mod program query converts program failures to programError', async (
 Deno.test('Mod program query converts active-program read failures to programError', async () => {
   const app = await createTestApp(
     () => Promise.reject(new Error('program file could not be loaded')),
-    () => Promise.resolve({ one: [1] }),
+    () => Promise.resolve(startStatesResponse({ one: [1] })),
   );
   try {
     await assertProgramError(await app.handler(authorizedRequest()));

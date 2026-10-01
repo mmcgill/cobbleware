@@ -4,7 +4,6 @@ import { type AppConfig, configFromEnv } from '../src/config.ts';
 import { DurableAuthStore } from '../src/auth/store.ts';
 import { createHandler } from '../src/index.ts';
 import type { ActiveProgram, ProgramStore } from '../src/programs/types.ts';
-import type { ProgramRunner } from '../src/programs/start-states.ts';
 import { MAX_EVENTS_PER_EXECUTION } from '../src/executions/manager.ts';
 
 const API_KEY = 'test-api-key';
@@ -26,7 +25,10 @@ type TestApp = {
   cleanup: () => Promise<void>;
 };
 
-async function createTestApp(step: ProgramRunner['step']): Promise<TestApp> {
+async function createTestApp(
+  fetch: CobblewareUserWorker['fetch'],
+  onRun?: (playerUUID: string) => void,
+): Promise<TestApp> {
   const storageDir = await Deno.makeTempDir({ prefix: 'cobbleware-executions-test-' });
   const config: AppConfig = configFromEnv({ apiKey: API_KEY, storageDir });
   const authStore = await DurableAuthStore.open(config);
@@ -34,16 +36,20 @@ async function createTestApp(step: ProgramRunner['step']): Promise<TestApp> {
     list: () => Promise.resolve({ programs: [], quotaBytes: 0, usedBytes: 0, remainingBytes: 0 }),
     readActive: () => Promise.resolve(activeProgram),
     upload: () => Promise.resolve({ metadata: activeProgram.metadata, created: false }),
-  };
-  const runner: ProgramRunner = {
-    startStates: () => Promise.resolve({}),
-    step,
+    run: (playerUUID) => {
+      onRun?.(playerUUID);
+      return Promise.resolve(worker(fetch));
+    },
   };
 
   return {
-    handler: await createHandler({ config, store: authStore, programStore, programRunner: runner }),
+    handler: await createHandler({ config, store: authStore, programStore }),
     cleanup: () => Deno.remove(storageDir, { recursive: true }),
   };
+}
+
+function worker(fetch: CobblewareUserWorker['fetch']): CobblewareUserWorker {
+  return { closed: Promise.resolve({}), retire: () => {}, fetch };
 }
 
 function execution(
@@ -191,12 +197,13 @@ Deno.test('Execution sync asynchronously advances state and acknowledges effect 
   let resolveStep: ((response: Response) => void) | undefined;
   let receivedStep: Uint8Array | undefined;
   let receivedPlayer: string | undefined;
-  const app = await createTestApp((player, _program, body) => {
-    receivedPlayer = player;
-    receivedStep = body;
+  const app = await createTestApp(async (request) => {
+    receivedStep = new Uint8Array(await request.arrayBuffer());
     return new Promise<Response>((resolve) => {
       resolveStep = resolve;
     });
+  }, (playerUUID) => {
+    receivedPlayer = playerUUID;
   });
   const initial = execution();
   try {
@@ -453,8 +460,8 @@ Deno.test('Execution sync advertises the remaining effect capacity for each step
   });
   const effectLimits: number[] = [];
   let calls = 0;
-  const app = await createTestApp((_player, _program, body) => {
-    const step = fromBinary(Program.StepRequestSchema, body);
+  const app = await createTestApp(async (request) => {
+    const step = fromBinary(Program.StepRequestSchema, new Uint8Array(await request.arrayBuffer()));
     effectLimits.push(step.effectLimit);
     const effectCount = calls++ === 0 ? 49 : 2;
     return Promise.resolve(stepResponse(new Uint8Array([calls]), Array(effectCount).fill(effect)));

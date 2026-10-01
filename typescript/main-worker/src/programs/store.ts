@@ -1,4 +1,5 @@
 import type { AppConfig } from '../config.ts';
+import { BYTES_PER_MEBIBYTE } from '../config.ts';
 import { bytesToBase32, digestBytes } from '../auth/crypto.ts';
 import {
   type ActiveProgram,
@@ -10,8 +11,10 @@ import {
   ProgramOperationConflictError,
   ProgramQuotaExceededError,
   type ProgramStore,
+  type RunOptions,
   type UploadProgramResult,
 } from './types.ts';
+import { workerServicePath } from './service-path.ts';
 
 const MANIFEST_FILENAME = 'programs.json';
 const ACTIVE_PROGRAM_READ_ATTEMPTS = 3;
@@ -72,6 +75,20 @@ export class DurableProgramStore implements ProgramStore {
     }
 
     throw new Error('active program read attempts exhausted');
+  }
+
+  async run(playerUUID: string, opts: RunOptions): Promise<CobblewareUserWorker> {
+    const program = await this.readActive(playerUUID);
+    if (program === null) {
+      throw new Error('player has no active program');
+    }
+
+    return await EdgeRuntime.userWorkers.create({
+      servicePath: workerServicePath(playerUUID, program.metadata.id),
+      maybeEszip: program.content,
+      maybeEntrypoint: 'file:///src/index.ts',
+      memoryLimitMb: opts.memoryQuotaBytes / BYTES_PER_MEBIBYTE,
+    });
   }
 
   upload(

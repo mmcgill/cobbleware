@@ -1,12 +1,8 @@
 import { emptyResponse, isJsonRequest, jsonError, jsonResponse, readJson } from '../auth/http.ts';
-import { fromBinary, fromJson, Program, toBinary, toJson } from '@cobbleware/core';
+import { fromBinary, fromJson, Program, toJson } from '@cobbleware/core';
 import type { JsonValue } from '@bufbuild/protobuf';
 import { requireSameOrigin } from '../auth/middleware.ts';
-import {
-  PROGRAM_BINARY_CONTENT_TYPE,
-  programErrorResponse,
-  type ProgramRunner,
-} from './start-states.ts';
+import { invokeNextState, invokeStartStates, PROGRAM_BINARY_CONTENT_TYPE } from './program-api.ts';
 import {
   ProgramOperationConflictError,
   ProgramQuotaExceededError,
@@ -87,7 +83,7 @@ export async function handleProgramCollection(
 export async function handleProgram(
   request: Request,
   store: ProgramStore,
-  runner: ProgramRunner,
+  playerMemoryQuotaBytes: number,
   playerUUID: string,
 ): Promise<Response> {
   if (request.method !== 'GET') {
@@ -101,7 +97,7 @@ export async function handleProgram(
     if (error instanceof ProgramOperationConflictError) {
       return jsonError('another program operation is in progress', 409);
     }
-    return programErrorResponse(error);
+    return jsonResponse({ programError: describeError(error) });
   }
 
   if (program === null) {
@@ -109,12 +105,13 @@ export async function handleProgram(
   }
 
   try {
+    const worker = await store.run(playerUUID, { memoryQuotaBytes: playerMemoryQuotaBytes });
     return jsonResponse({
       ...program.metadata,
-      startStates: await runner.startStates(playerUUID, program),
+      startStates: await invokeStartStates(worker),
     });
   } catch (error) {
-    return programErrorResponse(error);
+    return jsonResponse({ programError: describeError(error) });
   }
 }
 
@@ -122,7 +119,7 @@ export async function handleProgram(
 export async function handlePlayerProgramStartStates(
   request: Request,
   store: ProgramStore,
-  runner: ProgramRunner,
+  playerMemoryQuotaBytes: number,
   playerUUID: string,
   programId: string,
 ): Promise<Response> {
@@ -142,8 +139,10 @@ export async function handlePlayerProgramStartStates(
   }
 
   try {
+    const worker = await store.run(playerUUID, { memoryQuotaBytes: playerMemoryQuotaBytes });
+    const states = await invokeStartStates(worker);
     return jsonResponse({
-      startStates: Object.keys(await runner.startStates(playerUUID, program)),
+      startStates: Object.keys(states),
     });
   } catch (error) {
     const detail = error instanceof Error ? error.message : String(error);
@@ -154,7 +153,7 @@ export async function handlePlayerProgramStartStates(
 export async function handleProgramStep(
   request: Request,
   store: ProgramStore,
-  runner: ProgramRunner,
+  playerMemoryQuotaBytes: number,
   playerUUID: string,
   programId: string,
 ): Promise<Response> {
@@ -172,16 +171,15 @@ export async function handleProgramStep(
     return jsonError('content type must be application/octet-stream or application/json', 415);
   }
 
-  let body: Uint8Array;
+  let stepRequest: Program.StepRequest;
   try {
     if (isJsonRequest(request)) {
-      body = toBinary(
-        Program.StepRequestSchema,
-        fromJson(Program.StepRequestSchema, await readJson(request) as JsonValue),
-      );
+      stepRequest = fromJson(Program.StepRequestSchema, await readJson(request) as JsonValue);
     } else {
-      // Player-supplied protobuf messages are opaque at this boundary. Do not unpack or verify them.
-      body = new Uint8Array(await request.arrayBuffer());
+      stepRequest = fromBinary(
+        Program.StepRequestSchema,
+        new Uint8Array(await request.arrayBuffer()),
+      );
     }
   } catch (error) {
     return jsonError(
@@ -201,23 +199,23 @@ export async function handleProgramStep(
     return emptyResponse(404);
   }
 
-  const response = await runner.step(playerUUID, program, body);
-  if (!acceptsJsonResponse(request) || response.status !== 200) {
-    return response;
-  }
-
-  if (mediaType(response.headers.get('content-type')) !== PROGRAM_BINARY_CONTENT_TYPE) {
-    return jsonError('program returned an unexpected /nextState content type', 502);
-  }
+  const worker = await store.run(playerUUID, { memoryQuotaBytes: playerMemoryQuotaBytes });
+  const response = await invokeNextState(worker, stepRequest);
 
   try {
-    const body = new Uint8Array(await response.arrayBuffer());
     return jsonResponse(
-      toJson(Program.StepResponseSchema, fromBinary(Program.StepResponseSchema, body)),
+      toJson(Program.StepResponseSchema, response),
     );
   } catch {
     return jsonError('program returned an invalid StepResponse', 502);
   }
+}
+
+function describeError(error: unknown): string {
+  if (error instanceof Error) {
+    return error.stack ?? error.message;
+  }
+  return String(error);
 }
 
 function handleStoreError(error: unknown): Response {
@@ -249,23 +247,6 @@ function programLocation(id: string): string {
 
 function mediaType(value: string | null): string | undefined {
   return value?.split(';', 1)[0].trim().toLowerCase();
-}
-
-function acceptsJsonResponse(request: Request): boolean {
-  const accept = request.headers.get('accept');
-  if (accept === null) {
-    return false;
-  }
-
-  return accept.split(',').some((mediaRange) => {
-    const [type, ...parameters] = mediaRange.split(';');
-    if (type.trim().toLowerCase() !== JSON_CONTENT_TYPE) {
-      return false;
-    }
-
-    const quality = parameters.find((parameter) => parameter.trim().toLowerCase().startsWith('q='));
-    return quality === undefined || Number(quality.trim().slice(2)) > 0;
-  });
 }
 
 function methodNotAllowed(allowedMethods: string): Response {

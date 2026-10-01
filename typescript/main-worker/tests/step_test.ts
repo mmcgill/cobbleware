@@ -3,7 +3,6 @@ import { type AppConfig, configFromEnv } from '../src/config.ts';
 import { DurableAuthStore } from '../src/auth/store.ts';
 import { createHandler } from '../src/index.ts';
 import type { ActiveProgram, ProgramStore } from '../src/programs/types.ts';
-import type { ProgramRunner } from '../src/programs/start-states.ts';
 
 const API_KEY = 'test-api-key';
 const PLAYER_UUID = '123e4567-e89b-12d3-a456-426614174000';
@@ -27,7 +26,7 @@ type TestApp = {
 
 async function createTestApp(
   readActive: ProgramStore['readActive'],
-  step: ProgramRunner['step'],
+  fetch: CobblewareUserWorker['fetch'],
 ): Promise<TestApp> {
   const storageDir = await Deno.makeTempDir({ prefix: 'cobbleware-step-test-' });
   const config: AppConfig = configFromEnv({ apiKey: API_KEY, storageDir });
@@ -36,16 +35,17 @@ async function createTestApp(
     list: () => Promise.resolve({ programs: [], quotaBytes: 0, usedBytes: 0, remainingBytes: 0 }),
     readActive,
     upload: () => Promise.resolve({ metadata: activeProgram.metadata, created: false }),
-  };
-  const runner: ProgramRunner = {
-    startStates: () => Promise.resolve({}),
-    step,
+    run: () => Promise.resolve(worker(fetch)),
   };
 
   return {
-    handler: await createHandler({ config, store: authStore, programStore, programRunner: runner }),
+    handler: await createHandler({ config, store: authStore, programStore }),
     cleanup: () => Deno.remove(storageDir, { recursive: true }),
   };
+}
+
+function worker(fetch: CobblewareUserWorker['fetch']): CobblewareUserWorker {
+  return { closed: Promise.resolve({}), retire: () => {}, fetch };
 }
 
 function jsonRequest(url: string, body: unknown): Request {
@@ -171,16 +171,12 @@ async function assertJsonError(response: Response, status: number): Promise<void
   }
 }
 
-Deno.test('Player program step executes the active program and returns binary output', async () => {
-  let receivedPlayer: string | undefined;
-  let receivedProgram: ActiveProgram | undefined;
+Deno.test('Player program step accepts binary input and returns ProtoJSON output', async () => {
   let receivedBody: Uint8Array | undefined;
   const app = await createTestApp(
     () => Promise.resolve(activeProgram),
-    (playerUUID, program, body) => {
-      receivedPlayer = playerUUID;
-      receivedProgram = program;
-      receivedBody = body;
+    async (request) => {
+      receivedBody = new Uint8Array(await request.arrayBuffer());
       return Promise.resolve(binaryResponse(encodeStepResponse(), 200));
     },
   );
@@ -191,28 +187,24 @@ Deno.test('Player program step executes the active program and returns binary ou
     assertEquals(response.status, 200, 'step should succeed');
     assertEquals(
       response.headers.get('content-type'),
-      'application/octet-stream',
-      'step should return binary content',
+      'application/json; charset=utf-8',
+      'step should return JSON content',
     );
-
-    const body = new Uint8Array(await response.arrayBuffer());
-    const decoded = fromBinary(Program.StepResponseSchema, body);
     assertEquals(
-      JSON.stringify([...decoded.state]),
-      JSON.stringify([9, 8]),
-      'next state should round trip',
+      JSON.stringify(await response.json()),
+      JSON.stringify({
+        state: 'CQg=',
+        effects: [
+          { sendChat: { msg: 'hello' } },
+          { emitBeep: { millis: 250 } },
+        ],
+      }),
+      'StepResponse should use the canonical ProtoJSON form',
     );
-    assertEquals(decoded.effects.length, 2, 'effects should round trip');
-    assertEquals(receivedPlayer, PLAYER_UUID, 'runner should receive the authenticated player');
-    if (receivedProgram !== activeProgram) {
-      throw new Error('runner should receive the active program');
-    }
-    if (receivedBody === undefined) throw new Error('runner should receive the request body');
-    assertEquals(
-      JSON.stringify([...receivedBody]),
-      JSON.stringify([...requestBody]),
-      'runner should receive the exact request bytes',
-    );
+    if (receivedBody === undefined) throw new Error('worker should receive the request body');
+    const received = fromBinary(Program.StepRequestSchema, receivedBody);
+    assertEquals(received.executionId?.high, 1n, 'binary UUID high value should round trip');
+    assertEquals(received.event?.event.case, 'started', 'binary event should round trip');
   } finally {
     await app.cleanup();
   }
@@ -222,8 +214,8 @@ Deno.test('Player program step accepts and returns ProtoJSON', async () => {
   let receivedBody: Uint8Array | undefined;
   const app = await createTestApp(
     () => Promise.resolve(activeProgram),
-    (_playerUUID, _program, body) => {
-      receivedBody = body;
+    async (request) => {
+      receivedBody = new Uint8Array(await request.arrayBuffer());
       return Promise.resolve(binaryResponse(encodeStepResponse(), 200));
     },
   );
@@ -249,7 +241,7 @@ Deno.test('Player program step accepts and returns ProtoJSON', async () => {
       }),
       'StepResponse should use the canonical ProtoJSON form',
     );
-    if (receivedBody === undefined) throw new Error('runner should receive the converted request');
+    if (receivedBody === undefined) throw new Error('worker should receive the converted request');
     const request = fromBinary(Program.StepRequestSchema, receivedBody);
     assertEquals(request.executionId?.high, 1n, 'ProtoJSON UUID high value should convert');
     assertEquals(request.event?.event.case, 'started', 'ProtoJSON oneof should convert');
@@ -258,7 +250,7 @@ Deno.test('Player program step accepts and returns ProtoJSON', async () => {
   }
 });
 
-Deno.test('Player program step defaults a ProtoJSON request to a binary response', async () => {
+Deno.test('Player program step returns ProtoJSON without an Accept header', async () => {
   const app = await createTestApp(
     () => Promise.resolve(activeProgram),
     () => Promise.resolve(binaryResponse(encodeStepResponse(), 200)),
@@ -269,15 +261,19 @@ Deno.test('Player program step defaults a ProtoJSON request to a binary response
     assertEquals(response.status, 200, 'ProtoJSON step should succeed');
     assertEquals(
       response.headers.get('content-type'),
-      'application/octet-stream',
-      'ProtoJSON input should not select a JSON response',
+      'application/json; charset=utf-8',
+      'step should return JSON content',
     );
-    const body = new Uint8Array(await response.arrayBuffer());
-    const decoded = fromBinary(Program.StepResponseSchema, body);
     assertEquals(
-      JSON.stringify([...decoded.state]),
-      JSON.stringify([9, 8]),
-      'response should be binary',
+      JSON.stringify(await response.json()),
+      JSON.stringify({
+        state: 'CQg=',
+        effects: [
+          { sendChat: { msg: 'hello' } },
+          { emitBeep: { millis: 250 } },
+        ],
+      }),
+      'response should be ProtoJSON',
     );
   } finally {
     await app.cleanup();
@@ -305,7 +301,7 @@ Deno.test('Player program step rejects invalid ProtoJSON without invoking the pr
   }
 });
 
-Deno.test('Player program step enforces HTTP policy and forwards opaque request bodies', async () => {
+Deno.test('Player program step enforces HTTP policy and validates binary requests', async () => {
   let runnerCalled = false;
   const app = await createTestApp(
     () => Promise.resolve(activeProgram),
@@ -321,11 +317,10 @@ Deno.test('Player program step enforces HTTP policy and forwards opaque request 
     );
     assertEquals(
       malformedBodyResponse.status,
-      200,
-      'malformed protobuf messages should be forwarded without Main Worker verification',
+      400,
+      'malformed protobuf messages should be rejected',
     );
-    if (!runnerCalled) throw new Error('opaque request bodies must reach the program runner');
-    runnerCalled = false;
+    if (runnerCalled) throw new Error('malformed requests must not reach the program runner');
     await assertJsonError(
       await app.handler(stepRequest(encodeStepRequest(), cookie, 'POST', 'text/plain')),
       415,
@@ -359,7 +354,7 @@ Deno.test('Player program step enforces HTTP policy and forwards opaque request 
   }
 });
 
-Deno.test('Player program step exposes program failures as binary ErrorResponse', async () => {
+Deno.test('Player program step returns a server error when the program fails', async () => {
   const app = await createTestApp(
     () => Promise.resolve(activeProgram),
     () => Promise.resolve(binaryResponse(encodeErrorResponse('program exploded'), 500)),
@@ -375,23 +370,13 @@ Deno.test('Player program step exposes program failures as binary ErrorResponse'
         'application/json',
       ),
     );
-    assertEquals(response.status, 500, 'program failure should return 500');
-    assertEquals(
-      response.headers.get('content-type'),
-      'application/octet-stream',
-      'program failure should return binary content',
-    );
-    const body = new Uint8Array(await response.arrayBuffer());
-    const errorResponse = fromBinary(Program.ErrorResponseSchema, body);
-    if (errorResponse.error !== 'program exploded') {
-      throw new Error(`expected program error message, got ${errorResponse.error}`);
-    }
+    await assertJsonError(response, 500);
   } finally {
     await app.cleanup();
   }
 });
 
-Deno.test('Player program step forwards untrusted program response bytes unchanged', async () => {
+Deno.test('Player program step fails when the program response has the wrong content type', async () => {
   const responseBody = new Uint8Array([1, 2, 3]);
   const app = await createTestApp(
     () => Promise.resolve(activeProgram),
@@ -400,23 +385,13 @@ Deno.test('Player program step forwards untrusted program response bytes unchang
   try {
     const cookie = await authenticatePlayerSession(app.handler);
     const response = await app.handler(stepRequest(encodeStepRequest(), cookie));
-    assertEquals(response.status, 200, 'program response status should be preserved');
-    assertEquals(
-      response.headers.get('content-type'),
-      'text/plain',
-      'program response content type should be preserved',
-    );
-    assertEquals(
-      JSON.stringify([...new Uint8Array(await response.arrayBuffer())]),
-      JSON.stringify([...responseBody]),
-      'program response bytes should be preserved',
-    );
+    await assertJsonError(response, 500);
   } finally {
     await app.cleanup();
   }
 });
 
-Deno.test('Player program step returns 502 when a ProtoJSON response cannot be converted', async () => {
+Deno.test('Player program step fails when the program response is malformed', async () => {
   const app = await createTestApp(
     () => Promise.resolve(activeProgram),
     () => Promise.resolve(binaryResponse(new Uint8Array([1, 2, 3]), 200)),
@@ -433,7 +408,7 @@ Deno.test('Player program step returns 502 when a ProtoJSON response cannot be c
           'application/json',
         ),
       ),
-      502,
+      500,
     );
   } finally {
     await app.cleanup();

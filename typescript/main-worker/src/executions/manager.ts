@@ -1,8 +1,8 @@
 import { Common, create, Effects, Events, fromBinary, Program, toBinary } from '@cobbleware/core';
 import { isFieldSet } from '@bufbuild/protobuf';
 import * as Internal from '@cobbleware/core/internal';
-import type { ActiveProgram, ProgramStore } from '../programs/types.ts';
-import { PROGRAM_BINARY_CONTENT_TYPE, type ProgramRunner } from '../programs/start-states.ts';
+import type { ProgramStore } from '../programs/types.ts';
+import { invokeNextState } from '../programs/program-api.ts';
 
 export const MAX_EVENTS_PER_EXECUTION = 50;
 export const MAX_EFFECTS_PER_EXECUTION = 50;
@@ -38,7 +38,7 @@ export class ExecutionManager {
 
   constructor(
     private readonly programStore: ProgramStore,
-    private readonly programRunner: ProgramRunner,
+    private readonly playerMemoryQuotaBytes: number,
   ) {}
 
   sync(request: Internal.ExecutionsRequest): Internal.ExecutionsResponse {
@@ -111,14 +111,8 @@ export class ExecutionManager {
     generation: number,
   ): Promise<void> {
     try {
-      const program = await this.programStore.readActive(entry.ownerKey);
-      if (program === null) {
-        throw new Error('player has no active program');
-      }
-
       const effectLimit = Math.max(0, MAX_EFFECTS_PER_EXECUTION - entry.outbox.length);
-      const response = await this.runProgram(entry, event, program, effectLimit);
-      const step = await decodeStepResponse(response);
+      const step = await this.runProgram(entry, event, effectLimit);
       if (!this.isCurrent(entry, generation, eventSeqNum)) {
         return;
       }
@@ -161,9 +155,8 @@ export class ExecutionManager {
   private async runProgram(
     entry: CachedExecution,
     event: Events.Event,
-    program: ActiveProgram,
     effectLimit: number,
-  ): Promise<Response> {
+  ): Promise<Program.StepResponse> {
     const request = create(Program.StepRequestSchema, {
       executionId: cloneUuid(entry.id),
       state: entry.currentState.slice(),
@@ -171,11 +164,10 @@ export class ExecutionManager {
       effectLimit,
       stateSizeLimit: entry.stateSizeLimit,
     });
-    return await this.programRunner.step(
-      entry.ownerKey,
-      program,
-      toBinary(Program.StepRequestSchema, request),
-    );
+    const worker = await this.programStore.run(entry.ownerKey, {
+      memoryQuotaBytes: this.playerMemoryQuotaBytes,
+    });
+    return await invokeNextState(worker, request);
   }
 
   private isCurrent(entry: CachedExecution, generation: number, eventSeqNum: bigint): boolean {
@@ -246,16 +238,6 @@ function requireRequestField(
 ): void {
   if (!isFieldSet(message as never, field)) {
     invalidRequest(`${name} is required`);
-  }
-}
-
-function requireField(
-  message: object,
-  field: Parameters<typeof isFieldSet>[1],
-  name: string,
-): void {
-  if (!isFieldSet(message as never, field)) {
-    throw new Error(`${name} is required`);
   }
 }
 
@@ -376,46 +358,6 @@ class StateSizeLimitError extends Error {
   constructor() {
     super('program response state exceeds the execution state-size limit');
   }
-}
-
-async function decodeStepResponse(response: Response): Promise<Program.StepResponse> {
-  if (response.status !== 200) {
-    const contentType = mediaType(response.headers.get('content-type'));
-    let detail = '';
-    if (contentType === PROGRAM_BINARY_CONTENT_TYPE) {
-      try {
-        const error = fromBinary(
-          Program.ErrorResponseSchema,
-          new Uint8Array(await response.arrayBuffer()),
-        );
-        if (error.error !== '') {
-          detail = `: ${error.error}`;
-        }
-      } catch {
-        detail = ' (response body was not a valid ErrorResponse)';
-      }
-    }
-    throw new Error(
-      `program returned HTTP ${response.status} with content type ${
-        contentType ?? 'absent'
-      }${detail}`,
-    );
-  }
-  if (mediaType(response.headers.get('content-type')) !== PROGRAM_BINARY_CONTENT_TYPE) {
-    throw new Error('program returned an unexpected /nextState content type');
-  }
-  const step = fromBinary(Program.StepResponseSchema, new Uint8Array(await response.arrayBuffer()));
-  requireField(step, Program.StepResponseSchema.field.state, 'program response state');
-  for (const effect of step.effects) {
-    if (effect.effect.case === undefined) {
-      throw new Error('program response effect is invalid');
-    }
-  }
-  return step;
-}
-
-function mediaType(value: string | null): string | undefined {
-  return value?.split(';', 1)[0].trim().toLowerCase();
 }
 
 function cloneUuid(uuid: Common.Uuid): Common.Uuid {

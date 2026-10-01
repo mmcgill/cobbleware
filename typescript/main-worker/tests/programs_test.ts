@@ -1,8 +1,9 @@
 import { type AppConfig, configFromEnv } from '../src/config.ts';
+import { create, Program, toBinary } from '@cobbleware/core';
 import { DurableAuthStore } from '../src/auth/store.ts';
+import { BYTES_PER_MEBIBYTE } from '../src/config.ts';
 import { createHandler } from '../src/index.ts';
 import { DurableProgramStore } from '../src/programs/store.ts';
-import type { ProgramRunner } from '../src/programs/start-states.ts';
 import {
   type ActiveProgram,
   ProgramOperationConflictError,
@@ -26,7 +27,6 @@ type TestApp = {
 async function createTestApp(
   playerProgramQuotaBytes: number,
   programStore?: ProgramStore,
-  programRunner?: ProgramRunner,
 ): Promise<TestApp> {
   const storageDir = await Deno.makeTempDir({ prefix: 'cobbleware-program-test-' });
   const config = configFromEnv({
@@ -37,10 +37,26 @@ async function createTestApp(
   const authStore = await DurableAuthStore.open(config);
 
   return {
-    handler: await createHandler({ config, store: authStore, programStore, programRunner }),
+    handler: await createHandler({ config, store: authStore, programStore }),
     config,
     cleanup: () => Deno.remove(storageDir, { recursive: true }),
   };
+}
+
+function worker(fetch: CobblewareUserWorker['fetch']): CobblewareUserWorker {
+  return { closed: Promise.resolve({}), retire: () => {}, fetch };
+}
+
+function startStatesResponse(startStates: Record<string, number[]>): Response {
+  const content = toBinary(
+    Program.StartStatesResponseSchema,
+    create(Program.StartStatesResponseSchema, {
+      startStates: Object.entries(startStates).map(([stateName, state]) =>
+        create(Program.StartStateSchema, { stateName, state: new Uint8Array(state) })
+      ),
+    }),
+  );
+  return new Response(content, { headers: { 'content-type': 'application/octet-stream' } });
 }
 
 Deno.test('Player program start states returns names for the active program', async () => {
@@ -63,12 +79,14 @@ Deno.test('Player program start states returns names for the active program', as
       }),
     readActive: () => Promise.resolve(activeProgram),
     upload: () => Promise.resolve({ metadata: activeProgram.metadata, created: false }),
+    run: () =>
+      Promise.resolve(worker(() =>
+        Promise.resolve(
+          startStatesResponse({ default: [1], paused: [2] }),
+        )
+      )),
   };
-  const programRunner: ProgramRunner = {
-    startStates: () => Promise.resolve({ default: [1], paused: [2] }),
-    step: () => Promise.reject(new Error('step is not used by this test')),
-  };
-  const app = await createTestApp(1024, programStore, programRunner);
+  const app = await createTestApp(1024, programStore);
   try {
     const cookie = await authenticatePlayerSession(app.handler);
     const response = await app.handler(new Request(START_STATES_PATH, { headers: { cookie } }));
@@ -79,6 +97,43 @@ Deno.test('Player program start states returns names for the active program', as
       'start state names should be returned in program order',
     );
   } finally {
+    await app.cleanup();
+  }
+});
+
+Deno.test('Program store creates an active-program worker with the requested memory quota', async () => {
+  const app = await createTestApp(1024);
+  const store = new DurableProgramStore(app.config);
+  const previousRuntime = Object.getOwnPropertyDescriptor(globalThis, 'EdgeRuntime');
+  let options: CobblewareUserWorkerOptions | undefined;
+  Object.defineProperty(globalThis, 'EdgeRuntime', {
+    configurable: true,
+    value: {
+      userWorkers: {
+        create: (value: CobblewareUserWorkerOptions) => {
+          options = value;
+          return Promise.resolve(worker(() => Promise.resolve(new Response())));
+        },
+        memStats: () => Promise.resolve({}),
+      },
+    },
+  });
+
+  try {
+    const uploaded = await store.upload(PLAYER_UUID, new Uint8Array([1, 2, 3]), 'test.eszip');
+    await store.run(PLAYER_UUID, { memoryQuotaBytes: 3 * BYTES_PER_MEBIBYTE });
+    if (options === undefined) throw new Error('ProgramStore.run did not create a worker');
+    assertEquals(options.memoryLimitMb, 3, 'worker memory limit should be in MiB');
+    assertEquals(options.maybeEszip.byteLength, 3, 'worker should receive active program content');
+    if (!options.servicePath.endsWith(`-${uploaded.metadata.id}`)) {
+      throw new Error(`worker service path changed: ${options.servicePath}`);
+    }
+  } finally {
+    if (previousRuntime === undefined) {
+      delete (globalThis as { EdgeRuntime?: unknown }).EdgeRuntime;
+    } else {
+      Object.defineProperty(globalThis, 'EdgeRuntime', previousRuntime);
+    }
     await app.cleanup();
   }
 });
@@ -434,6 +489,7 @@ Deno.test('Program operation conflicts return HTTP 409', async () => {
     list: () => conflict(),
     readActive: () => conflict(),
     upload: () => conflict(),
+    run: () => conflict(),
   };
   const app = await createTestApp(1024, conflictStore);
   try {
