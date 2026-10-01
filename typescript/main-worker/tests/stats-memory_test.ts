@@ -1,4 +1,4 @@
-import { workerServicePath } from '../src/programs/service-path.ts';
+import { workerServicePath } from '../src/programs/store.ts';
 import { memoryUsageByPlayer } from '../src/stats/handlers.ts';
 
 const PLAYER = 'd2a99799-250c-4eff-a5ed-dc421fcd189c';

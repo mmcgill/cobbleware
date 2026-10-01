@@ -14,7 +14,6 @@ import {
   type RunOptions,
   type UploadProgramResult,
 } from './types.ts';
-import { workerServicePath } from './service-path.ts';
 
 const MANIFEST_FILENAME = 'programs.json';
 const ACTIVE_PROGRAM_READ_ATTEMPTS = 3;
@@ -24,6 +23,14 @@ type Clock = () => number;
 export type ProgramStoreOptions = {
   clock?: Clock;
 };
+
+export function workerServicePath(playerUUID: string, programId: string): string {
+  return `${playerWorkerServicePathPrefix(playerUUID)}${programId}`;
+}
+
+export function playerWorkerServicePathPrefix(playerUUID: string): string {
+  return `cobbleware-${encodeURIComponent(playerUUID)}-`;
+}
 
 export class DurableProgramStore implements ProgramStore {
   private readonly lockedPlayers = new Set<string>();

@@ -2,7 +2,7 @@ import { create, fromBinary, toBinary } from '@cobbleware/core';
 import * as Internal from '@cobbleware/core/internal';
 import type { AppConfig } from '../config.ts';
 import { requireModAuth, requireSameOrigin } from '../auth/middleware.ts';
-import { playerWorkerServicePathPrefix } from '../programs/service-path.ts';
+import { playerWorkerServicePathPrefix } from '../programs/store.ts';
 
 type MemoryStats =
   | Map<string, CobblewareWorkerHeapStatisticsWithServicePath>
