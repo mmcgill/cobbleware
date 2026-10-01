@@ -10,6 +10,8 @@ public record CobblewareConfig(
         int maxRunningExecutionsPerPlayer,
         int maxQueuedEventsPerPlayer,
         long maxTotalExecutionStateBytesPerPlayer,
+        int guaranteedPoolSize,
+        int bestEffortPoolSize,
         String configurationError) {
     public CobblewareConfig {
         if (mainWorkerApiKey == null) {
@@ -26,6 +28,12 @@ public record CobblewareConfig(
         }
         if (maxTotalExecutionStateBytesPerPlayer <= 0) {
             throw new IllegalArgumentException("maxTotalExecutionStateBytesPerPlayer must be positive");
+        }
+        if (guaranteedPoolSize < 0) {
+            throw new IllegalArgumentException("guaranteedPoolSize must not be negative");
+        }
+        if (bestEffortPoolSize < 0) {
+            throw new IllegalArgumentException("bestEffortPoolSize must not be negative");
         }
     }
 
@@ -53,6 +61,8 @@ public record CobblewareConfig(
                 CobblewareConfigLoader.DEFAULT_MAX_RUNNING_EXECUTIONS_PER_PLAYER,
                 CobblewareConfigLoader.DEFAULT_MAX_QUEUED_EVENTS_PER_PLAYER,
                 CobblewareConfigLoader.DEFAULT_MAX_TOTAL_EXECUTION_STATE_BYTES_PER_PLAYER,
+                CobblewareConfigLoader.DEFAULT_GUARANTEED_POOL_SIZE,
+                CobblewareConfigLoader.DEFAULT_BEST_EFFORT_POOL_SIZE,
                 reason);
     }
 }

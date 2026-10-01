@@ -26,7 +26,7 @@ public final class PlayerPriorityStore implements AutoCloseable {
     static final int CURRENT_FORMAT_VERSION = 1;
     public static final int MIN_PRIORITY = 1;
     public static final int MAX_PRIORITY = 3;
-    static final Priorities DEFAULT_PRIORITIES = new Priorities(2, 3);
+    public static final Priorities DEFAULT_PRIORITIES = new Priorities(2, 3);
 
     private static final Gson JSON =
             new GsonBuilder().setPrettyPrinting().disableHtmlEscaping().create();

@@ -23,6 +23,10 @@ public final class CobblewareConfigLoader {
     public static final int DEFAULT_MAX_RUNNING_EXECUTIONS_PER_PLAYER = 10;
     public static final int DEFAULT_MAX_QUEUED_EVENTS_PER_PLAYER = 200;
     public static final long DEFAULT_MAX_TOTAL_EXECUTION_STATE_BYTES_PER_PLAYER = 1024L * 1024L;
+    /** A zero value defers the documented default to the server player limit. */
+    public static final int DEFAULT_GUARANTEED_POOL_SIZE = 0;
+
+    public static final int DEFAULT_BEST_EFFORT_POOL_SIZE = 0;
 
     private CobblewareConfigLoader() {}
 
@@ -78,6 +82,8 @@ public final class CobblewareConfigLoader {
                 optionalPositiveInt(object, "maxQueuedEventsPerPlayer", DEFAULT_MAX_QUEUED_EVENTS_PER_PLAYER);
         long maxTotalExecutionStateBytesPerPlayer = optionalPositiveLong(
                 object, "maxTotalExecutionStateBytesPerPlayer", DEFAULT_MAX_TOTAL_EXECUTION_STATE_BYTES_PER_PLAYER);
+        int guaranteedPoolSize = optionalPositiveInt(object, "guaranteedPoolSize", DEFAULT_GUARANTEED_POOL_SIZE);
+        int bestEffortPoolSize = optionalNonNegativeInt(object, "bestEffortPoolSize", DEFAULT_BEST_EFFORT_POOL_SIZE);
         URI baseUri = normalizeBaseUri(mainWorkerUrl);
         return new CobblewareConfig(
                 baseUri,
@@ -86,6 +92,8 @@ public final class CobblewareConfigLoader {
                 maxRunningExecutionsPerPlayer,
                 maxQueuedEventsPerPlayer,
                 maxTotalExecutionStateBytesPerPlayer,
+                guaranteedPoolSize,
+                bestEffortPoolSize,
                 null);
     }
 
@@ -138,6 +146,25 @@ public final class CobblewareConfigLoader {
         }
     }
 
+    private static int optionalNonNegativeInt(JsonObject object, String property, int defaultValue) {
+        JsonElement value = object.get(property);
+        if (value == null) {
+            return defaultValue;
+        }
+        if (!value.isJsonPrimitive() || !value.getAsJsonPrimitive().isNumber()) {
+            throw new IllegalArgumentException(property + " must be a non-negative integer");
+        }
+        try {
+            int result = value.getAsBigDecimal().intValueExact();
+            if (result < 0) {
+                throw new IllegalArgumentException(property + " must be a non-negative integer");
+            }
+            return result;
+        } catch (ArithmeticException exception) {
+            throw new IllegalArgumentException(property + " must be a non-negative integer", exception);
+        }
+    }
+
     private static URI normalizeBaseUri(String value) {
         try {
             URI parsed = new URI(value);
@@ -166,7 +193,8 @@ public final class CobblewareConfigLoader {
                 + DEFAULT_MAX_RUNNING_EXECUTIONS_PER_PLAYER + ",\n"
                 + "  \"maxQueuedEventsPerPlayer\": " + DEFAULT_MAX_QUEUED_EVENTS_PER_PLAYER + ",\n"
                 + "  \"maxTotalExecutionStateBytesPerPlayer\": "
-                + DEFAULT_MAX_TOTAL_EXECUTION_STATE_BYTES_PER_PLAYER + "\n"
+                + DEFAULT_MAX_TOTAL_EXECUTION_STATE_BYTES_PER_PLAYER + ",\n"
+                + "  \"bestEffortPoolSize\": " + DEFAULT_BEST_EFFORT_POOL_SIZE + "\n"
                 + "}\n";
     }
 }

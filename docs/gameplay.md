@@ -131,6 +131,26 @@ and the Cobbleputer crashes while retaining its prior state for `/cobbleware res
 limit-exceeded log entry and the usual crash transition. The Browser Limits tab shows the total state-byte usage and
 cap with live updates from execution statistics.
 
+## Execution Pools
+
+A server assigns running Cobbleputers to one of two execution pools:
+
+* Executions in the guaranteed pool are synced every game tick. Every execution in the guaranteed
+  pool has a dedicated User Worker slot in the runtime.
+* Executions in the best-effort pool are round-robin rotated through a fixed number of
+  User Worker slots. If there are more executions in the pool than best-effort slots,
+  these programs only make progress periodically.
+
+Executions are assigned to the pools according to the _execution priority_ of their owning player.
+
+### Execution Priority
+
+Every player has an _online execution priority_ and an _offline execution priority_. Valid priority values
+are 1, 2, and 3. The default online priority is 2 and the default offline priority is 3. An administrator
+can persistently set either value with `/cobbleware setpriority <player> <online|offline> <priority>`.
+Any player can view their own two priorities with `/cobbleware priority`; an administrator can view another
+player's priorities with `/cobbleware priority <player>`.
+
 ## Wireless Observer
 
 Wireless Observer blocks allow a Cobbleputer to detect block state changes and control

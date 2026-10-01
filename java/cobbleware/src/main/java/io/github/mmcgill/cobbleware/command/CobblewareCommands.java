@@ -11,6 +11,7 @@ import io.github.mmcgill.cobbleware.block.CobbleputerBlock;
 import io.github.mmcgill.cobbleware.block.CobbleputerBlockEntity;
 import io.github.mmcgill.cobbleware.block.CobbleputerState;
 import io.github.mmcgill.cobbleware.execution.ExecutionDriver;
+import io.github.mmcgill.cobbleware.execution.ExecutionPoolManager;
 import io.github.mmcgill.cobbleware.execution.PlayerPriorityStore;
 import io.github.mmcgill.cobbleware.execution.PlayerPriorityStore.PriorityTarget;
 import io.github.mmcgill.cobbleware.instrumentation.Instrumentation;
@@ -51,7 +52,8 @@ public final class CobblewareCommands {
             MainWorkerClient mainWorkerClient,
             Instrumentation instrumentation,
             ExecutionDriver executionDriver,
-            PlayerPriorityStore playerPriorityStore) {
+            PlayerPriorityStore playerPriorityStore,
+            ExecutionPoolManager executionPoolManager) {
         CommandRegistrationCallback.EVENT.register((dispatcher, registryAccess, environment) ->
                 dispatcher.register(Commands.literal("cobbleware")
                         .then(Commands.literal("auth")
@@ -92,6 +94,20 @@ public final class CobblewareCommands {
                                         .requires(source ->
                                                 source.permissions().hasPermission(Permissions.COMMANDS_GAMEMASTER))
                                         .executes(context -> targetPriority(context, playerPriorityStore))))
+                        .then(Commands.literal("pool")
+                                .executes(context -> ownPool(context, executionPoolManager))
+                                .then(Commands.argument("player", GameProfileArgument.gameProfile())
+                                        .requires(source ->
+                                                source.permissions().hasPermission(Permissions.COMMANDS_GAMEMASTER))
+                                        .executes(context -> targetPool(context, executionPoolManager))))
+                        .then(Commands.literal("guaranteed")
+                                .requires(source -> source.permissions().hasPermission(Permissions.COMMANDS_GAMEMASTER))
+                                .executes(context ->
+                                        members(context, executionPoolManager, ExecutionPoolManager.Pool.GUARANTEED)))
+                        .then(Commands.literal("besteffort")
+                                .requires(source -> source.permissions().hasPermission(Permissions.COMMANDS_GAMEMASTER))
+                                .executes(context ->
+                                        members(context, executionPoolManager, ExecutionPoolManager.Pool.BEST_EFFORT)))
                         .then(Commands.literal("stats")
                                 .requires(source -> source.permissions().hasPermission(Permissions.COMMANDS_GAMEMASTER))
                                 .executes(context -> stats(context, instrumentation))
@@ -177,6 +193,60 @@ public final class CobblewareCommands {
 
     private static String formatPriorities(PlayerPriorityStore.Priorities priorities) {
         return "online " + priorities.onlinePriority() + "; offline " + priorities.offlinePriority();
+    }
+
+    private static int ownPool(CommandContext<CommandSourceStack> context, ExecutionPoolManager executionPoolManager) {
+        ServerPlayer player;
+        try {
+            player = context.getSource().getPlayerOrException();
+        } catch (CommandSyntaxException exception) {
+            context.getSource().sendFailure(Component.literal("Specify a player to view an execution pool."));
+            return 0;
+        }
+        return sendPool(context.getSource(), player.getGameProfile().name(), player.getUUID(), executionPoolManager);
+    }
+
+    private static int targetPool(CommandContext<CommandSourceStack> context, ExecutionPoolManager executionPoolManager)
+            throws CommandSyntaxException {
+        Optional<NameAndId> target = priorityTarget(context);
+        if (target.isEmpty()) {
+            return 0;
+        }
+        NameAndId profile = target.orElseThrow();
+        return sendPool(context.getSource(), profile.name(), profile.id(), executionPoolManager);
+    }
+
+    private static int sendPool(
+            CommandSourceStack source, String playerName, UUID playerId, ExecutionPoolManager executionPoolManager) {
+        Optional<ExecutionPoolManager.Pool> pool = executionPoolManager.poolFor(playerId);
+        if (pool.isEmpty()) {
+            source.sendSuccess(
+                    () -> Component.literal(playerName + " has no current execution-pool assignment."), false);
+            return 1;
+        }
+        source.sendSuccess(
+                () -> Component.literal(playerName + "'s execution pool: " + formatPool(pool.orElseThrow()) + "."),
+                false);
+        return 1;
+    }
+
+    private static int members(
+            CommandContext<CommandSourceStack> context,
+            ExecutionPoolManager executionPoolManager,
+            ExecutionPoolManager.Pool pool) {
+        Collection<ExecutionPoolManager.Member> members = pool == ExecutionPoolManager.Pool.GUARANTEED
+                ? executionPoolManager.guaranteedMembers()
+                : executionPoolManager.bestEffortMembers();
+        String memberNames = members.isEmpty()
+                ? "(empty)"
+                : members.stream().map(ExecutionPoolManager.Member::playerName).collect(Collectors.joining(", "));
+        context.getSource()
+                .sendSuccess(() -> Component.literal(formatPool(pool) + " execution pool: " + memberNames), false);
+        return 1;
+    }
+
+    private static String formatPool(ExecutionPoolManager.Pool pool) {
+        return pool == ExecutionPoolManager.Pool.GUARANTEED ? "guaranteed" : "best-effort";
     }
 
     private static int stats(CommandContext<CommandSourceStack> context, Instrumentation instrumentation) {

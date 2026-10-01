@@ -48,6 +48,7 @@ import net.minecraft.resources.Identifier;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
+import net.minecraft.stats.Stats;
 import net.minecraft.world.item.DyeColor;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.DirectionalBlock;
@@ -135,6 +136,8 @@ public final class ExecutionDriver {
     private final MainWorker mainWorker;
     private final ExecutionStateAccess executionStateAccess;
     private final Instrumentation instrumentation;
+    private final PlayerPriorityStore playerPriorityStore;
+    private final ExecutionPoolManager executionPoolManager;
     private final int maxRunningExecutionsPerPlayer;
     private final int maxQueuedEventsPerPlayer;
     private final long maxTotalExecutionStateBytesPerPlayer;
@@ -159,6 +162,8 @@ public final class ExecutionDriver {
             MainWorker mainWorker,
             ExecutionStateAccess executionStateAccess,
             Instrumentation instrumentation,
+            PlayerPriorityStore playerPriorityStore,
+            ExecutionPoolManager executionPoolManager,
             int maxRunningExecutionsPerPlayer,
             int maxQueuedEventsPerPlayer,
             long maxTotalExecutionStateBytesPerPlayer,
@@ -166,6 +171,8 @@ public final class ExecutionDriver {
         if (mainWorker == null
                 || executionStateAccess == null
                 || instrumentation == null
+                || playerPriorityStore == null
+                || executionPoolManager == null
                 || logger == null
                 || maxRunningExecutionsPerPlayer <= 0
                 || maxQueuedEventsPerPlayer <= 0
@@ -176,10 +183,40 @@ public final class ExecutionDriver {
         this.mainWorker = mainWorker;
         this.executionStateAccess = executionStateAccess;
         this.instrumentation = instrumentation;
+        this.playerPriorityStore = playerPriorityStore;
+        this.executionPoolManager = executionPoolManager;
         this.maxRunningExecutionsPerPlayer = maxRunningExecutionsPerPlayer;
         this.maxQueuedEventsPerPlayer = maxQueuedEventsPerPlayer;
         this.maxTotalExecutionStateBytesPerPlayer = maxTotalExecutionStateBytesPerPlayer;
         this.logger = logger;
+    }
+
+    /** Recomputes non-durable execution-pool membership from loaded running Cobbleputers. */
+    public void refreshExecutionPools(MinecraftServer server) {
+        if (server == null) {
+            throw new IllegalArgumentException("Minecraft server must not be null");
+        }
+        Map<UUID, ExecutionPoolManager.EligiblePlayer> eligible = new HashMap<>();
+        for (CobbleputerBlockEntity blockEntity : loadedCobbleputers.keySet()) {
+            if (!isRunningExecution(blockEntity)) {
+                continue;
+            }
+            UUID ownerId = blockEntity.ownerPlayerId().orElseThrow();
+            ServerPlayer onlinePlayer = server.getPlayerList().getPlayer(ownerId);
+            PlayerPriorityStore.Priorities priorities = playerPriorityStore.isAvailable()
+                    ? playerPriorityStore.priorities(ownerId)
+                    : PlayerPriorityStore.DEFAULT_PRIORITIES;
+            int priority = onlinePlayer == null ? priorities.offlinePriority() : priorities.onlinePriority();
+            long onlineTime = onlinePlayer == null
+                    ? Long.MAX_VALUE
+                    : Math.max(0, onlinePlayer.getStats().getValue(Stats.CUSTOM, Stats.PLAY_TIME));
+            String ownerName = ownerName(blockEntity, ownerId);
+            eligible.merge(
+                    ownerId,
+                    new ExecutionPoolManager.EligiblePlayer(ownerId, ownerName, priority, onlineTime),
+                    (first, second) -> first.playerName().compareTo(second.playerName()) <= 0 ? first : second);
+        }
+        executionPoolManager.refresh(eligible.values());
     }
 
     /** Adds a loaded Cobbleputer to the driver's loaded set. */

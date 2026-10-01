@@ -6,7 +6,7 @@ design details for how the Mod facilitates program execution.
 ## Configuration
 
 The Mod reads `config/cobbleware.json` when the server starts. In addition to its Main Worker
-connection settings, it accepts these positive integer settings:
+connection settings, it accepts these integer settings:
 
 * `instrumentationWindowTicks`, which defaults to 600 and controls the number of server ticks
   retained for the in-memory instrumentation window.
@@ -20,6 +20,10 @@ connection settings, it accepts these positive integer settings:
 * `maxTotalExecutionStateBytesPerPlayer`, which defaults to 1,048,576 and caps the sum of all durable
   execution-state byte arrays owned by one player. Stopped, crashed, and unloaded records count; protobuf
   storage overhead, events, and effects do not.
+* `guaranteedPoolSize`, a positive integer that defaults to the max server player limit and sets the
+  size of the guaranteed execution pool.
+* `bestEffortPoolSize`, a non-negative integer that defaults to zero and sets the size of the
+  best-effort execution pool.
 
 Starting or resuming an execution is rejected when it would exceed the running-execution cap. When a
 chunk falls below Minecraft's `BLOCK_TICKING` status, the Mod immediately removes a running execution
@@ -73,6 +77,25 @@ persistently set the online or offline priority of a specific player.
 The `priority <player>` command can be used to check the online and offline priorities of a player.
 Users with permission level 2 or higher can check the priorities of any player.
 Users with lower-level permission can check only their own priorities.
+
+### Execution Pool
+
+```
+/cobbleware pool [player]
+```
+
+The `pool <player>` command displays the current execution pool of the given player.
+Users with permission level 2 or higher can check the pool of any player.
+Users with lower-level permission can only check their own pool.
+
+```
+/cobbleware guaranteed
+/cobbleware besteffort
+```
+
+The `guaranteed` command (requires permission level 2 or higher) prints the full membership
+of the guaranteed execution pool. The `besteffort` command prints the full best-effort pool
+membership.
 
 ### Program
 
@@ -237,6 +260,18 @@ emitting Cobbleputer. An effect with neither selector changes all of those obser
 `observer_id` and `observer_color` independently narrow that set, and both selectors
 must match when both are supplied. Unspecified or unrecognized selected colors are
 ignored rather than treated as an unfiltered effect.
+
+### Execution Pools
+
+The _eligible player set_ is the set of players for which there is at least
+one running loaded Cobbleputer.
+
+Whenever the eligible player set changes or a player joins/leaves the server,
+the Mod recomputes membership in the guaranteed
+execution pool by sorting the eligible player set according to the triple
+(player priority, online time, random number) and assigning players to the guaranteed
+pool in order until it is full. Any remaining players are assigned to the
+best-effort pool.
 
 ## Instrumentation
 

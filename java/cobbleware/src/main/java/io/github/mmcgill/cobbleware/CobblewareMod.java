@@ -8,6 +8,7 @@ import io.github.mmcgill.cobbleware.command.CobblewareCommands;
 import io.github.mmcgill.cobbleware.config.CobblewareConfig;
 import io.github.mmcgill.cobbleware.config.CobblewareConfigLoader;
 import io.github.mmcgill.cobbleware.execution.ExecutionDriver;
+import io.github.mmcgill.cobbleware.execution.ExecutionPoolManager;
 import io.github.mmcgill.cobbleware.execution.ExecutionStateStore;
 import io.github.mmcgill.cobbleware.execution.PlayerPriorityStore;
 import io.github.mmcgill.cobbleware.instrumentation.Instrumentation;
@@ -31,6 +32,7 @@ public final class CobblewareMod implements ModInitializer {
     private static final ExecutionStateStore executionStateStore = new ExecutionStateStore(LOGGER);
     private static final PlayerPriorityStore playerPriorityStore = new PlayerPriorityStore(LOGGER);
     private static ExecutionDriver executionDriver;
+    private static ExecutionPoolManager executionPoolManager;
     private static WirelessObserverNetwork wirelessObserverNetwork;
 
     /** Returns the server-owned execution driver after Mod initialization. */
@@ -56,6 +58,14 @@ public final class CobblewareMod implements ModInitializer {
         return playerPriorityStore;
     }
 
+    /** Returns the server-owned execution-pool assignment manager after Mod initialization. */
+    public static ExecutionPoolManager executionPoolManager() {
+        if (executionPoolManager == null) {
+            throw new IllegalStateException("Cobbleware execution pool manager has not been initialized");
+        }
+        return executionPoolManager;
+    }
+
     /** Returns the loaded-observer index after Mod initialization, otherwise {@code null}. */
     public static WirelessObserverNetwork wirelessObserverNetworkOrNull() {
         return wirelessObserverNetwork;
@@ -75,10 +85,13 @@ public final class CobblewareMod implements ModInitializer {
         }
         MainWorkerClient mainWorkerClient = new MainWorkerClient(config, LOGGER);
         Instrumentation instrumentation = new Instrumentation(config.instrumentationWindowTicks());
+        executionPoolManager = new ExecutionPoolManager(config.guaranteedPoolSize(), config.bestEffortPoolSize());
         executionDriver = new ExecutionDriver(
                 mainWorkerClient,
                 executionStateStore,
                 instrumentation,
+                playerPriorityStore,
+                executionPoolManager,
                 config.maxRunningExecutionsPerPlayer(),
                 config.maxQueuedEventsPerPlayer(),
                 config.maxTotalExecutionStateBytesPerPlayer(),
@@ -88,6 +101,8 @@ public final class CobblewareMod implements ModInitializer {
         wirelessObserverNetwork = new WirelessObserverNetwork();
         ServerLifecycleEvents.SERVER_STARTING.register(executionStateStore::initialize);
         ServerLifecycleEvents.SERVER_STARTING.register(playerPriorityStore::initialize);
+        ServerLifecycleEvents.SERVER_STARTED.register(
+                server -> executionPoolManager.initialize(server.getPlayerList().getMaxPlayers()));
         ServerLifecycleEvents.BEFORE_SAVE.register((server, flush, force) -> {
             executionStateStore.beforeSave();
             playerPriorityStore.beforeSave();
@@ -135,7 +150,9 @@ public final class CobblewareMod implements ModInitializer {
             instrumentation.advanceTick();
             wirelessObserverNetwork.tick(server);
             executionDriver.driveExecutions(ExecutionDriver.minecraft(server));
+            executionDriver.refreshExecutionPools(server);
         });
-        CobblewareCommands.register(mainWorkerClient, instrumentation, executionDriver, playerPriorityStore);
+        CobblewareCommands.register(
+                mainWorkerClient, instrumentation, executionDriver, playerPriorityStore, executionPoolManager);
     }
 }

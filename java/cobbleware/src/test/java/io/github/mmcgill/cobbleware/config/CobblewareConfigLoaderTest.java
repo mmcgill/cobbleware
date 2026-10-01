@@ -30,6 +30,8 @@ class CobblewareConfigLoaderTest {
         assertEquals(10, config.maxRunningExecutionsPerPlayer());
         assertEquals(200, config.maxQueuedEventsPerPlayer());
         assertEquals(1_048_576, config.maxTotalExecutionStateBytesPerPlayer());
+        assertEquals(0, config.guaranteedPoolSize());
+        assertEquals(0, config.bestEffortPoolSize());
         assertNull(config.configurationError());
         assertFalse(config.isEnabled());
         assertEquals("mainWorkerApiKey is empty", config.disabledReason());
@@ -39,7 +41,8 @@ class CobblewareConfigLoaderTest {
                         + "  \"instrumentationWindowTicks\": 600,\n"
                         + "  \"maxRunningExecutionsPerPlayer\": 10,\n"
                         + "  \"maxQueuedEventsPerPlayer\": 200,\n"
-                        + "  \"maxTotalExecutionStateBytesPerPlayer\": 1048576\n}\n",
+                        + "  \"maxTotalExecutionStateBytesPerPlayer\": 1048576,\n"
+                        + "  \"bestEffortPoolSize\": 0\n}\n",
                 Files.readString(configPath));
     }
 
@@ -52,7 +55,9 @@ class CobblewareConfigLoaderTest {
               "mainWorkerApiKey": "secret",
               "instrumentationWindowTicks": 42,
               "maxRunningExecutionsPerPlayer": 7,
-              "maxQueuedEventsPerPlayer": 123
+              "maxQueuedEventsPerPlayer": 123,
+              "guaranteedPoolSize": 5,
+              "bestEffortPoolSize": 2
             }
             """);
 
@@ -65,6 +70,8 @@ class CobblewareConfigLoaderTest {
         assertEquals(7, configured.maxRunningExecutionsPerPlayer());
         assertEquals(123, configured.maxQueuedEventsPerPlayer());
         assertEquals(1_048_576, configured.maxTotalExecutionStateBytesPerPlayer());
+        assertEquals(5, configured.guaranteedPoolSize());
+        assertEquals(2, configured.bestEffortPoolSize());
         assertTrue(configured.isEnabled());
 
         Files.writeString(configPath, """
@@ -125,6 +132,8 @@ class CobblewareConfigLoaderTest {
         assertEquals(10, config.maxRunningExecutionsPerPlayer());
         assertEquals(200, config.maxQueuedEventsPerPlayer());
         assertEquals(1_048_576, config.maxTotalExecutionStateBytesPerPlayer());
+        assertEquals(0, config.guaranteedPoolSize());
+        assertEquals(0, config.bestEffortPoolSize());
         assertTrue(config.isEnabled());
     }
 
@@ -175,5 +184,33 @@ class CobblewareConfigLoaderTest {
         CobblewareConfig config = CobblewareConfigLoader.load(configPath, LOGGER);
 
         assertFalse(config.isEnabled());
+    }
+
+    @Test
+    void rejectsInvalidExecutionPoolSizes() throws Exception {
+        Path configPath = tempDir.resolve(CobblewareConfigLoader.FILE_NAME);
+        Files.writeString(configPath, """
+            {
+              "mainWorkerUrl": "http://localhost:9000",
+              "mainWorkerApiKey": "secret",
+              "guaranteedPoolSize": 0
+            }
+            """);
+
+        CobblewareConfig invalidGuaranteed = CobblewareConfigLoader.load(configPath, LOGGER);
+
+        assertFalse(invalidGuaranteed.isEnabled());
+
+        Files.writeString(configPath, """
+            {
+              "mainWorkerUrl": "http://localhost:9000",
+              "mainWorkerApiKey": "secret",
+              "bestEffortPoolSize": -1
+            }
+            """);
+
+        CobblewareConfig invalidBestEffort = CobblewareConfigLoader.load(configPath, LOGGER);
+
+        assertFalse(invalidBestEffort.isEnabled());
     }
 }

@@ -492,6 +492,9 @@ class ExecutionDriverTest {
         private final CapturingMainWorker worker = new CapturingMainWorker();
         private final FakeMinecraft minecraft = new FakeMinecraft();
         private final Instrumentation instrumentation = new Instrumentation(10);
+        private final ExecutionPoolManager executionPoolManager = new ExecutionPoolManager(10, 0);
+        private final PlayerPriorityStore playerPriorityStore =
+                new PlayerPriorityStore(LoggerFactory.getLogger(ExecutionDriverTest.class));
         private final ExecutionDriver driver;
         private int nextPos;
 
@@ -501,10 +504,13 @@ class ExecutionDriverTest {
 
         private Fixture(long stateLimit, int queuedEventLimit) {
             stateStore = new FakeExecutionStateAccess(stateLimit);
+            executionPoolManager.initialize(10);
             driver = new ExecutionDriver(
                     worker,
                     stateStore,
                     instrumentation,
+                    playerPriorityStore,
+                    executionPoolManager,
                     10,
                     queuedEventLimit,
                     stateLimit,
