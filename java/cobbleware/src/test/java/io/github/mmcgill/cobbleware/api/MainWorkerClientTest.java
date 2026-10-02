@@ -4,7 +4,6 @@ import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
 import cobbleware.common.Uuid;
-import cobbleware.internal.ExecutionStatus;
 import cobbleware.internal.ExecutionsRequest;
 import cobbleware.internal.ExecutionsResponse;
 import com.sun.net.httpserver.HttpServer;
@@ -73,7 +72,7 @@ class MainWorkerClientTest {
     @Test
     void doesNotMakeRequestsWhenApiKeyIsEmpty() throws Exception {
         MainWorkerClient client = new MainWorkerClient(
-                new CobblewareConfig(URI.create("http://127.0.0.1:1/"), "", 600, 10, 200, 1024, 0, 0, null),
+                new CobblewareConfig(URI.create("http://127.0.0.1:1/"), "", 600, 10, 200, 200, 1024, 0, 0, null),
                 HttpClient.newHttpClient(),
                 LOGGER);
 
@@ -166,9 +165,7 @@ class MainWorkerClientTest {
                 .addResults(cobbleware.internal.ExecutionResult.newBuilder()
                         .setExecutionId(Uuid.newBuilder().setHigh(1).setLow(2))
                         .setFinalState(com.google.protobuf.ByteString.copyFrom(new byte[] {9}))
-                        .setEventSeqNum(0)
-                        .setEffectSeqNum(1)
-                        .setState(ExecutionStatus.EXECUTION_STATUS_RUNNING))
+                        .setEventSeqNum(0))
                 .build();
         startBinaryServer("/worker/modapi/v1/executions", 200, expected.toByteArray(), exchange -> {
             authorization.set(exchange.getRequestHeaders().getFirst("Authorization"));
@@ -225,14 +222,14 @@ class MainWorkerClientTest {
     private MainWorkerClient client(String apiKey) {
         URI baseUri = URI.create("http://127.0.0.1:" + server.getAddress().getPort() + "/worker/");
         return new MainWorkerClient(
-                new CobblewareConfig(baseUri, apiKey, 600, 10, 200, 1024, 0, 0, null),
+                new CobblewareConfig(baseUri, apiKey, 600, 10, 200, 200, 1024, 0, 0, null),
                 HttpClient.newBuilder().connectTimeout(Duration.ofSeconds(1)).build(),
                 LOGGER);
     }
 
     private MainWorkerClient productionClient(String apiKey) {
         URI baseUri = URI.create("http://127.0.0.1:" + server.getAddress().getPort() + "/worker/");
-        return new MainWorkerClient(new CobblewareConfig(baseUri, apiKey, 600, 10, 200, 1024, 0, 0, null), LOGGER);
+        return new MainWorkerClient(new CobblewareConfig(baseUri, apiKey, 600, 10, 200, 200, 1024, 0, 0, null), LOGGER);
     }
 
     private static MainWorkerClient.AuthenticationRequest request() {

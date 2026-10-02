@@ -17,6 +17,8 @@ connection settings, it accepts these integer settings:
 * `maxQueuedEventsPerPlayer`, which defaults to 200 and caps the total ephemeral events queued
   across all of one player's active Cobbleputers. Queued events on stopped Cobbleputers count;
   events intended for stopped Cobbleputers are dropped immediately.
+* `maxPendingEffectsPerPlayer`, which defaults to 200 and caps the total number of outstanding effects
+  that can be buffered for application before execution steps block.
 * `maxTotalExecutionStateBytesPerPlayer`, which defaults to 1,048,576 and caps the sum of all durable
   execution-state byte arrays owned by one player. Stopped, crashed, and unloaded records count; protobuf
   storage overhead, events, and effects do not.
@@ -182,7 +184,7 @@ event will be processed, and there is no guarantee that every effect will be app
 The currently emitted lifecycle events are `Started` after `/cobbleware exec` or after a crashed Cobbleputer
 is restarted with `/cobbleware resume`, and `Resumed` after its owner resumes a stopped Cobbleputer or a
 Cobbleputer in a newly block-ticking chunk is successfully admitted back to running. The driver retains at most the configured
-number of pending events across a player's active Cobbleputers and offers at most 50 to the Runtime for each active Cobbleputer in each
+number of pending events across a player's active Cobbleputers and offers each active Cobbleputer's full pending queue to the Runtime in each
 execution-sync request. Currently `EmitBeep` sends nearby players a
 `beep` system-chat message and `SendChat` sends its message to those same nearby players; neither effect
 has audio or durable delivery semantics yet.
@@ -282,6 +284,14 @@ execution pool by sorting the eligible player set according to the triple
 (player priority, online time, random number) and assigning players to the guaranteed
 pool in order until it is full. Any remaining players are assigned to the
 best-effort pool.
+
+### Execution Syncs
+
+At the end of each server tick the Mod syncs execution states with the Runtime.
+The Mod submits a sync request with all the active executions of all the players
+in the guaranteed pool. The Mod processes the sync response by storing the states
+of all executions that have advanced in their respective Cobbleputer block entities,
+and attempting to apply all associated effects.
 
 ## Instrumentation
 

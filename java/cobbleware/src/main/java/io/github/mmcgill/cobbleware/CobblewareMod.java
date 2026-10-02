@@ -94,6 +94,7 @@ public final class CobblewareMod implements ModInitializer {
                 executionPoolManager,
                 config.maxRunningExecutionsPerPlayer(),
                 config.maxQueuedEventsPerPlayer(),
+                config.maxPendingEffectsPerPlayer(),
                 config.maxTotalExecutionStateBytesPerPlayer(),
                 LOGGER);
         ServerMessageEvents.CHAT_MESSAGE.register(
@@ -149,8 +150,8 @@ public final class CobblewareMod implements ModInitializer {
         ServerTickEvents.END_SERVER_TICK.register((server) -> {
             instrumentation.advanceTick();
             wirelessObserverNetwork.tick(server);
-            executionDriver.driveExecutions(ExecutionDriver.minecraft(server));
             executionDriver.refreshExecutionPools(server);
+            executionDriver.driveExecutions(ExecutionDriver.minecraft(server));
         });
         CobblewareCommands.register(
                 mainWorkerClient, instrumentation, executionDriver, playerPriorityStore, executionPoolManager);

@@ -13,10 +13,10 @@ import cobbleware.events.WirelessObserverUnpaired;
 import cobbleware.internal.ExecutionFailureReason;
 import cobbleware.internal.ExecutionResult;
 import cobbleware.internal.ExecutionState;
-import cobbleware.internal.ExecutionStatus;
 import cobbleware.internal.ExecutionTransition;
 import cobbleware.internal.ExecutionsRequest;
 import cobbleware.internal.ExecutionsResponse;
+import cobbleware.internal.PlayerExecutionState;
 import io.github.mmcgill.cobbleware.CobblewareMod;
 import io.github.mmcgill.cobbleware.api.MainWorker;
 import io.github.mmcgill.cobbleware.block.CobbleputerBlock;
@@ -32,6 +32,7 @@ import java.util.Collections;
 import java.util.Comparator;
 import java.util.HashMap;
 import java.util.IdentityHashMap;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -58,9 +59,9 @@ import net.minecraft.world.level.block.state.properties.Property;
 import net.minecraft.world.phys.Vec3;
 import org.slf4j.Logger;
 
-/** Drives the best-effort synchronization of active Cobbleputer executions. */
+/** Drives asynchronous synchronization of guaranteed-pool Cobbleputer executions. */
 public final class ExecutionDriver {
-    private static final int MAX_OFFERED_EVENTS_PER_EXECUTION = 50;
+    private static final int OUTBOX_LIMIT = 20;
     private static final double CHAT_RADIUS = 16.0;
     private static final double CHAT_RADIUS_SQUARED = CHAT_RADIUS * CHAT_RADIUS;
     private static final Comparator<CobbleputerBlockEntity> RUNNING_LIMIT_CANDIDATE_ORDER = Comparator.comparing(
@@ -140,6 +141,7 @@ public final class ExecutionDriver {
     private final ExecutionPoolManager executionPoolManager;
     private final int maxRunningExecutionsPerPlayer;
     private final int maxQueuedEventsPerPlayer;
+    private final int maxPendingEffectsPerPlayer;
     private final long maxTotalExecutionStateBytesPerPlayer;
     private final Logger logger;
     private final Map<CobbleputerBlockEntity, EphemeralCobbleputerState> loadedCobbleputers = new IdentityHashMap<>();
@@ -166,6 +168,7 @@ public final class ExecutionDriver {
             ExecutionPoolManager executionPoolManager,
             int maxRunningExecutionsPerPlayer,
             int maxQueuedEventsPerPlayer,
+            int maxPendingEffectsPerPlayer,
             long maxTotalExecutionStateBytesPerPlayer,
             Logger logger) {
         if (mainWorker == null
@@ -176,6 +179,7 @@ public final class ExecutionDriver {
                 || logger == null
                 || maxRunningExecutionsPerPlayer <= 0
                 || maxQueuedEventsPerPlayer <= 0
+                || maxPendingEffectsPerPlayer <= 0
                 || maxTotalExecutionStateBytesPerPlayer <= 0) {
             throw new IllegalArgumentException(
                     "ExecutionDriver dependencies must not be null and execution limits must be positive");
@@ -187,6 +191,7 @@ public final class ExecutionDriver {
         this.executionPoolManager = executionPoolManager;
         this.maxRunningExecutionsPerPlayer = maxRunningExecutionsPerPlayer;
         this.maxQueuedEventsPerPlayer = maxQueuedEventsPerPlayer;
+        this.maxPendingEffectsPerPlayer = maxPendingEffectsPerPlayer;
         this.maxTotalExecutionStateBytesPerPlayer = maxTotalExecutionStateBytesPerPlayer;
         this.logger = logger;
     }
@@ -891,47 +896,56 @@ public final class ExecutionDriver {
     }
 
     private Flight buildFlight() {
-        List<ExecutionState> executions = new ArrayList<>();
+        Map<UUID, List<ExecutionState>> executionsByOwner = new LinkedHashMap<>();
         Map<String, OfferedExecution> offered = new HashMap<>();
+        List<OfferedExecution> orderedOffered = new ArrayList<>();
         for (Map.Entry<CobbleputerBlockEntity, EphemeralCobbleputerState> entry : loadedCobbleputers.entrySet()) {
             CobbleputerBlockEntity blockEntity = entry.getKey();
-            if (!blockEntity.hasExecution()) {
-                continue;
-            }
-            ExecutionStatus status = executionStatus(blockEntity.getBlockState());
-            if (status == null) {
+            if (!isRunningExecution(blockEntity)) {
                 continue;
             }
             UUID executionId = blockEntity.executionId().orElseThrow();
             UUID ownerId = blockEntity.ownerPlayerId().orElseThrow();
+            if (executionPoolManager.poolFor(ownerId).orElse(null) != ExecutionPoolManager.Pool.GUARANTEED) {
+                continue;
+            }
             byte[] executionState = blockEntity.executionState().orElseThrow();
             List<Event> events = new ArrayList<>();
             for (QueuedEvent queued : entry.getValue().events) {
-                if (events.size() == MAX_OFFERED_EVENTS_PER_EXECUTION) {
-                    break;
-                }
                 events.add(queued.event);
             }
             long firstEventSequence = entry.getValue().events.isEmpty()
                     ? blockEntity.nextEventSequenceNum()
                     : entry.getValue().events.getFirst().sequenceNum;
-            executions.add(ExecutionState.newBuilder()
-                    .setExecutionId(protoUuid(executionId))
-                    .setPlayerId(protoUuid(ownerId))
-                    .setInitialState(com.google.protobuf.ByteString.copyFrom(executionState))
-                    .addAllEvents(events)
-                    .setEventSeqNum(firstEventSequence)
-                    .setEffectSeqNum(blockEntity.effectSequenceNum())
-                    .setState(status)
-                    .setStateSizeLimit(stateSizeLimit(ownerId, blockEntity.cobbleputerId()))
+            executionsByOwner
+                    .computeIfAbsent(ownerId, ignored -> new ArrayList<>())
+                    .add(ExecutionState.newBuilder()
+                            .setExecutionId(protoUuid(executionId))
+                            .setInitialState(com.google.protobuf.ByteString.copyFrom(executionState))
+                            .addAllEvents(events)
+                            .setEventSeqNum(firstEventSequence)
+                            .setStateSizeLimit(stateSizeLimit(ownerId, blockEntity.cobbleputerId()))
+                            .setOutboxLimit(OUTBOX_LIMIT)
+                            .build());
+            OfferedExecution offeredExecution = new OfferedExecution(blockEntity, firstEventSequence, events.size());
+            offered.put(uuidKey(executionId), offeredExecution);
+            orderedOffered.add(offeredExecution);
+        }
+        List<PlayerExecutionState> players = new ArrayList<>();
+        for (Map.Entry<UUID, List<ExecutionState>> entry : executionsByOwner.entrySet()) {
+            players.add(PlayerExecutionState.newBuilder()
+                    .setPlayerId(protoUuid(entry.getKey()))
+                    .addAllExecutions(entry.getValue())
+                    .setOutstandingEffectLimit(maxPendingEffectsPerPlayer)
                     .build());
-            offered.put(
-                    uuidKey(executionId),
-                    new OfferedExecution(
-                            blockEntity, firstEventSequence, events.size(), blockEntity.effectSequenceNum(), status));
         }
         return new Flight(
-                ExecutionsRequest.newBuilder().addAllExecutions(executions).build(), offered);
+                ExecutionsRequest.newBuilder()
+                        .addAllPlayers(players)
+                        .setWorkerLimit(executionPoolManager.guaranteedPoolSize())
+                        .build(),
+                offered,
+                orderedOffered);
     }
 
     private void applyResponse(Minecraft minecraft, ExecutionsResponse response, Flight completedFlight) {
@@ -939,12 +953,12 @@ public final class ExecutionDriver {
             logger.warn("Discarding invalid execution-sync response");
             return;
         }
-        for (ExecutionResult result : response.getResultsList()) {
-            OfferedExecution offered = completedFlight.offered.get(uuidKey(result.getExecutionId()));
-            if (offered == null
-                    || loadedCobbleputers.get(offered.blockEntity) == null
+        for (int index = 0; index < response.getResultsCount(); index += 1) {
+            ExecutionResult result = response.getResults(index);
+            OfferedExecution offered = completedFlight.orderedOffered.get(index);
+            if (loadedCobbleputers.get(offered.blockEntity) == null
                     || !sameExecutionId(offered.blockEntity, result.getExecutionId())
-                    || executionStatus(offered.blockEntity.getBlockState()) != offered.lifecycleState) {
+                    || !isRunningExecution(offered.blockEntity)) {
                 continue;
             }
             applyResult(minecraft, offered, result);
@@ -952,13 +966,13 @@ public final class ExecutionDriver {
     }
 
     private boolean hasExpectedResults(ExecutionsResponse response, Flight completedFlight) {
-        if (response.getResultsCount() != completedFlight.offered.size()) {
+        if (response.getResultsCount() != completedFlight.orderedOffered.size()) {
             return false;
         }
-        Map<String, Boolean> seen = new HashMap<>();
-        for (ExecutionResult result : response.getResultsList()) {
-            String key = uuidKey(result.getExecutionId());
-            if (!completedFlight.offered.containsKey(key) || seen.put(key, Boolean.TRUE) != null) {
+        for (int index = 0; index < response.getResultsCount(); index += 1) {
+            if (!sameExecutionId(
+                    completedFlight.orderedOffered.get(index).blockEntity,
+                    response.getResults(index).getExecutionId())) {
                 return false;
             }
         }
@@ -966,20 +980,9 @@ public final class ExecutionDriver {
     }
 
     private void applyResult(Minecraft minecraft, OfferedExecution offered, ExecutionResult result) {
-        ExecutionStatus status = result.getState();
-        if (status != ExecutionStatus.EXECUTION_STATUS_RUNNING
-                && status != ExecutionStatus.EXECUTION_STATUS_STOPPED
-                && status != ExecutionStatus.EXECUTION_STATUS_CRASHED) {
-            logger.warn(
-                    "Discarding execution result with invalid lifecycle state at {}",
-                    offered.blockEntity.getBlockPos().toShortString());
-            return;
-        }
         long minimumConsumed = offered.firstEventSequence - 1;
         long maximumConsumed = offered.firstEventSequence + offered.offeredEventCount - 1;
-        if (result.getEventSeqNum() < minimumConsumed
-                || result.getEventSeqNum() > maximumConsumed
-                || result.getEffectSeqNum() != offered.effectSequenceNum + 1) {
+        if (result.getEventSeqNum() < minimumConsumed || result.getEventSeqNum() > maximumConsumed) {
             logger.warn(
                     "Discarding execution result with invalid sequence numbers at {}",
                     offered.blockEntity.getBlockPos().toShortString());
@@ -989,7 +992,7 @@ public final class ExecutionDriver {
         EphemeralCobbleputerState active = loadedCobbleputers.get(offered.blockEntity);
         removeConsumedEvents(offered.blockEntity, active, result.getEventSeqNum());
         applyEffects(minecraft, offered.blockEntity, result);
-        if (status == ExecutionStatus.EXECUTION_STATUS_CRASHED) {
+        if (result.getExecutionFailed()) {
             UUID owner = offered.blockEntity.ownerPlayerId().orElseThrow();
             UUID executionId = offered.blockEntity.executionId().orElseThrow();
             discardPendingEvents(offered.blockEntity, active);
@@ -1013,22 +1016,9 @@ public final class ExecutionDriver {
             return;
         }
         offered.blockEntity.updateExecutionState(finalState);
-        CobbleputerState previousState = offered.blockEntity.getBlockState().getValue(CobbleputerBlock.STATE);
-        CobbleputerState nextState = status == ExecutionStatus.EXECUTION_STATUS_RUNNING
-                ? CobbleputerState.RUNNING
-                : CobbleputerState.STOPPED;
-        updateVisibleState(minecraft, offered.blockEntity, nextState);
-        if (previousState != nextState) {
-            reportExecutionTransition(
-                    offered.blockEntity,
-                    nextState == CobbleputerState.RUNNING
-                            ? ExecutionTransition.EXECUTION_TRANSITION_RESUMED
-                            : ExecutionTransition.EXECUTION_TRANSITION_STOPPED);
-        }
     }
 
     private void applyEffects(Minecraft minecraft, CobbleputerBlockEntity blockEntity, ExecutionResult result) {
-        long sequence = result.getEffectSeqNum();
         for (Effect effect : result.getEffectsList()) {
             boolean failed = false;
             long startedAt = System.nanoTime();
@@ -1043,8 +1033,6 @@ public final class ExecutionDriver {
             } finally {
                 recordEffect(minecraft, blockEntity, effect, System.nanoTime() - startedAt, failed);
             }
-            blockEntity.acknowledgeEffect(sequence);
-            sequence += 1;
         }
     }
 
@@ -1091,14 +1079,6 @@ public final class ExecutionDriver {
             return;
         }
         minecraft.setRedstonePower(blockEntity, observerId, observerColor, effect.getPowerLevel());
-    }
-
-    private static ExecutionStatus executionStatus(BlockState blockState) {
-        return switch (blockState.getValue(CobbleputerBlock.STATE)) {
-            case RUNNING -> ExecutionStatus.EXECUTION_STATUS_RUNNING;
-            case STOPPED -> ExecutionStatus.EXECUTION_STATUS_STOPPED;
-            case UNINITIALIZED, CRASHED -> null;
-        };
     }
 
     private static void updateVisibleState(
@@ -1353,19 +1333,22 @@ public final class ExecutionDriver {
     }
 
     private record OfferedExecution(
-            CobbleputerBlockEntity blockEntity,
-            long firstEventSequence,
-            int offeredEventCount,
-            long effectSequenceNum,
-            ExecutionStatus lifecycleState) {}
+            CobbleputerBlockEntity blockEntity, long firstEventSequence, int offeredEventCount) {}
 
-    private record Flight(ExecutionsRequest request, Map<String, OfferedExecution> offered, long dispatchNanos) {
-        private Flight(ExecutionsRequest request, Map<String, OfferedExecution> offered) {
-            this(request, offered, -1);
+    private record Flight(
+            ExecutionsRequest request,
+            Map<String, OfferedExecution> offered,
+            List<OfferedExecution> orderedOffered,
+            long dispatchNanos) {
+        private Flight(
+                ExecutionsRequest request,
+                Map<String, OfferedExecution> offered,
+                List<OfferedExecution> orderedOffered) {
+            this(request, offered, orderedOffered, -1);
         }
 
         private Flight withDispatchNanos(long nextDispatchNanos) {
-            return new Flight(request, offered, nextDispatchNanos);
+            return new Flight(request, offered, orderedOffered, nextDispatchNanos);
         }
 
         private boolean hadExecutions() {

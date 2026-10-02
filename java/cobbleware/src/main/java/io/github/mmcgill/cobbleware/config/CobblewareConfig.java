@@ -9,6 +9,7 @@ public record CobblewareConfig(
         int instrumentationWindowTicks,
         int maxRunningExecutionsPerPlayer,
         int maxQueuedEventsPerPlayer,
+        int maxPendingEffectsPerPlayer,
         long maxTotalExecutionStateBytesPerPlayer,
         int guaranteedPoolSize,
         int bestEffortPoolSize,
@@ -25,6 +26,9 @@ public record CobblewareConfig(
         }
         if (maxQueuedEventsPerPlayer <= 0) {
             throw new IllegalArgumentException("maxQueuedEventsPerPlayer must be positive");
+        }
+        if (maxPendingEffectsPerPlayer <= 0) {
+            throw new IllegalArgumentException("maxPendingEffectsPerPlayer must be positive");
         }
         if (maxTotalExecutionStateBytesPerPlayer <= 0) {
             throw new IllegalArgumentException("maxTotalExecutionStateBytesPerPlayer must be positive");
@@ -60,6 +64,7 @@ public record CobblewareConfig(
                 CobblewareConfigLoader.DEFAULT_INSTRUMENTATION_WINDOW_TICKS,
                 CobblewareConfigLoader.DEFAULT_MAX_RUNNING_EXECUTIONS_PER_PLAYER,
                 CobblewareConfigLoader.DEFAULT_MAX_QUEUED_EVENTS_PER_PLAYER,
+                CobblewareConfigLoader.DEFAULT_MAX_PENDING_EFFECTS_PER_PLAYER,
                 CobblewareConfigLoader.DEFAULT_MAX_TOTAL_EXECUTION_STATE_BYTES_PER_PLAYER,
                 CobblewareConfigLoader.DEFAULT_GUARANTEED_POOL_SIZE,
                 CobblewareConfigLoader.DEFAULT_BEST_EFFORT_POOL_SIZE,

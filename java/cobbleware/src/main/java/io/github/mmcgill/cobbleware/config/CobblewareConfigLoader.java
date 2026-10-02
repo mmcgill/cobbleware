@@ -22,6 +22,7 @@ public final class CobblewareConfigLoader {
     public static final int DEFAULT_INSTRUMENTATION_WINDOW_TICKS = 600;
     public static final int DEFAULT_MAX_RUNNING_EXECUTIONS_PER_PLAYER = 10;
     public static final int DEFAULT_MAX_QUEUED_EVENTS_PER_PLAYER = 200;
+    public static final int DEFAULT_MAX_PENDING_EFFECTS_PER_PLAYER = 200;
     public static final long DEFAULT_MAX_TOTAL_EXECUTION_STATE_BYTES_PER_PLAYER = 1024L * 1024L;
     /** A zero value defers the documented default to the server player limit. */
     public static final int DEFAULT_GUARANTEED_POOL_SIZE = 0;
@@ -80,6 +81,8 @@ public final class CobblewareConfigLoader {
                 optionalPositiveInt(object, "maxRunningExecutionsPerPlayer", DEFAULT_MAX_RUNNING_EXECUTIONS_PER_PLAYER);
         int maxQueuedEventsPerPlayer =
                 optionalPositiveInt(object, "maxQueuedEventsPerPlayer", DEFAULT_MAX_QUEUED_EVENTS_PER_PLAYER);
+        int maxPendingEffectsPerPlayer =
+                optionalPositiveInt(object, "maxPendingEffectsPerPlayer", DEFAULT_MAX_PENDING_EFFECTS_PER_PLAYER);
         long maxTotalExecutionStateBytesPerPlayer = optionalPositiveLong(
                 object, "maxTotalExecutionStateBytesPerPlayer", DEFAULT_MAX_TOTAL_EXECUTION_STATE_BYTES_PER_PLAYER);
         int guaranteedPoolSize = optionalPositiveInt(object, "guaranteedPoolSize", DEFAULT_GUARANTEED_POOL_SIZE);
@@ -91,6 +94,7 @@ public final class CobblewareConfigLoader {
                 instrumentationWindowTicks,
                 maxRunningExecutionsPerPlayer,
                 maxQueuedEventsPerPlayer,
+                maxPendingEffectsPerPlayer,
                 maxTotalExecutionStateBytesPerPlayer,
                 guaranteedPoolSize,
                 bestEffortPoolSize,
@@ -192,6 +196,7 @@ public final class CobblewareConfigLoader {
                 + "  \"maxRunningExecutionsPerPlayer\": "
                 + DEFAULT_MAX_RUNNING_EXECUTIONS_PER_PLAYER + ",\n"
                 + "  \"maxQueuedEventsPerPlayer\": " + DEFAULT_MAX_QUEUED_EVENTS_PER_PLAYER + ",\n"
+                + "  \"maxPendingEffectsPerPlayer\": " + DEFAULT_MAX_PENDING_EFFECTS_PER_PLAYER + ",\n"
                 + "  \"maxTotalExecutionStateBytesPerPlayer\": "
                 + DEFAULT_MAX_TOTAL_EXECUTION_STATE_BYTES_PER_PLAYER + ",\n"
                 + "  \"bestEffortPoolSize\": " + DEFAULT_BEST_EFFORT_POOL_SIZE + "\n"

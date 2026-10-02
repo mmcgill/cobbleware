@@ -29,6 +29,7 @@ class CobblewareConfigLoaderTest {
         assertEquals(600, config.instrumentationWindowTicks());
         assertEquals(10, config.maxRunningExecutionsPerPlayer());
         assertEquals(200, config.maxQueuedEventsPerPlayer());
+        assertEquals(200, config.maxPendingEffectsPerPlayer());
         assertEquals(1_048_576, config.maxTotalExecutionStateBytesPerPlayer());
         assertEquals(0, config.guaranteedPoolSize());
         assertEquals(0, config.bestEffortPoolSize());
@@ -41,6 +42,7 @@ class CobblewareConfigLoaderTest {
                         + "  \"instrumentationWindowTicks\": 600,\n"
                         + "  \"maxRunningExecutionsPerPlayer\": 10,\n"
                         + "  \"maxQueuedEventsPerPlayer\": 200,\n"
+                        + "  \"maxPendingEffectsPerPlayer\": 200,\n"
                         + "  \"maxTotalExecutionStateBytesPerPlayer\": 1048576,\n"
                         + "  \"bestEffortPoolSize\": 0\n}\n",
                 Files.readString(configPath));
@@ -56,6 +58,7 @@ class CobblewareConfigLoaderTest {
               "instrumentationWindowTicks": 42,
               "maxRunningExecutionsPerPlayer": 7,
               "maxQueuedEventsPerPlayer": 123,
+              "maxPendingEffectsPerPlayer": 45,
               "guaranteedPoolSize": 5,
               "bestEffortPoolSize": 2
             }
@@ -69,6 +72,7 @@ class CobblewareConfigLoaderTest {
         assertEquals(42, configured.instrumentationWindowTicks());
         assertEquals(7, configured.maxRunningExecutionsPerPlayer());
         assertEquals(123, configured.maxQueuedEventsPerPlayer());
+        assertEquals(45, configured.maxPendingEffectsPerPlayer());
         assertEquals(1_048_576, configured.maxTotalExecutionStateBytesPerPlayer());
         assertEquals(5, configured.guaranteedPoolSize());
         assertEquals(2, configured.bestEffortPoolSize());
@@ -131,6 +135,7 @@ class CobblewareConfigLoaderTest {
         assertEquals(600, config.instrumentationWindowTicks());
         assertEquals(10, config.maxRunningExecutionsPerPlayer());
         assertEquals(200, config.maxQueuedEventsPerPlayer());
+        assertEquals(200, config.maxPendingEffectsPerPlayer());
         assertEquals(1_048_576, config.maxTotalExecutionStateBytesPerPlayer());
         assertEquals(0, config.guaranteedPoolSize());
         assertEquals(0, config.bestEffortPoolSize());
@@ -178,6 +183,22 @@ class CobblewareConfigLoaderTest {
               "mainWorkerUrl": "http://localhost:9000",
               "mainWorkerApiKey": "secret",
               "maxQueuedEventsPerPlayer": 1.5
+            }
+            """);
+
+        CobblewareConfig config = CobblewareConfigLoader.load(configPath, LOGGER);
+
+        assertFalse(config.isEnabled());
+    }
+
+    @Test
+    void rejectsInvalidPendingEffectLimit() throws Exception {
+        Path configPath = tempDir.resolve(CobblewareConfigLoader.FILE_NAME);
+        Files.writeString(configPath, """
+            {
+              "mainWorkerUrl": "http://localhost:9000",
+              "mainWorkerApiKey": "secret",
+              "maxPendingEffectsPerPlayer": 0
             }
             """);
 

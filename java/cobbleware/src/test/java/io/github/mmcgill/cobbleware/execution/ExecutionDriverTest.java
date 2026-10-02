@@ -10,8 +10,9 @@ import cobbleware.effects.SendChat;
 import cobbleware.effects.SetRedstonePower;
 import cobbleware.events.ChatMessage;
 import cobbleware.events.Event;
+import cobbleware.internal.ExecutionFailureReason;
 import cobbleware.internal.ExecutionResult;
-import cobbleware.internal.ExecutionStatus;
+import cobbleware.internal.ExecutionState;
 import cobbleware.internal.ExecutionTransition;
 import cobbleware.internal.ExecutionsRequest;
 import cobbleware.internal.ExecutionsResponse;
@@ -25,6 +26,7 @@ import io.github.mmcgill.cobbleware.instrumentation.Instrumentation;
 import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.Deque;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -203,7 +205,7 @@ class ExecutionDriverTest {
         fixture.serverTick();
         ExecutionsRequest firstRequest = fixture.worker.syncRequests.getFirst();
         first.complete(MainWorker.ExecutionSyncResult.success(ExecutionsResponse.newBuilder()
-                .addResults(resultFor(firstRequest.getExecutions(0), 1, new byte[] {2}))
+                .addResults(resultFor(execution(firstRequest, 0), 1, new byte[] {2}))
                 .build()));
         fixture.serverTick();
 
@@ -213,17 +215,17 @@ class ExecutionDriverTest {
                         .setChatMessage(ChatMessage.newBuilder().setMessage("accepted"))
                         .build());
         second.complete(MainWorker.ExecutionSyncResult.success(ExecutionsResponse.newBuilder()
-                .addResults(resultFor(fixture.worker.syncRequests.get(1).getExecutions(0), 1, new byte[] {2}))
+                .addResults(resultFor(execution(fixture.worker.syncRequests.get(1), 0), 1, new byte[] {2}))
                 .build()));
         fixture.serverTick();
 
         assertEquals(
                 Event.EventCase.CHAT_MESSAGE,
-                fixture.worker.syncRequests.get(2).getExecutions(0).getEvents(0).getEventCase());
+                execution(fixture.worker.syncRequests.get(2), 0).getEvents(0).getEventCase());
     }
 
     @Test
-    void offersNoMoreThanFiftyEventsForOneExecutionSync() {
+    void offersEveryPendingEventForOneExecutionSync() {
         Fixture fixture = new Fixture(32, 200);
         CobbleputerBlockEntity cobbleputer = fixture.startNewExecution(new byte[] {1});
         for (int index = 1; index < 200; index += 1) {
@@ -237,7 +239,87 @@ class ExecutionDriverTest {
 
         fixture.serverTick();
 
-        assertEquals(50, fixture.worker.syncRequests.getFirst().getExecutions(0).getEventsCount());
+        assertEquals(200, execution(fixture.worker.syncRequests.getFirst(), 0).getEventsCount());
+    }
+
+    @Test
+    void groupsGuaranteedExecutionsByPlayerAndSuppliesSyncLimits() {
+        Fixture fixture = new Fixture(32);
+        UUID owner = UUID.randomUUID();
+        fixture.startNewExecution(owner, new byte[] {1});
+        fixture.startNewExecution(owner, new byte[] {2});
+        fixture.worker.enqueueSyncResult();
+
+        fixture.serverTick();
+
+        ExecutionsRequest request = fixture.worker.syncRequests.getFirst();
+        assertEquals(10, request.getWorkerLimit());
+        assertEquals(1, request.getPlayersCount());
+        assertEquals(
+                owner.getMostSignificantBits(),
+                request.getPlayers(0).getPlayerId().getHigh());
+        assertEquals(
+                owner.getLeastSignificantBits(),
+                request.getPlayers(0).getPlayerId().getLow());
+        assertEquals(200, request.getPlayers(0).getOutstandingEffectLimit());
+        assertEquals(2, request.getPlayers(0).getExecutionsCount());
+        assertEquals(20, request.getPlayers(0).getExecutions(0).getOutboxLimit());
+    }
+
+    @Test
+    void syncsOnlyGuaranteedPoolMembers() {
+        Fixture fixture = new Fixture(32, 200, 1);
+        UUID firstOwner = UUID.randomUUID();
+        UUID secondOwner = UUID.randomUUID();
+        fixture.startNewExecution(firstOwner, new byte[] {1});
+        fixture.startNewExecution(secondOwner, new byte[] {2});
+        fixture.worker.enqueueSyncResult();
+
+        fixture.serverTick();
+
+        ExecutionsRequest request = fixture.worker.syncRequests.getFirst();
+        UUID guaranteedOwner =
+                fixture.executionPoolManager.guaranteedMembers().getFirst().playerId();
+        assertEquals(1, request.getPlayersCount());
+        assertEquals(
+                guaranteedOwner.getMostSignificantBits(),
+                request.getPlayers(0).getPlayerId().getHigh());
+        assertEquals(
+                guaranteedOwner.getLeastSignificantBits(),
+                request.getPlayers(0).getPlayerId().getLow());
+        assertEquals(1, executionCount(request));
+    }
+
+    @Test
+    void omitsDemotedPlayersFromTheNextAuthoritativeSnapshot() {
+        Fixture fixture = new Fixture(32, 200, 1);
+        UUID firstOwner = UUID.randomUUID();
+        CobbleputerBlockEntity first = fixture.startNewExecution(firstOwner, new byte[] {1});
+        CompletableFuture<MainWorker.ExecutionSyncResult> firstResult = fixture.worker.enqueueSyncResult();
+        fixture.worker.enqueueSyncResult();
+
+        fixture.serverTick();
+        ExecutionsRequest firstRequest = fixture.worker.syncRequests.getFirst();
+
+        UUID secondOwner = UUID.randomUUID();
+        fixture.startNewExecution(secondOwner, new byte[] {2});
+        fixture.eligiblePlayers.put(firstOwner, new ExecutionPoolManager.EligiblePlayer(firstOwner, "first", 3, 0));
+        fixture.eligiblePlayers.put(secondOwner, new ExecutionPoolManager.EligiblePlayer(secondOwner, "second", 1, 0));
+        fixture.executionPoolManager.refresh(fixture.eligiblePlayers.values());
+        firstResult.complete(MainWorker.ExecutionSyncResult.success(ExecutionsResponse.newBuilder()
+                .addResults(resultFor(execution(firstRequest, 0), 1, new byte[] {3}))
+                .build()));
+
+        fixture.serverTick();
+
+        ExecutionsRequest secondRequest = fixture.worker.syncRequests.get(1);
+        assertEquals(
+                secondOwner.getMostSignificantBits(),
+                secondRequest.getPlayers(0).getPlayerId().getHigh());
+        assertEquals(
+                secondOwner.getLeastSignificantBits(),
+                secondRequest.getPlayers(0).getPlayerId().getLow());
+        assertArrayEquals(new byte[] {3}, first.executionState().orElseThrow());
     }
 
     @Test
@@ -250,11 +332,10 @@ class ExecutionDriverTest {
         fixture.serverTick();
 
         ExecutionsRequest firstRequest = fixture.worker.syncRequests.getFirst();
-        assertEquals(1, firstRequest.getExecutionsCount());
-        assertEquals(1, firstRequest.getExecutions(0).getEventSeqNum());
+        assertEquals(1, executionCount(firstRequest));
+        assertEquals(1, execution(firstRequest, 0).getEventSeqNum());
         assertEquals(
-                Event.EventCase.STARTED,
-                firstRequest.getExecutions(0).getEvents(0).getEventCase());
+                Event.EventCase.STARTED, execution(firstRequest, 0).getEvents(0).getEventCase());
 
         fixture.driver.enqueueEvent(
                 cobbleputer,
@@ -266,27 +347,28 @@ class ExecutionDriverTest {
         assertEquals(1, fixture.worker.syncRequests.size());
 
         first.complete(MainWorker.ExecutionSyncResult.success(ExecutionsResponse.newBuilder()
-                .addResults(resultFor(firstRequest.getExecutions(0), 1, new byte[] {9}))
+                .addResults(resultFor(execution(firstRequest, 0), 1, new byte[] {9}))
                 .build()));
         fixture.serverTick();
 
         assertEquals(2, fixture.worker.syncRequests.size());
-        assertEquals(2, fixture.worker.syncRequests.get(1).getExecutions(0).getEventSeqNum());
+        assertEquals(2, execution(fixture.worker.syncRequests.get(1), 0).getEventSeqNum());
         assertEquals(
                 Event.EventCase.CHAT_MESSAGE,
-                fixture.worker.syncRequests.get(1).getExecutions(0).getEvents(0).getEventCase());
+                execution(fixture.worker.syncRequests.get(1), 0).getEvents(0).getEventCase());
         assertEquals(
                 "after dispatch",
                 fixture.worker
                         .syncRequests
                         .get(1)
+                        .getPlayers(0)
                         .getExecutions(0)
                         .getEvents(0)
                         .getChatMessage()
                         .getMessage());
         assertEquals(
                 ByteString.copyFrom(new byte[] {9}),
-                fixture.worker.syncRequests.get(1).getExecutions(0).getInitialState());
+                execution(fixture.worker.syncRequests.get(1), 0).getInitialState());
         assertEquals(3, cobbleputer.nextEventSequenceNum());
         assertFalse(second.isDone());
     }
@@ -302,16 +384,38 @@ class ExecutionDriverTest {
         fixture.serverTick();
 
         ExecutionsRequest request = fixture.worker.syncRequests.getFirst();
-        assertEquals(2, request.getExecutionsCount());
+        assertEquals(2, executionCount(request));
         first.complete(MainWorker.ExecutionSyncResult.success(ExecutionsResponse.newBuilder()
-                .addResults(resultFor(request.getExecutions(0), 1, new byte[] {8}))
+                .addResults(resultFor(execution(request, 0), 1, new byte[] {8}))
                 .build()));
         fixture.serverTick();
 
         assertArrayEquals(new byte[] {1}, firstCobbleputer.executionState().orElseThrow());
         assertArrayEquals(new byte[] {2}, secondCobbleputer.executionState().orElseThrow());
         assertEquals(2, fixture.worker.syncRequests.size());
-        assertEquals(2, fixture.worker.syncRequests.get(1).getExecutionsCount());
+        assertEquals(2, executionCount(fixture.worker.syncRequests.get(1)));
+    }
+
+    @Test
+    void discardsTheEntireResponseWhenResultsAreOutOfRequestOrder() {
+        Fixture fixture = new Fixture(32);
+        CobbleputerBlockEntity firstCobbleputer = fixture.startNewExecution(new byte[] {1});
+        CobbleputerBlockEntity secondCobbleputer = fixture.startNewExecution(new byte[] {2});
+        CompletableFuture<MainWorker.ExecutionSyncResult> first = fixture.worker.enqueueSyncResult();
+        fixture.worker.enqueueSyncResult();
+
+        fixture.serverTick();
+
+        ExecutionsRequest request = fixture.worker.syncRequests.getFirst();
+        first.complete(MainWorker.ExecutionSyncResult.success(ExecutionsResponse.newBuilder()
+                .addResults(resultFor(execution(request, 1), 1, new byte[] {8}))
+                .addResults(resultFor(execution(request, 0), 1, new byte[] {9}))
+                .build()));
+        fixture.serverTick();
+
+        assertArrayEquals(new byte[] {1}, firstCobbleputer.executionState().orElseThrow());
+        assertArrayEquals(new byte[] {2}, secondCobbleputer.executionState().orElseThrow());
+        assertEquals(2, fixture.worker.syncRequests.size());
     }
 
     @Test
@@ -325,12 +429,12 @@ class ExecutionDriverTest {
         ExecutionsRequest request = fixture.worker.syncRequests.getFirst();
         fixture.driver.deactivate(cobbleputer);
         first.complete(MainWorker.ExecutionSyncResult.success(ExecutionsResponse.newBuilder()
-                .addResults(resultFor(request.getExecutions(0), 1, new byte[] {2}))
+                .addResults(resultFor(execution(request, 0), 1, new byte[] {2}))
                 .build()));
 
         fixture.serverTick();
         assertEquals(2, fixture.worker.syncRequests.size());
-        assertEquals(0, fixture.worker.syncRequests.get(1).getExecutionsCount());
+        assertEquals(0, executionCount(fixture.worker.syncRequests.get(1)));
 
         empty.complete(MainWorker.ExecutionSyncResult.success(ExecutionsResponse.getDefaultInstance()));
         fixture.serverTick();
@@ -348,7 +452,7 @@ class ExecutionDriverTest {
         fixture.serverTick();
         ExecutionsRequest request = fixture.worker.syncRequests.getFirst();
         first.complete(MainWorker.ExecutionSyncResult.success(ExecutionsResponse.newBuilder()
-                .addResults(resultFor(request.getExecutions(0), 1, new byte[] {2, 3}))
+                .addResults(resultFor(execution(request, 0), 1, new byte[] {2, 3}))
                 .build()));
 
         fixture.serverTick();
@@ -362,6 +466,27 @@ class ExecutionDriverTest {
                         ExecutionTransition.EXECUTION_TRANSITION_STARTED,
                         ExecutionTransition.EXECUTION_TRANSITION_CRASHED),
                 fixture.worker.transitions);
+    }
+
+    @Test
+    void crashesWhenTheRuntimeReportsAnExecutionFailure() {
+        Fixture fixture = new Fixture(32);
+        CobbleputerBlockEntity cobbleputer = fixture.startNewExecution(new byte[] {1});
+        CompletableFuture<MainWorker.ExecutionSyncResult> first = fixture.worker.enqueueSyncResult();
+        fixture.worker.enqueueSyncResult();
+
+        fixture.serverTick();
+        ExecutionState offered = execution(fixture.worker.syncRequests.getFirst(), 0);
+        first.complete(MainWorker.ExecutionSyncResult.success(ExecutionsResponse.newBuilder()
+                .addResults(resultFor(offered, 1, new byte[] {1}).toBuilder()
+                        .setExecutionFailed(true)
+                        .setFailureReason(ExecutionFailureReason.EXECUTION_FAILURE_REASON_STATE_SIZE_LIMIT)
+                        .build())
+                .build()));
+        fixture.serverTick();
+
+        assertEquals(CobbleputerState.CRASHED, cobbleputer.getBlockState().getValue(CobbleputerBlock.STATE));
+        assertEquals(List.of("TotalExecutionStateSize"), fixture.worker.limitReasons);
     }
 
     @Test
@@ -380,7 +505,7 @@ class ExecutionDriverTest {
                 .setSendChat(SendChat.newBuilder().setMsg("two"))
                 .build();
         first.complete(MainWorker.ExecutionSyncResult.success(ExecutionsResponse.newBuilder()
-                .addResults(resultFor(request.getExecutions(0), 1, new byte[] {2}).toBuilder()
+                .addResults(resultFor(execution(request, 0), 1, new byte[] {2}).toBuilder()
                         .addEffects(firstEffect)
                         .addEffects(secondEffect)
                         .build())
@@ -389,8 +514,7 @@ class ExecutionDriverTest {
         fixture.serverTick();
 
         assertEquals(List.of("one", "two"), fixture.minecraft.nearbyMessages);
-        assertEquals(2, cobbleputer.effectSequenceNum());
-        assertEquals(2, fixture.worker.syncRequests.get(1).getExecutions(0).getEffectSeqNum());
+        assertEquals(0, cobbleputer.effectSequenceNum());
     }
 
     @Test
@@ -412,7 +536,7 @@ class ExecutionDriverTest {
                 .setSetRedstonePower(SetRedstonePower.newBuilder().setPowerLevel(1))
                 .build();
         first.complete(MainWorker.ExecutionSyncResult.success(ExecutionsResponse.newBuilder()
-                .addResults(resultFor(firstRequest.getExecutions(0), 1, new byte[] {2}).toBuilder()
+                .addResults(resultFor(execution(firstRequest, 0), 1, new byte[] {2}).toBuilder()
                         .addEffects(effect)
                         .build())
                 .build()));
@@ -420,10 +544,10 @@ class ExecutionDriverTest {
         fixture.serverTick();
 
         ExecutionsRequest secondRequest = fixture.worker.syncRequests.get(1);
-        assertEquals(1, secondRequest.getExecutions(0).getEventsCount());
+        assertEquals(1, execution(secondRequest, 0).getEventsCount());
         assertEquals(
                 Event.EventCase.BLOCK_STATE_CHANGE,
-                secondRequest.getExecutions(0).getEvents(0).getEventCase());
+                execution(secondRequest, 0).getEvents(0).getEventCase());
     }
 
     @Test
@@ -456,18 +580,18 @@ class ExecutionDriverTest {
         assertEquals(1, fixture.worker.syncRequests.size());
 
         first.complete(MainWorker.ExecutionSyncResult.success(ExecutionsResponse.newBuilder()
-                .addResults(resultFor(firstRequest.getExecutions(0), 1, new byte[] {2}))
+                .addResults(resultFor(execution(firstRequest, 0), 1, new byte[] {2}))
                 .build()));
         fixture.serverTick();
 
         ExecutionsRequest secondRequest = fixture.worker.syncRequests.get(1);
-        assertEquals(2, secondRequest.getExecutions(0).getEventsCount());
+        assertEquals(2, execution(secondRequest, 0).getEventsCount());
         assertEquals(
                 Event.EventCase.BLOCK_STATE_CHANGE,
-                secondRequest.getExecutions(0).getEvents(0).getEventCase());
+                execution(secondRequest, 0).getEvents(0).getEventCase());
         assertEquals(
                 Event.EventCase.BLOCK_STATE_CHANGE,
-                secondRequest.getExecutions(0).getEvents(1).getEventCase());
+                execution(secondRequest, 0).getEvents(1).getEventCase());
     }
 
     private static WirelessObserverBlockEntity.ObservedBlockStateChange observedStateChange(
@@ -476,15 +600,29 @@ class ExecutionDriverTest {
                 observer.observedBlockPos(), Blocks.STONE.defaultBlockState(), Blocks.DIRT.defaultBlockState());
     }
 
-    private static ExecutionResult resultFor(
-            cobbleware.internal.ExecutionState offered, long consumedEventSequence, byte[] finalState) {
+    private static ExecutionResult resultFor(ExecutionState offered, long consumedEventSequence, byte[] finalState) {
         return ExecutionResult.newBuilder()
                 .setExecutionId(offered.getExecutionId())
                 .setFinalState(ByteString.copyFrom(finalState))
                 .setEventSeqNum(consumedEventSequence)
-                .setEffectSeqNum(offered.getEffectSeqNum() + 1)
-                .setState(ExecutionStatus.EXECUTION_STATUS_RUNNING)
                 .build();
+    }
+
+    private static int executionCount(ExecutionsRequest request) {
+        return request.getPlayersList().stream()
+                .mapToInt(player -> player.getExecutionsCount())
+                .sum();
+    }
+
+    private static ExecutionState execution(ExecutionsRequest request, int index) {
+        int remaining = index;
+        for (cobbleware.internal.PlayerExecutionState player : request.getPlayersList()) {
+            if (remaining < player.getExecutionsCount()) {
+                return player.getExecutions(remaining);
+            }
+            remaining -= player.getExecutionsCount();
+        }
+        throw new IndexOutOfBoundsException("execution index " + index + " is not present");
     }
 
     private static final class Fixture {
@@ -492,7 +630,8 @@ class ExecutionDriverTest {
         private final CapturingMainWorker worker = new CapturingMainWorker();
         private final FakeMinecraft minecraft = new FakeMinecraft();
         private final Instrumentation instrumentation = new Instrumentation(10);
-        private final ExecutionPoolManager executionPoolManager = new ExecutionPoolManager(10, 0);
+        private final ExecutionPoolManager executionPoolManager;
+        private final Map<UUID, ExecutionPoolManager.EligiblePlayer> eligiblePlayers = new HashMap<>();
         private final PlayerPriorityStore playerPriorityStore =
                 new PlayerPriorityStore(LoggerFactory.getLogger(ExecutionDriverTest.class));
         private final ExecutionDriver driver;
@@ -503,7 +642,12 @@ class ExecutionDriverTest {
         }
 
         private Fixture(long stateLimit, int queuedEventLimit) {
+            this(stateLimit, queuedEventLimit, 10);
+        }
+
+        private Fixture(long stateLimit, int queuedEventLimit, int guaranteedPoolSize) {
             stateStore = new FakeExecutionStateAccess(stateLimit);
+            executionPoolManager = new ExecutionPoolManager(guaranteedPoolSize, 0);
             executionPoolManager.initialize(10);
             driver = new ExecutionDriver(
                     worker,
@@ -513,6 +657,7 @@ class ExecutionDriverTest {
                     executionPoolManager,
                     10,
                     queuedEventLimit,
+                    200,
                     stateLimit,
                     LoggerFactory.getLogger(ExecutionDriverTest.class));
         }
@@ -527,6 +672,8 @@ class ExecutionDriverTest {
             assertEquals(
                     ExecutionDriver.ExecutionInitResult.SUCCESS,
                     driver.startExecution(minecraft, cobbleputer, owner, "owner", initialState));
+            eligiblePlayers.put(owner, new ExecutionPoolManager.EligiblePlayer(owner, "owner", 2, 0));
+            executionPoolManager.refresh(eligiblePlayers.values());
             return cobbleputer;
         }
 
