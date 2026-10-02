@@ -205,6 +205,11 @@ finally deletes the old program file. `programs.json` is the source of truth for
 cleanup of files not referenced by `programs.json`. In particular, a failed old-file deletion does not change which
 program is active.
 
+After an upload makes a new program active, the Runtime retires the player's existing execution worker and
+invalidates its in-flight execution windows. The windows' retained state and pending events are preserved, so the
+replacement worker continues those executions with the new program. This notification is the active-program-change
+path; execution sync does not reread active programs for workers it already manages.
+
 The upload is not required to leave the program directory free of unreferenced files after every failure, but an
 unsuccessful upload does not make a newly stored program active unless `programs.json` is updated successfully.
 
@@ -514,129 +519,59 @@ a stacktrace from the program itself, etc.
 ### Execution Sync
 
 The `POST /modapi/v1/executions` operation is the engine of Cobbleputer execution. The Mod
-calls this operation at regular intervals whenever there are new events or in-progress
-computations. The request body is described by the `cobbleware.internal.ExecutionsRequest` message.
+calls this operation at regular intervals (typically once per tick).
+The request body is described by the `cobbleware.internal.ExecutionsRequest` message.
 The response body is described by `cobbleware.internal.ExecutionsResponse`.
 
 The request and success response both use the binary protobuf wire format with an
 `application/octet-stream` media type (parameters are permitted). Results are ordered to match the
-request's `executions` list. Errors produced by this endpoint use the same media type and contain
+request's player order and, within each player, their `executions` list. Errors produced by this endpoint use the same media type and contain
 a `cobbleware.internal.ErrorResponse` message with an `error` string.
 
-The operation fulfills several purposes:
+Each Mod request presents its authoritative view of the current execution state,
+and the Runtime responds with its most recent execution results. The actual execution
+steps happen asynchronously; this operation is for state synchronization and does not
+block on program step completion.
 
-* The Mod presents the Runtime with its current understanding of in-progress and pending work,
-  in the form of per-execution state/event sequence pairs. The Mod's representation of work
-  is authoritative.
-* The Runtime synchronizes with the Mod's presented view, possibly dispatching new events
-  to new or existing per-player user workers.
-* The Runtime's response provides the Mod with the Runtime's own representation of in-flight work,
-  conveying new execution states and Effect sequences to the Mod for storage and processing.
+The Runtime maintains a sliding _execution window_ for each active execution. An execution
+window tracks a window of events synced by the Mod.
+For each processed event, the SHA-1 of the resulting state is stored.
+The window also stores the SHA-1 of the initial state before the first event,
+the current state, the window index of the next event (i.e. the event after the
+one that produced the current state),
+and all effects from the start of the window up to the current state.
+The execution window is non-authoritative and not persisted to disk.
 
-The Runtime maintains an in-memory data structure (non-authoritative and not persisted to disk)
-that tracks the current state of every active execution, from its point of view.
-It contains, for each active execution:
+`ExecutionState.event_seq_num` is the sequence number of the first pending event, so its
+`initial_state` is the state after event `event_seq_num - 1`. A result's `event_seq_num` is
+the last event consumed to produce its `final_state`. The result effects are all effects
+produced after the request's initial-state boundary and through that final state.
 
-* The `execution_id` that uniquely identifies the execution. A new execution (with a fresh id)
-  begins when a Cobbleputer is started or restarted.
-* The current execution state and associated event sequence number. Event sequence numbers are
-  specific to an execution and increase monotonically.
-* A bounded queue of events to be processed.
-* A bounded queue of effects emitted by the execution and not yet acknowledged by the Mod.
+The outbox and player outstanding-effect limits are soft. A step may take an outbox from at
+most its limit to above its limit, but the Runtime will not schedule a later step for that
+execution or player until the Mod advances the corresponding execution window.
 
-The Runtime currently hard-codes an event-window limit of 50 events per execution. If the Mod's
-authoritative snapshot contains more pending events, the Runtime retains only the first 50. Once the
-Mod accepts a consumed prefix and advances its in-memory queue, a later sync fills the newly
-available window slots from the remaining suffix. The Mod must therefore retain the suffix until the
-Runtime reports it consumed.
+The execution sync operation maintains the following invariants:
 
-The Runtime also hard-codes an outbox limit of 50 unacknowledged effects per execution. For each invocation, it sends
-the remaining outbox capacity in `StepRequest.effect_limit`. The Runtime retains no more than that many effects from
-the invocation, even if acknowledgements received while it runs free more capacity. Only retained effects receive
-sequence numbers, so the effects returned to the Mod remain contiguous.
-
-#### Execution records
-
-An execution is the unit of identity presented to a program and synchronized by this operation;
-the API does not separately track a Cobbleputer identity. An execution is owned by one player for
-its entire lifetime. The `player_id` in `ExecutionState` identifies that player, allowing the
-Runtime to select the player's active program and per-player user worker. A start or restart creates
-a new `execution_id`; ownership or program changes therefore also require a new execution.
-
-While a Cobbleputer is active, the Mod's driver holds the authoritative snapshot for its execution.
-The Cobbleputer block entity durably stores its execution id, owner id, lifecycle state, current state,
-and sequence counters, but pending events and received effects are driver memory only. The active snapshot
-contains:
-
-* its `execution_id`, owner `player_id`, and lifecycle `state`;
-* the state immediately before its first pending event, and that event's sequence number;
-* its bounded, ordered in-memory queue of pending events; and
-* effects returned by the Runtime for immediate best-effort application, together with the last
-  durable effect sequence number for which application was attempted.
-
-The first event and effect of an execution have sequence number 1. Sequence numbers increase by one
-without wrapping. `ExecutionState.event_seq_num` is the next event sequence number even when its
-`events` list is empty. Its events occupy the contiguous range beginning at that number.
-`ExecutionState.effect_seq_num` acknowledges every effect through that number; it is zero before
-the first effect is applied. `EXECUTION_STATUS_UNSPECIFIED` is invalid. `RUNNING` permits dispatch,
-`STOPPED` preserves already-queued work without dispatching it; the Mod does not enqueue new
-events for stopped executions. `CRASHED` is terminal for the execution id.
-Every `ExecutionState` must include its required scalar/message values; each event must select an
-`Event.event` oneof. `event_seq_num` must be at least one. Empty states and empty event lists are valid.
-
-The Runtime keeps a non-durable cache, keyed by `execution_id`. Each entry stores the immutable
-owner id; lifecycle state; the current state and last consumed event sequence number; a bounded,
-ordered event queue; an ordered outbox of unacknowledged effects with their sequence numbers; and,
-when applicable, the single in-flight program invocation. The entry also has a generation token so
-that a result from an invocation cancelled by a re-sync cannot update a newer entry. The Runtime
-uses the execution id as `StepRequest.execution_id` when it invokes the player program.
-
-`ExecutionResult.event_seq_num` is the last event consumed by the Runtime, and `final_state` is the
-state after that event. Every `ExecutionState` supplies `state_size_limit`, the largest final state that may be
-returned for that execution snapshot. The Runtime passes that value to the Program and rejects a larger response
-before it reaches the Mod, returning a crashed result with the state-size-limit failure reason and the prior state.
-A failing event is consumed but leaves the state unchanged. The result's
-effects occupy the contiguous range beginning at `effect_seq_num`; they are all effects that have
-not been acknowledged by the request. When `effects` is empty, `effect_seq_num` is the next effect
-sequence number. A result for a newly created execution with no consumed events reports event
-sequence number 0.
-
-#### Runtime synchronization algorithm
-
-An `ExecutionsRequest` is a complete snapshot: it contains every execution that may still need
-execution or may have unacknowledged effects. The Mod serializes sync calls and never changes an
-event after assigning its sequence number. For each request, the Runtime:
-
-1. Rejects duplicate execution ids and records with a missing required value. For an existing id,
-   a different `player_id` is invalid; changing ownership requires a fresh execution id.
-2. Removes every cached entry absent from the request, increments its generation token, and abandons
-   its queued or in-flight work. For each new execution, initializes the cache from the Mod's state
-   and event snapshot. For an existing execution, the Runtime uses the sequence number and state
-   supplied by the Mod to discard a prefix that the Mod has accepted, retains compatible
-   completed work, and appends the previously unseen contiguous event suffix. If the supplied state
-   or overlapping events are incompatible with the cache, it discards the cache and reinitializes
-   it from the Mod's authoritative snapshot.
-3. Drops from each effect outbox every effect through the request's `effect_seq_num`. This is an
-   acknowledgement of an application attempt, not an assertion that the effect was applicable.
-4. For a `RUNNING` execution with no invocation in flight, schedules the oldest queued event for the
-   owning player's worker. The invocation is asynchronous: this operation need not wait for it, so
-   a response may describe only work completed before the response snapshot. On success, the Runtime
-   advances the state and event sequence number, assigns consecutive sequence numbers to the returned
-   effects, and schedules the next event. It ignores a completion whose generation token is stale.
-5. Does not dispatch events for `STOPPED` executions. On an invocation failure, including an invalid
-   program response, it consumes the failing event, marks the execution `CRASHED`, and discards its
-   remaining local event queue. A `CRASHED` execution never resumes under the same execution id and
-   discards subsequently presented events.
-6. Returns one `ExecutionResult` for every requested execution, containing its current state,
-   lifecycle state, last consumed event sequence number, and remaining effect outbox.
-
-When the Mod receives a result for the same active Cobbleputer block entity and execution id, it updates
-the durable returned state and lifecycle state, removes the consumed prefix of its in-memory event queue,
-and attempts returned effects in sequence order. A `CRASHED` result also makes the Mod discard its remaining
-in-memory event queue. The Mod durably advances its acknowledged effect sequence after each application
-attempt, but does not persist received effects before attempting them. If a Cobbleputer becomes inactive,
-or if the server stops, while events or effects are in flight, that work can be lost; duplicate or missed
-effect attempts are acceptable under this best-effort model.
+* An execution does not take steps if its outbox contains more effects than the Mod-specified outbox limit.
+* An execution does not take steps if the owning player's total number of outstanding effects
+  is greater than the Mod-specified limit.
+* A player worker is not created if the current number of player workers is greater than or
+  equal to the Mod-specified worker limit.
+* An existing execution window is dropped if its execution is not present in the sync request.
+* An existing player worker is retired if its player is not present in the sync request.
+* A player worker counts against the total until it is _closed_. A retired worker may
+  still be processing a step and/or taking up memory and resources.
+* A worker slot counts against the total while its worker is initializing, so asynchronous worker
+  startup cannot exceed the Mod-specified worker limit.
+* An existing execution window is dropped if its corresponding execution state in the sync request
+  has an associated event sequence number that is in the window,
+  but a state value whose SHA-1 does not match that stored in the corresponding window entry.
+* An existing execution window is extended with all new events when new events are present
+  in a sync request.
+* An existing execution window advances to the event_seq_num of the execution state in the sync request.
+  If the execution window is `failed` and advances up to or beyond the event sequence number associated
+  with its current state, its `failed` status is reset.
 
 The endpoint returns a protobuf `ErrorResponse` for errors generated by the Main Worker:
 
@@ -647,4 +582,5 @@ The endpoint returns a protobuf `ErrorResponse` for errors generated by the Main
 * `500` for an unexpected Main Worker failure
 
 Program invocation failures are represented in the normal `200` `ExecutionsResponse`: the failing
-event is consumed and its execution becomes `CRASHED`. Crash diagnostics are not included in this API.
+event is consumed and its execution window becomes `failed`. The Mod will in turn
+transition the cobbleputer to `CRASHED` and drop its execution from subsequent syncs.

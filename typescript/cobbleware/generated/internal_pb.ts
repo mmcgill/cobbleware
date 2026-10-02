@@ -16,7 +16,7 @@ import type { Message } from "@bufbuild/protobuf";
  * Describes the file internal.proto.
  */
 export const file_internal: GenFile = /*@__PURE__*/
-  fileDesc("Cg5pbnRlcm5hbC5wcm90bxITY29iYmxld2FyZS5pbnRlcm5hbCKqAgoORXhlY3V0aW9uU3RhdGUSLQoMZXhlY3V0aW9uX2lkGAEgASgLMhcuY29iYmxld2FyZS5jb21tb24uVXVpZBIVCg1pbml0aWFsX3N0YXRlGAIgASgMEigKBmV2ZW50cxgDIAMoCzIYLmNvYmJsZXdhcmUuZXZlbnRzLkV2ZW50EhUKDWV2ZW50X3NlcV9udW0YBCABKAQSFgoOZWZmZWN0X3NlcV9udW0YBSABKAQSKgoJcGxheWVyX2lkGAYgASgLMhcuY29iYmxld2FyZS5jb21tb24uVXVpZBIzCgVzdGF0ZRgHIAEoDjIkLmNvYmJsZXdhcmUuaW50ZXJuYWwuRXhlY3V0aW9uU3RhdHVzEhgKEHN0YXRlX3NpemVfbGltaXQYCCABKAQiqwIKD0V4ZWN1dGlvblJlc3VsdBItCgxleGVjdXRpb25faWQYASABKAsyFy5jb2JibGV3YXJlLmNvbW1vbi5VdWlkEhMKC2ZpbmFsX3N0YXRlGAIgASgMEisKB2VmZmVjdHMYAyADKAsyGi5jb2JibGV3YXJlLmVmZmVjdHMuRWZmZWN0EhUKDWV2ZW50X3NlcV9udW0YBCABKAQSFgoOZWZmZWN0X3NlcV9udW0YBSABKAQSMwoFc3RhdGUYBiABKA4yJC5jb2JibGV3YXJlLmludGVybmFsLkV4ZWN1dGlvblN0YXR1cxJDCg5mYWlsdXJlX3JlYXNvbhgHIAEoDjIrLmNvYmJsZXdhcmUuaW50ZXJuYWwuRXhlY3V0aW9uRmFpbHVyZVJlYXNvbiJMChFFeGVjdXRpb25zUmVxdWVzdBI3CgpleGVjdXRpb25zGAEgAygLMiMuY29iYmxld2FyZS5pbnRlcm5hbC5FeGVjdXRpb25TdGF0ZSJLChJFeGVjdXRpb25zUmVzcG9uc2USNQoHcmVzdWx0cxgBIAMoCzIkLmNvYmJsZXdhcmUuaW50ZXJuYWwuRXhlY3V0aW9uUmVzdWx0Im4KFVBsYXllckV4ZWN1dGlvblN0YXRlcxIWCg5mb3JtYXRfdmVyc2lvbhgBIAEoDRI9CgpleGVjdXRpb25zGAIgAygLMikuY29iYmxld2FyZS5pbnRlcm5hbC5TdG9yZWRFeGVjdXRpb25TdGF0ZSKkAgoUU3RvcmVkRXhlY3V0aW9uU3RhdGUSLwoOY29iYmxlcHV0ZXJfaWQYASABKAsyFy5jb2JibGV3YXJlLmNvbW1vbi5VdWlkEi0KDGV4ZWN1dGlvbl9pZBgCIAEoCzIXLmNvYmJsZXdhcmUuY29tbW9uLlV1aWQSGQoRb3duZXJfcGxheWVyX25hbWUYAyABKAkSFwoPZXhlY3V0aW9uX3N0YXRlGAQgASgMEh8KF25leHRfZXZlbnRfc2VxdWVuY2VfbnVtGAUgASgEEhsKE2VmZmVjdF9zZXF1ZW5jZV9udW0YBiABKAQSFwoPc3RvcHBlZF9hdF90aWNrGAcgASgEEiEKGXdhc19ydW5uaW5nX3doZW5fdW5sb2FkZWQYCCABKAgisAsKEkV4ZWN1dGlvblN0YXRzVGljaxIeChZzYW1wbGVkX2F0X3VuaXhfbWlsbGlzGAEgASgEEhUKDXRpY2tfc2VxdWVuY2UYAiABKAQSRAoHcGxheWVycxgDIAMoCzIzLmNvYmJsZXdhcmUuaW50ZXJuYWwuRXhlY3V0aW9uU3RhdHNUaWNrLlBsYXllclN0YXRzGnEKDkNvYmJsZXB1dGVyUmVmEi8KDmNvYmJsZXB1dGVyX2lkGAEgASgLMhcuY29iYmxld2FyZS5jb21tb24uVXVpZBIuCghwb3NpdGlvbhgCIAEoCzIcLmNvYmJsZXdhcmUuY29tbW9uLkdsb2JhbFBvcxqnAwoLUGxheWVyU3RhdHMSKgoJcGxheWVyX2lkGAEgASgLMhcuY29iYmxld2FyZS5jb21tb24uVXVpZBISCgp1c2VkX2J5dGVzGAYgASgEEhEKCW1heF9ieXRlcxgHIAEoBBJICgZldmVudHMYAiADKAsyOC5jb2JibGV3YXJlLmludGVybmFsLkV4ZWN1dGlvblN0YXRzVGljay5FdmVudE1lYXN1cmVtZW50ElkKD2V2ZW50c19wZXJfc3luYxgDIAMoCzJALmNvYmJsZXdhcmUuaW50ZXJuYWwuRXhlY3V0aW9uU3RhdHNUaWNrLkV2ZW50c1BlclN5bmNNZWFzdXJlbWVudBJKCgdlZmZlY3RzGAQgAygLMjkuY29iYmxld2FyZS5pbnRlcm5hbC5FeGVjdXRpb25TdGF0c1RpY2suRWZmZWN0TWVhc3VyZW1lbnQSVAoSY29iYmxlcHV0ZXJfc3RhdGVzGAUgAygLMjguY29iYmxld2FyZS5pbnRlcm5hbC5FeGVjdXRpb25TdGF0c1RpY2suQ29iYmxlcHV0ZXJTdGF0ZRq/AQoQRXZlbnRNZWFzdXJlbWVudBJLCgtjb2JibGVwdXRlchgBIAEoCzI2LmNvYmJsZXdhcmUuaW50ZXJuYWwuRXhlY3V0aW9uU3RhdHNUaWNrLkNvYmJsZXB1dGVyUmVmEjsKBHR5cGUYAiABKA4yLS5jb2JibGV3YXJlLmludGVybmFsLkluc3RydW1lbnRhdGlvbkV2ZW50VHlwZRIQCghhY2NlcHRlZBgDIAEoBBIPCgdkcm9wcGVkGAQgASgEGpIBChhFdmVudHNQZXJTeW5jTWVhc3VyZW1lbnQSSwoLY29iYmxlcHV0ZXIYASABKAsyNi5jb2JibGV3YXJlLmludGVybmFsLkV4ZWN1dGlvblN0YXRzVGljay5Db2JibGVwdXRlclJlZhINCgVjb3VudBgCIAEoBBINCgV0b3RhbBgDIAEoBBILCgNtYXgYBCABKAQa6QEKEUVmZmVjdE1lYXN1cmVtZW50EksKC2NvYmJsZXB1dGVyGAEgASgLMjYuY29iYmxld2FyZS5pbnRlcm5hbC5FeGVjdXRpb25TdGF0c1RpY2suQ29iYmxlcHV0ZXJSZWYSPAoEdHlwZRgCIAEoDjIuLmNvYmJsZXdhcmUuaW50ZXJuYWwuSW5zdHJ1bWVudGF0aW9uRWZmZWN0VHlwZRIRCglhdHRlbXB0ZWQYAyABKAQSDgoGZmFpbGVkGAQgASgEEhMKC3RvdGFsX25hbm9zGAUgASgEEhEKCW1heF9uYW5vcxgGIAEoBBq8AQoQQ29iYmxlcHV0ZXJTdGF0ZRJLCgtjb2JibGVwdXRlchgBIAEoCzI2LmNvYmJsZXdhcmUuaW50ZXJuYWwuRXhlY3V0aW9uU3RhdHNUaWNrLkNvYmJsZXB1dGVyUmVmEkEKBXN0YXRlGAIgASgOMjIuY29iYmxld2FyZS5pbnRlcm5hbC5JbnN0cnVtZW50YXRpb25MaWZlY3ljbGVTdGF0ZRIYChBzdGF0ZV9zaXplX2J5dGVzGAMgASgEIh4KDUVycm9yUmVzcG9uc2USDQoFZXJyb3IYASABKAkiNwoRRXhjZXB0aW9uTG9nRW50cnkSCwoDbXNnGAEgASgJEhUKDWNwdV90aW1lX3VzZWQYAiABKAQiVgoVTGltaXRFeGNlZWRlZExvZ0VudHJ5Eg4KBnJlYXNvbhgBIAEoCRIVCg1jcHVfdGltZV91c2VkGAIgASgEEhYKDnRvdGFsX21lbV91c2VkGAMgASgEIkwKD1Byb2dyYW1Mb2dFbnRyeRIsCgVsZXZlbBgBIAEoDjIdLmNvYmJsZXdhcmUuaW50ZXJuYWwuTG9nTGV2ZWwSCwoDbXNnGAIgASgJIuEBChtFeGVjdXRpb25UcmFuc2l0aW9uTG9nRW50cnkSLQoMZXhlY3V0aW9uX2lkGAEgASgLMhcuY29iYmxld2FyZS5jb21tb24uVXVpZBI8Cgp0cmFuc2l0aW9uGAIgASgOMiguY29iYmxld2FyZS5pbnRlcm5hbC5FeGVjdXRpb25UcmFuc2l0aW9uEhcKD2V4ZWN1dGlvbl9jb3VudBgDIAEoDRIXCg9leGVjdXRpb25fbGltaXQYBCABKA0SIwobdG90YWxfZXhlY3V0aW9uX3N0YXRlX2xpbWl0GAUgASgEIsECChFFeGVjdXRpb25Mb2dFbnRyeRIqCglwbGF5ZXJfaWQYASABKAsyFy5jb2JibGV3YXJlLmNvbW1vbi5VdWlkEjsKCWV4Y2VwdGlvbhgCIAEoCzImLmNvYmJsZXdhcmUuaW50ZXJuYWwuRXhjZXB0aW9uTG9nRW50cnlIABI9CgdsaW1pdGVkGAMgASgLMiouY29iYmxld2FyZS5pbnRlcm5hbC5MaW1pdEV4Y2VlZGVkTG9nRW50cnlIABIzCgNsb2cYBCABKAsyJC5jb2JibGV3YXJlLmludGVybmFsLlByb2dyYW1Mb2dFbnRyeUgAEkYKCnRyYW5zaXRpb24YBSABKAsyMC5jb2JibGV3YXJlLmludGVybmFsLkV4ZWN1dGlvblRyYW5zaXRpb25Mb2dFbnRyeUgAQgcKBWlubmVyKo0BCg9FeGVjdXRpb25TdGF0dXMSIAocRVhFQ1VUSU9OX1NUQVRVU19VTlNQRUNJRklFRBAAEhwKGEVYRUNVVElPTl9TVEFUVVNfUlVOTklORxABEhwKGEVYRUNVVElPTl9TVEFUVVNfU1RPUFBFRBACEhwKGEVYRUNVVElPTl9TVEFUVVNfQ1JBU0hFRBADKnEKFkV4ZWN1dGlvbkZhaWx1cmVSZWFzb24SKAokRVhFQ1VUSU9OX0ZBSUxVUkVfUkVBU09OX1VOU1BFQ0lGSUVEEAASLQopRVhFQ1VUSU9OX0ZBSUxVUkVfUkVBU09OX1NUQVRFX1NJWkVfTElNSVQQASrqAgoYSW5zdHJ1bWVudGF0aW9uRXZlbnRUeXBlEioKJklOU1RSVU1FTlRBVElPTl9FVkVOVF9UWVBFX1VOU1BFQ0lGSUVEEAASJgoiSU5TVFJVTUVOVEFUSU9OX0VWRU5UX1RZUEVfU1RBUlRFRBABEiYKIklOU1RSVU1FTlRBVElPTl9FVkVOVF9UWVBFX1JFU1VNRUQQAhIrCidJTlNUUlVNRU5UQVRJT05fRVZFTlRfVFlQRV9DSEFUX01FU1NBR0UQAxIxCi1JTlNUUlVNRU5UQVRJT05fRVZFTlRfVFlQRV9CTE9DS19TVEFURV9DSEFOR0UQBBI3CjNJTlNUUlVNRU5UQVRJT05fRVZFTlRfVFlQRV9XSVJFTEVTU19PQlNFUlZFUl9QQUlSRUQQBRI5CjVJTlNUUlVNRU5UQVRJT05fRVZFTlRfVFlQRV9XSVJFTEVTU19PQlNFUlZFUl9VTlBBSVJFRBAGKtIBChlJbnN0cnVtZW50YXRpb25FZmZlY3RUeXBlEisKJ0lOU1RSVU1FTlRBVElPTl9FRkZFQ1RfVFlQRV9VTlNQRUNJRklFRBAAEikKJUlOU1RSVU1FTlRBVElPTl9FRkZFQ1RfVFlQRV9TRU5EX0NIQVQQARIpCiVJTlNUUlVNRU5UQVRJT05fRUZGRUNUX1RZUEVfRU1JVF9CRUVQEAISMgouSU5TVFJVTUVOVEFUSU9OX0VGRkVDVF9UWVBFX1NFVF9SRURTVE9ORV9QT1dFUhADKqoBCh1JbnN0cnVtZW50YXRpb25MaWZlY3ljbGVTdGF0ZRIvCitJTlNUUlVNRU5UQVRJT05fTElGRUNZQ0xFX1NUQVRFX1VOU1BFQ0lGSUVEEAASKwonSU5TVFJVTUVOVEFUSU9OX0xJRkVDWUNMRV9TVEFURV9SVU5OSU5HEAESKwonSU5TVFJVTUVOVEFUSU9OX0xJRkVDWUNMRV9TVEFURV9TVE9QUEVEEAIqdwoITG9nTGV2ZWwSGQoVTE9HX0xFVkVMX1VOU1BFQ0lGSUVEEAASEwoPTE9HX0xFVkVMX0RFQlVHEAUSEgoOTE9HX0xFVkVMX0lORk8QChISCg5MT0dfTEVWRUxfV0FSThAPEhMKD0xPR19MRVZFTF9FUlJPUhAUKsMBChNFeGVjdXRpb25UcmFuc2l0aW9uEiQKIEVYRUNVVElPTl9UUkFOU0lUSU9OX1VOU1BFQ0lGSUVEEAASIAocRVhFQ1VUSU9OX1RSQU5TSVRJT05fU1RBUlRFRBABEiAKHEVYRUNVVElPTl9UUkFOU0lUSU9OX1NUT1BQRUQQAhIgChxFWEVDVVRJT05fVFJBTlNJVElPTl9SRVNVTUVEEAMSIAocRVhFQ1VUSU9OX1RSQU5TSVRJT05fQ1JBU0hFRBAEYghlZGl0aW9uc3DpBw", [file_common, file_effects, file_events]);
+  fileDesc("Cg5pbnRlcm5hbC5wcm90bxITY29iYmxld2FyZS5pbnRlcm5hbCLHAQoORXhlY3V0aW9uU3RhdGUSLQoMZXhlY3V0aW9uX2lkGAEgASgLMhcuY29iYmxld2FyZS5jb21tb24uVXVpZBIVCg1pbml0aWFsX3N0YXRlGAIgASgMEigKBmV2ZW50cxgDIAMoCzIYLmNvYmJsZXdhcmUuZXZlbnRzLkV2ZW50EhUKDWV2ZW50X3NlcV9udW0YBCABKAQSGAoQc3RhdGVfc2l6ZV9saW1pdBgFIAEoBBIUCgxvdXRib3hfbGltaXQYBiABKA0inQEKFFBsYXllckV4ZWN1dGlvblN0YXRlEioKCXBsYXllcl9pZBgBIAEoCzIXLmNvYmJsZXdhcmUuY29tbW9uLlV1aWQSNwoKZXhlY3V0aW9ucxgCIAMoCzIjLmNvYmJsZXdhcmUuaW50ZXJuYWwuRXhlY3V0aW9uU3RhdGUSIAoYb3V0c3RhbmRpbmdfZWZmZWN0X2xpbWl0GAMgASgNImUKEUV4ZWN1dGlvbnNSZXF1ZXN0EjoKB3BsYXllcnMYASADKAsyKS5jb2JibGV3YXJlLmludGVybmFsLlBsYXllckV4ZWN1dGlvblN0YXRlEhQKDHdvcmtlcl9saW1pdBgCIAEoDSL4AQoPRXhlY3V0aW9uUmVzdWx0Ei0KDGV4ZWN1dGlvbl9pZBgBIAEoCzIXLmNvYmJsZXdhcmUuY29tbW9uLlV1aWQSEwoLZmluYWxfc3RhdGUYAiABKAwSKwoHZWZmZWN0cxgDIAMoCzIaLmNvYmJsZXdhcmUuZWZmZWN0cy5FZmZlY3QSFQoNZXZlbnRfc2VxX251bRgEIAEoBBIYChBleGVjdXRpb25fZmFpbGVkGAUgASgIEkMKDmZhaWx1cmVfcmVhc29uGAcgASgOMisuY29iYmxld2FyZS5pbnRlcm5hbC5FeGVjdXRpb25GYWlsdXJlUmVhc29uIksKEkV4ZWN1dGlvbnNSZXNwb25zZRI1CgdyZXN1bHRzGAEgAygLMiQuY29iYmxld2FyZS5pbnRlcm5hbC5FeGVjdXRpb25SZXN1bHQibgoVUGxheWVyRXhlY3V0aW9uU3RhdGVzEhYKDmZvcm1hdF92ZXJzaW9uGAEgASgNEj0KCmV4ZWN1dGlvbnMYAiADKAsyKS5jb2JibGV3YXJlLmludGVybmFsLlN0b3JlZEV4ZWN1dGlvblN0YXRlIqQCChRTdG9yZWRFeGVjdXRpb25TdGF0ZRIvCg5jb2JibGVwdXRlcl9pZBgBIAEoCzIXLmNvYmJsZXdhcmUuY29tbW9uLlV1aWQSLQoMZXhlY3V0aW9uX2lkGAIgASgLMhcuY29iYmxld2FyZS5jb21tb24uVXVpZBIZChFvd25lcl9wbGF5ZXJfbmFtZRgDIAEoCRIXCg9leGVjdXRpb25fc3RhdGUYBCABKAwSHwoXbmV4dF9ldmVudF9zZXF1ZW5jZV9udW0YBSABKAQSGwoTZWZmZWN0X3NlcXVlbmNlX251bRgGIAEoBBIXCg9zdG9wcGVkX2F0X3RpY2sYByABKAQSIQoZd2FzX3J1bm5pbmdfd2hlbl91bmxvYWRlZBgIIAEoCCKwCwoSRXhlY3V0aW9uU3RhdHNUaWNrEh4KFnNhbXBsZWRfYXRfdW5peF9taWxsaXMYASABKAQSFQoNdGlja19zZXF1ZW5jZRgCIAEoBBJECgdwbGF5ZXJzGAMgAygLMjMuY29iYmxld2FyZS5pbnRlcm5hbC5FeGVjdXRpb25TdGF0c1RpY2suUGxheWVyU3RhdHMacQoOQ29iYmxlcHV0ZXJSZWYSLwoOY29iYmxlcHV0ZXJfaWQYASABKAsyFy5jb2JibGV3YXJlLmNvbW1vbi5VdWlkEi4KCHBvc2l0aW9uGAIgASgLMhwuY29iYmxld2FyZS5jb21tb24uR2xvYmFsUG9zGqcDCgtQbGF5ZXJTdGF0cxIqCglwbGF5ZXJfaWQYASABKAsyFy5jb2JibGV3YXJlLmNvbW1vbi5VdWlkEhIKCnVzZWRfYnl0ZXMYBiABKAQSEQoJbWF4X2J5dGVzGAcgASgEEkgKBmV2ZW50cxgCIAMoCzI4LmNvYmJsZXdhcmUuaW50ZXJuYWwuRXhlY3V0aW9uU3RhdHNUaWNrLkV2ZW50TWVhc3VyZW1lbnQSWQoPZXZlbnRzX3Blcl9zeW5jGAMgAygLMkAuY29iYmxld2FyZS5pbnRlcm5hbC5FeGVjdXRpb25TdGF0c1RpY2suRXZlbnRzUGVyU3luY01lYXN1cmVtZW50EkoKB2VmZmVjdHMYBCADKAsyOS5jb2JibGV3YXJlLmludGVybmFsLkV4ZWN1dGlvblN0YXRzVGljay5FZmZlY3RNZWFzdXJlbWVudBJUChJjb2JibGVwdXRlcl9zdGF0ZXMYBSADKAsyOC5jb2JibGV3YXJlLmludGVybmFsLkV4ZWN1dGlvblN0YXRzVGljay5Db2JibGVwdXRlclN0YXRlGr8BChBFdmVudE1lYXN1cmVtZW50EksKC2NvYmJsZXB1dGVyGAEgASgLMjYuY29iYmxld2FyZS5pbnRlcm5hbC5FeGVjdXRpb25TdGF0c1RpY2suQ29iYmxlcHV0ZXJSZWYSOwoEdHlwZRgCIAEoDjItLmNvYmJsZXdhcmUuaW50ZXJuYWwuSW5zdHJ1bWVudGF0aW9uRXZlbnRUeXBlEhAKCGFjY2VwdGVkGAMgASgEEg8KB2Ryb3BwZWQYBCABKAQakgEKGEV2ZW50c1BlclN5bmNNZWFzdXJlbWVudBJLCgtjb2JibGVwdXRlchgBIAEoCzI2LmNvYmJsZXdhcmUuaW50ZXJuYWwuRXhlY3V0aW9uU3RhdHNUaWNrLkNvYmJsZXB1dGVyUmVmEg0KBWNvdW50GAIgASgEEg0KBXRvdGFsGAMgASgEEgsKA21heBgEIAEoBBrpAQoRRWZmZWN0TWVhc3VyZW1lbnQSSwoLY29iYmxlcHV0ZXIYASABKAsyNi5jb2JibGV3YXJlLmludGVybmFsLkV4ZWN1dGlvblN0YXRzVGljay5Db2JibGVwdXRlclJlZhI8CgR0eXBlGAIgASgOMi4uY29iYmxld2FyZS5pbnRlcm5hbC5JbnN0cnVtZW50YXRpb25FZmZlY3RUeXBlEhEKCWF0dGVtcHRlZBgDIAEoBBIOCgZmYWlsZWQYBCABKAQSEwoLdG90YWxfbmFub3MYBSABKAQSEQoJbWF4X25hbm9zGAYgASgEGrwBChBDb2JibGVwdXRlclN0YXRlEksKC2NvYmJsZXB1dGVyGAEgASgLMjYuY29iYmxld2FyZS5pbnRlcm5hbC5FeGVjdXRpb25TdGF0c1RpY2suQ29iYmxlcHV0ZXJSZWYSQQoFc3RhdGUYAiABKA4yMi5jb2JibGV3YXJlLmludGVybmFsLkluc3RydW1lbnRhdGlvbkxpZmVjeWNsZVN0YXRlEhgKEHN0YXRlX3NpemVfYnl0ZXMYAyABKAQiHgoNRXJyb3JSZXNwb25zZRINCgVlcnJvchgBIAEoCSI3ChFFeGNlcHRpb25Mb2dFbnRyeRILCgNtc2cYASABKAkSFQoNY3B1X3RpbWVfdXNlZBgCIAEoBCJWChVMaW1pdEV4Y2VlZGVkTG9nRW50cnkSDgoGcmVhc29uGAEgASgJEhUKDWNwdV90aW1lX3VzZWQYAiABKAQSFgoOdG90YWxfbWVtX3VzZWQYAyABKAQiTAoPUHJvZ3JhbUxvZ0VudHJ5EiwKBWxldmVsGAEgASgOMh0uY29iYmxld2FyZS5pbnRlcm5hbC5Mb2dMZXZlbBILCgNtc2cYAiABKAki4QEKG0V4ZWN1dGlvblRyYW5zaXRpb25Mb2dFbnRyeRItCgxleGVjdXRpb25faWQYASABKAsyFy5jb2JibGV3YXJlLmNvbW1vbi5VdWlkEjwKCnRyYW5zaXRpb24YAiABKA4yKC5jb2JibGV3YXJlLmludGVybmFsLkV4ZWN1dGlvblRyYW5zaXRpb24SFwoPZXhlY3V0aW9uX2NvdW50GAMgASgNEhcKD2V4ZWN1dGlvbl9saW1pdBgEIAEoDRIjCht0b3RhbF9leGVjdXRpb25fc3RhdGVfbGltaXQYBSABKAQiwQIKEUV4ZWN1dGlvbkxvZ0VudHJ5EioKCXBsYXllcl9pZBgBIAEoCzIXLmNvYmJsZXdhcmUuY29tbW9uLlV1aWQSOwoJZXhjZXB0aW9uGAIgASgLMiYuY29iYmxld2FyZS5pbnRlcm5hbC5FeGNlcHRpb25Mb2dFbnRyeUgAEj0KB2xpbWl0ZWQYAyABKAsyKi5jb2JibGV3YXJlLmludGVybmFsLkxpbWl0RXhjZWVkZWRMb2dFbnRyeUgAEjMKA2xvZxgEIAEoCzIkLmNvYmJsZXdhcmUuaW50ZXJuYWwuUHJvZ3JhbUxvZ0VudHJ5SAASRgoKdHJhbnNpdGlvbhgFIAEoCzIwLmNvYmJsZXdhcmUuaW50ZXJuYWwuRXhlY3V0aW9uVHJhbnNpdGlvbkxvZ0VudHJ5SABCBwoFaW5uZXIqjQEKD0V4ZWN1dGlvblN0YXR1cxIgChxFWEVDVVRJT05fU1RBVFVTX1VOU1BFQ0lGSUVEEAASHAoYRVhFQ1VUSU9OX1NUQVRVU19SVU5OSU5HEAESHAoYRVhFQ1VUSU9OX1NUQVRVU19TVE9QUEVEEAISHAoYRVhFQ1VUSU9OX1NUQVRVU19DUkFTSEVEEAMqcQoWRXhlY3V0aW9uRmFpbHVyZVJlYXNvbhIoCiRFWEVDVVRJT05fRkFJTFVSRV9SRUFTT05fVU5TUEVDSUZJRUQQABItCilFWEVDVVRJT05fRkFJTFVSRV9SRUFTT05fU1RBVEVfU0laRV9MSU1JVBABKuoCChhJbnN0cnVtZW50YXRpb25FdmVudFR5cGUSKgomSU5TVFJVTUVOVEFUSU9OX0VWRU5UX1RZUEVfVU5TUEVDSUZJRUQQABImCiJJTlNUUlVNRU5UQVRJT05fRVZFTlRfVFlQRV9TVEFSVEVEEAESJgoiSU5TVFJVTUVOVEFUSU9OX0VWRU5UX1RZUEVfUkVTVU1FRBACEisKJ0lOU1RSVU1FTlRBVElPTl9FVkVOVF9UWVBFX0NIQVRfTUVTU0FHRRADEjEKLUlOU1RSVU1FTlRBVElPTl9FVkVOVF9UWVBFX0JMT0NLX1NUQVRFX0NIQU5HRRAEEjcKM0lOU1RSVU1FTlRBVElPTl9FVkVOVF9UWVBFX1dJUkVMRVNTX09CU0VSVkVSX1BBSVJFRBAFEjkKNUlOU1RSVU1FTlRBVElPTl9FVkVOVF9UWVBFX1dJUkVMRVNTX09CU0VSVkVSX1VOUEFJUkVEEAYq0gEKGUluc3RydW1lbnRhdGlvbkVmZmVjdFR5cGUSKwonSU5TVFJVTUVOVEFUSU9OX0VGRkVDVF9UWVBFX1VOU1BFQ0lGSUVEEAASKQolSU5TVFJVTUVOVEFUSU9OX0VGRkVDVF9UWVBFX1NFTkRfQ0hBVBABEikKJUlOU1RSVU1FTlRBVElPTl9FRkZFQ1RfVFlQRV9FTUlUX0JFRVAQAhIyCi5JTlNUUlVNRU5UQVRJT05fRUZGRUNUX1RZUEVfU0VUX1JFRFNUT05FX1BPV0VSEAMqqgEKHUluc3RydW1lbnRhdGlvbkxpZmVjeWNsZVN0YXRlEi8KK0lOU1RSVU1FTlRBVElPTl9MSUZFQ1lDTEVfU1RBVEVfVU5TUEVDSUZJRUQQABIrCidJTlNUUlVNRU5UQVRJT05fTElGRUNZQ0xFX1NUQVRFX1JVTk5JTkcQARIrCidJTlNUUlVNRU5UQVRJT05fTElGRUNZQ0xFX1NUQVRFX1NUT1BQRUQQAip3CghMb2dMZXZlbBIZChVMT0dfTEVWRUxfVU5TUEVDSUZJRUQQABITCg9MT0dfTEVWRUxfREVCVUcQBRISCg5MT0dfTEVWRUxfSU5GTxAKEhIKDkxPR19MRVZFTF9XQVJOEA8SEwoPTE9HX0xFVkVMX0VSUk9SEBQqwwEKE0V4ZWN1dGlvblRyYW5zaXRpb24SJAogRVhFQ1VUSU9OX1RSQU5TSVRJT05fVU5TUEVDSUZJRUQQABIgChxFWEVDVVRJT05fVFJBTlNJVElPTl9TVEFSVEVEEAESIAocRVhFQ1VUSU9OX1RSQU5TSVRJT05fU1RPUFBFRBACEiAKHEVYRUNVVElPTl9UUkFOU0lUSU9OX1JFU1VNRUQQAxIgChxFWEVDVVRJT05fVFJBTlNJVElPTl9DUkFTSEVEEARiCGVkaXRpb25zcOkH", [file_common, file_effects, file_events]);
 
 /**
  * @generated from message cobbleware.internal.ExecutionState
@@ -53,35 +53,19 @@ export type ExecutionState = Message<"cobbleware.internal.ExecutionState"> & {
   eventSeqNum: bigint;
 
   /**
-   * The sequence number of the last applied effect from this execution.
-   * Required by the application contract.
-   *
-   * @generated from field: uint64 effect_seq_num = 5;
-   */
-  effectSeqNum: bigint;
-
-  /**
-   * Identifies the player whose active program owns this execution.
-   * Required by the application contract.
-   *
-   * @generated from field: cobbleware.common.Uuid player_id = 6;
-   */
-  playerId?: Uuid | undefined;
-
-  /**
-   * The execution lifecycle state. Required by the application contract.
-   *
-   * @generated from field: cobbleware.internal.ExecutionStatus state = 7;
-   */
-  state: ExecutionStatus;
-
-  /**
    * Maximum final-state size the Runtime may accept for this execution in this snapshot.
    * Required by the application contract; zero permits only an empty final state.
    *
-   * @generated from field: uint64 state_size_limit = 8;
+   * @generated from field: uint64 state_size_limit = 5;
    */
   stateSizeLimit: bigint;
+
+  /**
+   * Soft limit on outstanding effects for this execution. Required by the application contract.
+   *
+   * @generated from field: uint32 outbox_limit = 6;
+   */
+  outboxLimit: number;
 };
 
 /**
@@ -90,6 +74,64 @@ export type ExecutionState = Message<"cobbleware.internal.ExecutionState"> & {
  */
 export const ExecutionStateSchema: GenMessage<ExecutionState> = /*@__PURE__*/
   messageDesc(file_internal, 0);
+
+/**
+ * @generated from message cobbleware.internal.PlayerExecutionState
+ */
+export type PlayerExecutionState = Message<"cobbleware.internal.PlayerExecutionState"> & {
+  /**
+   * Identifies the player whose active program owns these executions.
+   * Required by the application contract.
+   *
+   * @generated from field: cobbleware.common.Uuid player_id = 1;
+   */
+  playerId?: Uuid | undefined;
+
+  /**
+   * @generated from field: repeated cobbleware.internal.ExecutionState executions = 2;
+   */
+  executions: ExecutionState[];
+
+  /**
+   * Soft limit on total outstanding effects for this player. Required by the application contract.
+   *
+   * @generated from field: uint32 outstanding_effect_limit = 3;
+   */
+  outstandingEffectLimit: number;
+};
+
+/**
+ * Describes the message cobbleware.internal.PlayerExecutionState.
+ * Use `create(PlayerExecutionStateSchema)` to create a new message.
+ */
+export const PlayerExecutionStateSchema: GenMessage<PlayerExecutionState> = /*@__PURE__*/
+  messageDesc(file_internal, 1);
+
+/**
+ * @generated from message cobbleware.internal.ExecutionsRequest
+ */
+export type ExecutionsRequest = Message<"cobbleware.internal.ExecutionsRequest"> & {
+  /**
+   * Required by the application contract.
+   *
+   * @generated from field: repeated cobbleware.internal.PlayerExecutionState players = 1;
+   */
+  players: PlayerExecutionState[];
+
+  /**
+   * Maximum number of open player workers. Required by the application contract.
+   *
+   * @generated from field: uint32 worker_limit = 2;
+   */
+  workerLimit: number;
+};
+
+/**
+ * Describes the message cobbleware.internal.ExecutionsRequest.
+ * Use `create(ExecutionsRequestSchema)` to create a new message.
+ */
+export const ExecutionsRequestSchema: GenMessage<ExecutionsRequest> = /*@__PURE__*/
+  messageDesc(file_internal, 2);
 
 /**
  * @generated from message cobbleware.internal.ExecutionResult
@@ -127,19 +169,12 @@ export type ExecutionResult = Message<"cobbleware.internal.ExecutionResult"> & {
   eventSeqNum: bigint;
 
   /**
-   * Sequence number of the first effect.
+   * True if the execution failed when attempting step beyond event_seq_num.
    * Required by the application contract.
    *
-   * @generated from field: uint64 effect_seq_num = 5;
+   * @generated from field: bool execution_failed = 5;
    */
-  effectSeqNum: bigint;
-
-  /**
-   * The execution lifecycle state. Required by the application contract.
-   *
-   * @generated from field: cobbleware.internal.ExecutionStatus state = 6;
-   */
-  state: ExecutionStatus;
+  executionFailed: boolean;
 
   /**
    * Identifies a Runtime-enforced terminal failure when known.
@@ -154,26 +189,7 @@ export type ExecutionResult = Message<"cobbleware.internal.ExecutionResult"> & {
  * Use `create(ExecutionResultSchema)` to create a new message.
  */
 export const ExecutionResultSchema: GenMessage<ExecutionResult> = /*@__PURE__*/
-  messageDesc(file_internal, 1);
-
-/**
- * @generated from message cobbleware.internal.ExecutionsRequest
- */
-export type ExecutionsRequest = Message<"cobbleware.internal.ExecutionsRequest"> & {
-  /**
-   * Required by the application contract.
-   *
-   * @generated from field: repeated cobbleware.internal.ExecutionState executions = 1;
-   */
-  executions: ExecutionState[];
-};
-
-/**
- * Describes the message cobbleware.internal.ExecutionsRequest.
- * Use `create(ExecutionsRequestSchema)` to create a new message.
- */
-export const ExecutionsRequestSchema: GenMessage<ExecutionsRequest> = /*@__PURE__*/
-  messageDesc(file_internal, 2);
+  messageDesc(file_internal, 3);
 
 /**
  * @generated from message cobbleware.internal.ExecutionsResponse
@@ -192,7 +208,7 @@ export type ExecutionsResponse = Message<"cobbleware.internal.ExecutionsResponse
  * Use `create(ExecutionsResponseSchema)` to create a new message.
  */
 export const ExecutionsResponseSchema: GenMessage<ExecutionsResponse> = /*@__PURE__*/
-  messageDesc(file_internal, 3);
+  messageDesc(file_internal, 4);
 
 /**
  * Durable execution records for one player. This message is stored only by the
@@ -220,7 +236,7 @@ export type PlayerExecutionStates = Message<"cobbleware.internal.PlayerExecution
  * Use `create(PlayerExecutionStatesSchema)` to create a new message.
  */
 export const PlayerExecutionStatesSchema: GenMessage<PlayerExecutionStates> = /*@__PURE__*/
-  messageDesc(file_internal, 4);
+  messageDesc(file_internal, 5);
 
 /**
  * One Cobbleputer's durable execution record in a PlayerExecutionStates file.
@@ -278,7 +294,7 @@ export type StoredExecutionState = Message<"cobbleware.internal.StoredExecutionS
  * Use `create(StoredExecutionStateSchema)` to create a new message.
  */
 export const StoredExecutionStateSchema: GenMessage<StoredExecutionState> = /*@__PURE__*/
-  messageDesc(file_internal, 5);
+  messageDesc(file_internal, 6);
 
 /**
  * One raw execution-instrumentation bucket finalized by the Mod at the end of a server tick.
@@ -315,7 +331,7 @@ export type ExecutionStatsTick = Message<"cobbleware.internal.ExecutionStatsTick
  * Use `create(ExecutionStatsTickSchema)` to create a new message.
  */
 export const ExecutionStatsTickSchema: GenMessage<ExecutionStatsTick> = /*@__PURE__*/
-  messageDesc(file_internal, 6);
+  messageDesc(file_internal, 7);
 
 /**
  * Identifies the physical Cobbleputer to which a raw measurement belongs.
@@ -339,7 +355,7 @@ export type ExecutionStatsTick_CobbleputerRef = Message<"cobbleware.internal.Exe
  * Use `create(ExecutionStatsTick_CobbleputerRefSchema)` to create a new message.
  */
 export const ExecutionStatsTick_CobbleputerRefSchema: GenMessage<ExecutionStatsTick_CobbleputerRef> = /*@__PURE__*/
-  messageDesc(file_internal, 6, 0);
+  messageDesc(file_internal, 7, 0);
 
 /**
  * A player's raw instrumentation for this tick.
@@ -392,7 +408,7 @@ export type ExecutionStatsTick_PlayerStats = Message<"cobbleware.internal.Execut
  * Use `create(ExecutionStatsTick_PlayerStatsSchema)` to create a new message.
  */
 export const ExecutionStatsTick_PlayerStatsSchema: GenMessage<ExecutionStatsTick_PlayerStats> = /*@__PURE__*/
-  messageDesc(file_internal, 6, 1);
+  messageDesc(file_internal, 7, 1);
 
 /**
  * @generated from message cobbleware.internal.ExecutionStatsTick.EventMeasurement
@@ -424,7 +440,7 @@ export type ExecutionStatsTick_EventMeasurement = Message<"cobbleware.internal.E
  * Use `create(ExecutionStatsTick_EventMeasurementSchema)` to create a new message.
  */
 export const ExecutionStatsTick_EventMeasurementSchema: GenMessage<ExecutionStatsTick_EventMeasurement> = /*@__PURE__*/
-  messageDesc(file_internal, 6, 2);
+  messageDesc(file_internal, 7, 2);
 
 /**
  * @generated from message cobbleware.internal.ExecutionStatsTick.EventsPerSyncMeasurement
@@ -456,7 +472,7 @@ export type ExecutionStatsTick_EventsPerSyncMeasurement = Message<"cobbleware.in
  * Use `create(ExecutionStatsTick_EventsPerSyncMeasurementSchema)` to create a new message.
  */
 export const ExecutionStatsTick_EventsPerSyncMeasurementSchema: GenMessage<ExecutionStatsTick_EventsPerSyncMeasurement> = /*@__PURE__*/
-  messageDesc(file_internal, 6, 3);
+  messageDesc(file_internal, 7, 3);
 
 /**
  * @generated from message cobbleware.internal.ExecutionStatsTick.EffectMeasurement
@@ -498,7 +514,7 @@ export type ExecutionStatsTick_EffectMeasurement = Message<"cobbleware.internal.
  * Use `create(ExecutionStatsTick_EffectMeasurementSchema)` to create a new message.
  */
 export const ExecutionStatsTick_EffectMeasurementSchema: GenMessage<ExecutionStatsTick_EffectMeasurement> = /*@__PURE__*/
-  messageDesc(file_internal, 6, 4);
+  messageDesc(file_internal, 7, 4);
 
 /**
  * @generated from message cobbleware.internal.ExecutionStatsTick.CobbleputerState
@@ -527,7 +543,7 @@ export type ExecutionStatsTick_CobbleputerState = Message<"cobbleware.internal.E
  * Use `create(ExecutionStatsTick_CobbleputerStateSchema)` to create a new message.
  */
 export const ExecutionStatsTick_CobbleputerStateSchema: GenMessage<ExecutionStatsTick_CobbleputerState> = /*@__PURE__*/
-  messageDesc(file_internal, 6, 5);
+  messageDesc(file_internal, 7, 5);
 
 /**
  * An error returned by an internal Mod API endpoint.
@@ -546,7 +562,7 @@ export type ErrorResponse = Message<"cobbleware.internal.ErrorResponse"> & {
  * Use `create(ErrorResponseSchema)` to create a new message.
  */
 export const ErrorResponseSchema: GenMessage<ErrorResponse> = /*@__PURE__*/
-  messageDesc(file_internal, 7);
+  messageDesc(file_internal, 8);
 
 /**
  * Maps to an UncaughtException event (as sent to an Edge Runtime event worker).
@@ -570,7 +586,7 @@ export type ExceptionLogEntry = Message<"cobbleware.internal.ExceptionLogEntry">
  * Use `create(ExceptionLogEntrySchema)` to create a new message.
  */
 export const ExceptionLogEntrySchema: GenMessage<ExceptionLogEntry> = /*@__PURE__*/
-  messageDesc(file_internal, 8);
+  messageDesc(file_internal, 9);
 
 /**
  * Maps to a subset of ShutdownEvent (as sent to an Edge Runtime event worker)
@@ -600,7 +616,7 @@ export type LimitExceededLogEntry = Message<"cobbleware.internal.LimitExceededLo
  * Use `create(LimitExceededLogEntrySchema)` to create a new message.
  */
 export const LimitExceededLogEntrySchema: GenMessage<LimitExceededLogEntry> = /*@__PURE__*/
-  messageDesc(file_internal, 9);
+  messageDesc(file_internal, 10);
 
 /**
  * Maps to a Log event (as sent to an Edge Runtime event worker).
@@ -624,7 +640,7 @@ export type ProgramLogEntry = Message<"cobbleware.internal.ProgramLogEntry"> & {
  * Use `create(ProgramLogEntrySchema)` to create a new message.
  */
 export const ProgramLogEntrySchema: GenMessage<ProgramLogEntry> = /*@__PURE__*/
-  messageDesc(file_internal, 10);
+  messageDesc(file_internal, 11);
 
 /**
  * @generated from message cobbleware.internal.ExecutionTransitionLogEntry
@@ -661,7 +677,7 @@ export type ExecutionTransitionLogEntry = Message<"cobbleware.internal.Execution
  * Use `create(ExecutionTransitionLogEntrySchema)` to create a new message.
  */
 export const ExecutionTransitionLogEntrySchema: GenMessage<ExecutionTransitionLogEntry> = /*@__PURE__*/
-  messageDesc(file_internal, 11);
+  messageDesc(file_internal, 12);
 
 /**
  * @generated from message cobbleware.internal.ExecutionLogEntry
@@ -707,7 +723,7 @@ export type ExecutionLogEntry = Message<"cobbleware.internal.ExecutionLogEntry">
  * Use `create(ExecutionLogEntrySchema)` to create a new message.
  */
 export const ExecutionLogEntrySchema: GenMessage<ExecutionLogEntry> = /*@__PURE__*/
-  messageDesc(file_internal, 12);
+  messageDesc(file_internal, 13);
 
 /**
  * The lifecycle state of an execution.

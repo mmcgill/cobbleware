@@ -163,7 +163,12 @@ async function routeRequest(
   if (pathname === '/playerapi/v1/programs') {
     const context: RequestContext = {};
     const authError = await requirePlayerAuth(request, config, store, context, 'api');
-    return authError ?? handleProgramCollection(request, programStore, context.player!.playerUUID);
+    return authError ?? handleProgramCollection(
+      request,
+      programStore,
+      context.player!.playerUUID,
+      (playerId, programId) => executionManager.activeProgramChanged(playerId, programId),
+    );
   }
 
   const programStartStatesMatch = /^\/playerapi\/v1\/programs\/([^/]+)\/startStates$/.exec(

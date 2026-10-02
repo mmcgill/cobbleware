@@ -11,6 +11,7 @@ import {
   ProgramOperationConflictError,
   ProgramQuotaExceededError,
   type ProgramStore,
+  type RunningProgram,
   type RunOptions,
   type UploadProgramResult,
 } from './types.ts';
@@ -84,18 +85,19 @@ export class DurableProgramStore implements ProgramStore {
     throw new Error('active program read attempts exhausted');
   }
 
-  async run(playerUUID: string, opts: RunOptions): Promise<CobblewareUserWorker> {
+  async run(playerUUID: string, opts: RunOptions): Promise<RunningProgram> {
     const program = await this.readActive(playerUUID);
     if (program === null) {
       throw new Error('player has no active program');
     }
 
-    return await EdgeRuntime.userWorkers.create({
+    const worker = await EdgeRuntime.userWorkers.create({
       servicePath: workerServicePath(playerUUID, program.metadata.id),
       maybeEszip: program.content,
       maybeEntrypoint: 'file:///src/index.ts',
       memoryLimitMb: opts.memoryQuotaBytes / BYTES_PER_MEBIBYTE,
     });
+    return { program, worker };
   }
 
   upload(

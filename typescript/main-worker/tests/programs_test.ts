@@ -3,6 +3,7 @@ import { create, Program, toBinary } from '@cobbleware/core';
 import { DurableAuthStore } from '../src/auth/store.ts';
 import { BYTES_PER_MEBIBYTE } from '../src/config.ts';
 import { createHandler } from '../src/index.ts';
+import { handleProgramCollection } from '../src/programs/handlers.ts';
 import { DurableProgramStore } from '../src/programs/store.ts';
 import {
   type ActiveProgram,
@@ -80,11 +81,14 @@ Deno.test('Player program start states returns names for the active program', as
     readActive: () => Promise.resolve(activeProgram),
     upload: () => Promise.resolve({ metadata: activeProgram.metadata, created: false }),
     run: () =>
-      Promise.resolve(worker(() =>
-        Promise.resolve(
-          startStatesResponse({ default: [1], paused: [2] }),
-        )
-      )),
+      Promise.resolve({
+        program: activeProgram,
+        worker: worker(() =>
+          Promise.resolve(
+            startStatesResponse({ default: [1], paused: [2] }),
+          )
+        ),
+      }),
   };
   const app = await createTestApp(1024, programStore);
   try {
@@ -121,13 +125,18 @@ Deno.test('Program store creates an active-program worker with the requested mem
 
   try {
     const uploaded = await store.upload(PLAYER_UUID, new Uint8Array([1, 2, 3]), 'test.eszip');
-    await store.run(PLAYER_UUID, { memoryQuotaBytes: 3 * BYTES_PER_MEBIBYTE });
+    const running = await store.run(PLAYER_UUID, { memoryQuotaBytes: 3 * BYTES_PER_MEBIBYTE });
     if (options === undefined) throw new Error('ProgramStore.run did not create a worker');
     assertEquals(options.memoryLimitMb, 3, 'worker memory limit should be in MiB');
     assertEquals(options.maybeEszip.byteLength, 3, 'worker should receive active program content');
     if (!options.servicePath.endsWith(`-${uploaded.metadata.id}`)) {
       throw new Error(`worker service path changed: ${options.servicePath}`);
     }
+    assertEquals(
+      running.program.metadata.id,
+      uploaded.metadata.id,
+      'run should return its program',
+    );
   } finally {
     if (previousRuntime === undefined) {
       delete (globalThis as { EdgeRuntime?: unknown }).EdgeRuntime;
@@ -183,6 +192,49 @@ async function assertErrorResponse(response: Response, status: number): Promise<
     throw new Error(`expected an error property, got ${JSON.stringify(body)}`);
   }
 }
+
+Deno.test('Program upload notifies execution management when the active program changes', async () => {
+  const metadata = {
+    id: 'AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA',
+    name: 'test.eszip',
+    uploadedAt: '2026-10-02T00:00:00.000Z',
+    sizeBytes: 1,
+  };
+  let created = true;
+  const store: ProgramStore = {
+    list: () => Promise.reject(new Error('not used')),
+    readActive: () => Promise.reject(new Error('not used')),
+    upload: () => Promise.resolve({ metadata, created }),
+    run: () => Promise.reject(new Error('not used')),
+  };
+  const changes: Array<[string, string]> = [];
+
+  for (const expectedStatus of [201, 200]) {
+    const form = new FormData();
+    form.append('program', new File([new Uint8Array([1])], 'test.eszip'));
+    const response = await handleProgramCollection(
+      new Request(PROGRAMS_PATH, {
+        method: 'POST',
+        headers: { origin: 'http://localhost' },
+        body: form,
+      }),
+      store,
+      PLAYER_UUID,
+      (playerId, programId) => {
+        changes.push([playerId, programId]);
+        return Promise.resolve();
+      },
+    );
+    assertEquals(response.status, expectedStatus, 'upload response status');
+    created = false;
+  }
+
+  assertEquals(
+    JSON.stringify(changes),
+    JSON.stringify([[PLAYER_UUID, metadata.id]]),
+    'only an active-program change notifies execution management',
+  );
+});
 
 Deno.test('Player program upload stores bytes and returns metadata', async () => {
   const app = await createTestApp(1024);

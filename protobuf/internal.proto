@@ -31,17 +31,27 @@ message ExecutionState {
   // The sequence number of the first pending event.
   // Required by the application contract.
   uint64 event_seq_num = 4;
-  // The sequence number of the last applied effect from this execution.
-  // Required by the application contract.
-  uint64 effect_seq_num = 5;
-  // Identifies the player whose active program owns this execution.
-  // Required by the application contract.
-  cobbleware.common.Uuid player_id = 6;
-  // The execution lifecycle state. Required by the application contract.
-  ExecutionStatus state = 7;
   // Maximum final-state size the Runtime may accept for this execution in this snapshot.
   // Required by the application contract; zero permits only an empty final state.
-  uint64 state_size_limit = 8;
+  uint64 state_size_limit = 5;
+  // Soft limit on outstanding effects for this execution. Required by the application contract.
+  uint32 outbox_limit = 6;
+}
+
+message PlayerExecutionState {
+  // Identifies the player whose active program owns these executions.
+  // Required by the application contract.
+  cobbleware.common.Uuid player_id = 1;
+  repeated ExecutionState executions = 2;
+  // Soft limit on total outstanding effects for this player. Required by the application contract.
+  uint32 outstanding_effect_limit = 3;
+}
+
+message ExecutionsRequest {
+  // Required by the application contract.
+  repeated PlayerExecutionState players = 1;
+  // Maximum number of open player workers. Required by the application contract.
+  uint32 worker_limit = 2;
 }
 
 message ExecutionResult {
@@ -56,18 +66,11 @@ message ExecutionResult {
   // Sequence number of the last consumed event, whose output state was final_state.
   // Required by the application contract.
   uint64 event_seq_num = 4;
-  // Sequence number of the first effect.
+  // True if the execution failed when attempting step beyond event_seq_num.
   // Required by the application contract.
-  uint64 effect_seq_num = 5;
-  // The execution lifecycle state. Required by the application contract.
-  ExecutionStatus state = 6;
+  bool execution_failed = 5;
   // Identifies a Runtime-enforced terminal failure when known.
   ExecutionFailureReason failure_reason = 7;
-}
-
-message ExecutionsRequest {
-  // Required by the application contract.
-  repeated ExecutionState executions = 1;
 }
 
 message ExecutionsResponse {

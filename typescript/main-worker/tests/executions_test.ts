@@ -1,149 +1,184 @@
 import { Common, create, Effects, Events, fromBinary, Program, toBinary } from '@cobbleware/core';
 import * as Internal from '@cobbleware/core/internal';
-import { type AppConfig, configFromEnv } from '../src/config.ts';
-import { DurableAuthStore } from '../src/auth/store.ts';
-import { createHandler } from '../src/index.ts';
+import { configFromEnv } from '../src/config.ts';
+import { EXECUTIONS_CONTENT_TYPE, handleExecutions } from '../src/executions/handlers.ts';
+import { ExecutionManager, ExecutionRequestError } from '../src/executions/manager.ts';
 import type { ActiveProgram, ProgramStore } from '../src/programs/types.ts';
-import { MAX_EVENTS_PER_EXECUTION } from '../src/executions/manager.ts';
 
-const API_KEY = 'test-api-key';
-const PATH = 'http://localhost/modapi/v1/executions';
-const PROGRAM_ID = 'AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA';
+const PROGRAM_A = 'AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA';
+const PROGRAM_B = 'BBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBB';
+const PLAYER_A = uuid(1n, 1n);
+const PLAYER_B = uuid(2n, 2n);
+const EXECUTION_A = uuid(3n, 3n);
+const EXECUTION_B = uuid(4n, 4n);
 
-const activeProgram: ActiveProgram = {
-  metadata: {
-    id: PROGRAM_ID,
-    name: 'test',
-    uploadedAt: '2026-09-04T00:00:00.000Z',
-    sizeBytes: 2,
-  },
-  content: new Uint8Array([7, 8]),
-};
+class Deferred<T> {
+  readonly promise: Promise<T>;
+  private resolvePromise!: (value: T) => void;
 
-type TestApp = {
-  handler: (request: Request) => Promise<Response>;
-  cleanup: () => Promise<void>;
-};
+  constructor() {
+    this.promise = new Promise((resolve) => {
+      this.resolvePromise = resolve;
+    });
+  }
 
-async function createTestApp(
-  fetch: CobblewareUserWorker['fetch'],
-  onRun?: (playerUUID: string) => void,
-): Promise<TestApp> {
-  const storageDir = await Deno.makeTempDir({ prefix: 'cobbleware-executions-test-' });
-  const config: AppConfig = configFromEnv({ apiKey: API_KEY, storageDir });
-  const authStore = await DurableAuthStore.open(config);
-  const programStore: ProgramStore = {
-    list: () => Promise.resolve({ programs: [], quotaBytes: 0, usedBytes: 0, remainingBytes: 0 }),
-    readActive: () => Promise.resolve(activeProgram),
-    upload: () => Promise.resolve({ metadata: activeProgram.metadata, created: false }),
-    run: (playerUUID) => {
-      onRun?.(playerUUID);
-      return Promise.resolve(worker(fetch));
-    },
-  };
-
-  return {
-    handler: await createHandler({ config, store: authStore, programStore }),
-    cleanup: () => Deno.remove(storageDir, { recursive: true }),
-  };
+  resolve(value: T): void {
+    this.resolvePromise(value);
+  }
 }
 
-function worker(fetch: CobblewareUserWorker['fetch']): CobblewareUserWorker {
-  return { closed: Promise.resolve({}), retire: () => {}, fetch };
+class TestWorker implements CobblewareUserWorker {
+  private readonly closedDeferred = new Deferred<CobblewareUserWorkerClosed>();
+  readonly closed = this.closedDeferred.promise;
+  readonly requests: Program.StepRequest[] = [];
+  readonly responses: Deferred<Response>[] = [];
+  retireCalls = 0;
+
+  retire(): void {
+    this.retireCalls += 1;
+  }
+
+  async fetch(request: Request): Promise<Response> {
+    const step = fromBinary(
+      Program.StepRequestSchema,
+      new Uint8Array(await request.arrayBuffer()),
+    );
+    this.requests.push(step);
+    const response = new Deferred<Response>();
+    this.responses.push(response);
+    return await response.promise;
+  }
+
+  complete(index: number, response: Response): void {
+    this.responses[index]?.resolve(response);
+  }
+
+  close(): void {
+    this.closedDeferred.resolve({});
+  }
+}
+
+class TestProgramStore implements ProgramStore {
+  readonly created: Array<{ playerId: string; worker: TestWorker }> = [];
+  readonly active = new Map<string, ActiveProgram | null>();
+  readonly availableWorkers: TestWorker[] = [];
+  readonly pendingRuns: Deferred<{ program: ActiveProgram; worker: CobblewareUserWorker }>[] = [];
+  activeReadCalls = 0;
+
+  list(): Promise<never> {
+    throw new Error('not used by execution tests');
+  }
+
+  readActive(playerId: string): Promise<ActiveProgram | null> {
+    this.activeReadCalls += 1;
+    return Promise.resolve(
+      this.active.has(playerId) ? this.active.get(playerId)! : program(PROGRAM_A),
+    );
+  }
+
+  upload(): Promise<never> {
+    throw new Error('not used by execution tests');
+  }
+
+  run(playerId: string): Promise<{ program: ActiveProgram; worker: CobblewareUserWorker }> {
+    const activeProgram = this.active.has(playerId)
+      ? this.active.get(playerId)!
+      : program(PROGRAM_A);
+    if (activeProgram === null) {
+      return Promise.reject(new Error('player has no active program'));
+    }
+    const worker = this.availableWorkers.shift() ?? new TestWorker();
+    this.created.push({ playerId, worker });
+    const pendingRun = this.pendingRuns.shift();
+    if (pendingRun !== undefined) {
+      return pendingRun.promise;
+    }
+    return Promise.resolve({ program: activeProgram, worker });
+  }
+}
+
+function program(id: string): ActiveProgram {
+  return {
+    metadata: { id, name: 'test', uploadedAt: '2026-10-02T00:00:00.000Z', sizeBytes: 1 },
+    content: new Uint8Array([1]),
+  };
 }
 
 function execution(
   options: Partial<{
     executionId: Common.Uuid;
-    playerId: Common.Uuid;
     initialState: Uint8Array;
     events: Events.Event[];
     eventSeqNum: bigint;
-    effectSeqNum: bigint;
-    state: Internal.ExecutionStatus;
     stateSizeLimit: bigint;
+    outboxLimit: number;
   }> = {},
 ): Internal.ExecutionState {
   return create(Internal.ExecutionStateSchema, {
-    executionId: options.executionId ?? uuid(1n, 2n),
-    playerId: options.playerId ?? uuid(3n, 4n),
+    executionId: options.executionId ?? EXECUTION_A,
     initialState: options.initialState ?? new Uint8Array([1]),
-    events: options.events ?? [startedEvent(1n)],
+    events: options.events ?? [event(1n)],
     eventSeqNum: options.eventSeqNum ?? 1n,
-    effectSeqNum: options.effectSeqNum ?? 0n,
-    state: options.state ?? Internal.ExecutionStatus.RUNNING,
     stateSizeLimit: options.stateSizeLimit ?? 1024n,
+    outboxLimit: options.outboxLimit ?? 10,
+  });
+}
+
+function player(
+  playerId: Common.Uuid,
+  executions: Internal.ExecutionState[],
+  outstandingEffectLimit = 20,
+): Internal.PlayerExecutionState {
+  return create(Internal.PlayerExecutionStateSchema, {
+    playerId,
+    executions,
+    outstandingEffectLimit,
   });
 }
 
 function request(
-  executions: Internal.ExecutionState[],
-  options: Partial<{ method: string; contentType: string; authorized: boolean; body: Uint8Array }> =
-    {},
-): Request {
-  const headers = new Headers();
-  if (options.authorized !== false) headers.set('authorization', `Bearer ${API_KEY}`);
-  headers.set('content-type', options.contentType ?? 'application/octet-stream');
-  const body = options.body ?? toBinary(
-    Internal.ExecutionsRequestSchema,
-    create(Internal.ExecutionsRequestSchema, { executions }),
-  );
-  const method = options.method ?? 'POST';
-  return new Request(PATH, {
-    method,
-    headers,
-    body: method === 'GET' || method === 'HEAD'
-      ? undefined
-      : new Blob([body.slice().buffer as ArrayBuffer]),
-  });
+  players: Internal.PlayerExecutionState[],
+  workerLimit = 4,
+): Internal.ExecutionsRequest {
+  return create(Internal.ExecutionsRequestSchema, { players, workerLimit });
 }
 
-function uuid(high: bigint, low: bigint): Common.Uuid {
-  return create(Common.UuidSchema, { high, low });
-}
-
-function startedEvent(tick: bigint): Events.Event {
+function event(tick: bigint): Events.Event {
   return create(Events.EventSchema, {
     event: { case: 'started', value: create(Events.StartedSchema, { tick }) },
   });
 }
 
-function stepResponse(state: Uint8Array, effects: Effects.Effect[] = []): Response {
-  const body = toBinary(
-    Program.StepResponseSchema,
-    create(Program.StepResponseSchema, { state, effects }),
-  );
-  return new Response(new Blob([body.slice().buffer as ArrayBuffer]), {
-    status: 200,
-    headers: { 'content-type': 'application/octet-stream' },
+function effect(message: string): Effects.Effect {
+  return create(Effects.EffectSchema, {
+    effect: { case: 'sendChat', value: create(Effects.SendChatSchema, { msg: message }) },
   });
 }
 
-async function decodeResponse(response: Response): Promise<Internal.ExecutionsResponse> {
-  assertEquals(response.status, 200, 'execution sync should succeed');
-  assertEquals(
-    response.headers.get('content-type'),
-    'application/octet-stream',
-    'success should be protobuf binary',
-  );
-  return fromBinary(
-    Internal.ExecutionsResponseSchema,
-    new Uint8Array(await response.arrayBuffer()),
+function stepResponse(state: Uint8Array, effects: Effects.Effect[] = []): Response {
+  return new Response(
+    toBinary(
+      Program.StepResponseSchema,
+      create(Program.StepResponseSchema, {
+        state,
+        effects,
+      }),
+    ),
+    { headers: { 'content-type': 'application/octet-stream' } },
   );
 }
 
-async function assertError(response: Response, status: number): Promise<void> {
-  assertEquals(response.status, status, 'unexpected error status');
-  assertEquals(
-    response.headers.get('content-type'),
-    'application/octet-stream',
-    'errors should be protobuf binary',
-  );
-  const body = fromBinary(
-    Internal.ErrorResponseSchema,
-    new Uint8Array(await response.arrayBuffer()),
-  );
-  if (body.error === '') throw new Error('error body must contain an error string');
+async function waitForRequests(worker: TestWorker, count: number): Promise<void> {
+  for (let attempt = 0; attempt < 100; attempt += 1) {
+    if (worker.requests.length >= count) return;
+    await new Promise((resolve) => setTimeout(resolve, 0));
+  }
+  throw new Error(`expected ${count} worker requests, got ${worker.requests.length}`);
+}
+
+async function settle(): Promise<void> {
+  await new Promise((resolve) => setTimeout(resolve, 0));
+  await new Promise((resolve) => setTimeout(resolve, 0));
 }
 
 function assertEquals<T>(actual: T, expected: T, message: string): void {
@@ -152,333 +187,334 @@ function assertEquals<T>(actual: T, expected: T, message: string): void {
   }
 }
 
-async function flushTasks(): Promise<void> {
-  for (let index = 0; index < 5; index += 1) {
-    await Promise.resolve();
-  }
+function assertBytes(actual: Uint8Array, expected: number[], message: string): void {
+  assertEquals(JSON.stringify([...actual]), JSON.stringify(expected), message);
 }
 
-Deno.test('Execution sync uses protobuf responses for request, authentication, and method errors', async () => {
-  const app = await createTestApp(() => Promise.resolve(stepResponse(new Uint8Array([2]))));
-  try {
-    await assertError(await app.handler(request([], { authorized: false })), 401);
-    await assertError(await app.handler(request([], { method: 'GET' })), 405);
-    await assertError(await app.handler(request([], { contentType: 'application/json' })), 415);
-    await assertError(await app.handler(request([], { body: new Uint8Array([0xff]) })), 400);
-  } finally {
-    await app.cleanup();
-  }
+Deno.test('Execution sync is immediate and asynchronously records states and effects', async () => {
+  const store = new TestProgramStore();
+  const manager = new ExecutionManager(store, 1024);
+  const snapshot = request([player(PLAYER_A, [execution()])]);
+
+  const first = await manager.sync(snapshot);
+  assertEquals(first.results[0]?.eventSeqNum, 0n, 'initial result should consume no events');
+  const worker = store.created[0]!.worker;
+  await waitForRequests(worker, 1);
+  assertEquals(worker.requests[0]?.effectLimit, 10, 'step receives the execution outbox limit');
+  worker.complete(0, stepResponse(new Uint8Array([9]), [effect('hello')]));
+  await settle();
+
+  const completed = await manager.sync(snapshot);
+  const result = completed.results[0]!;
+  assertEquals(result.eventSeqNum, 1n, 'completed event should be consumed');
+  assertBytes(result.finalState, [9], 'completed state');
+  assertEquals(result.effects.length, 1, 'completed effects');
 });
 
-Deno.test('Execution sync rejects an invalid snapshot without replacing cached work', async () => {
-  let calls = 0;
-  const app = await createTestApp(() => {
-    calls += 1;
-    return Promise.resolve(stepResponse(new Uint8Array([9])));
-  });
+Deno.test('Execution sync endpoint keeps protobuf success and error responses', async () => {
+  const store = new TestProgramStore();
+  const manager = new ExecutionManager(store, 1024);
+  const config = configFromEnv({ apiKey: 'test-key', storageDir: 'unused' });
+  const validBody = toBinary(Internal.ExecutionsRequestSchema, request([], 0));
+  const success = await handleExecutions(
+    new Request('http://localhost/modapi/v1/executions', {
+      method: 'POST',
+      headers: { authorization: 'Bearer test-key', 'content-type': EXECUTIONS_CONTENT_TYPE },
+      body: validBody,
+    }),
+    config,
+    manager,
+  );
+  assertEquals(success.status, 200, 'valid protobuf request succeeds');
+  assertEquals(success.headers.get('content-type'), EXECUTIONS_CONTENT_TYPE, 'success is protobuf');
+
+  const unauthorized = await handleExecutions(
+    new Request('http://localhost/modapi/v1/executions', {
+      method: 'POST',
+      headers: { 'content-type': EXECUTIONS_CONTENT_TYPE },
+      body: validBody,
+    }),
+    config,
+    manager,
+  );
+  assertEquals(unauthorized.status, 401, 'missing bearer token is rejected');
+  const error = fromBinary(
+    Internal.ErrorResponseSchema,
+    new Uint8Array(await unauthorized.arrayBuffer()),
+  );
+  assertEquals(error.error === '', false, 'error body is protobuf with a message');
+});
+
+Deno.test('Execution sync validates snapshots before changing cached work', async () => {
+  const store = new TestProgramStore();
+  const manager = new ExecutionManager(store, 1024);
   const valid = execution();
+  await manager.sync(request([player(PLAYER_A, [valid])]));
+  const worker = store.created[0]!.worker;
+  await waitForRequests(worker, 1);
+
+  let rejected = false;
   try {
-    await decodeResponse(await app.handler(request([valid])));
-    await flushTasks();
-    assertEquals(calls, 1, 'valid snapshot should dispatch one event');
-
-    const duplicate = execution({ executionId: valid.executionId });
-    await assertError(await app.handler(request([valid, duplicate])), 400);
-
-    const result = await decodeResponse(await app.handler(request([valid])));
-    assertEquals(result.results[0]?.eventSeqNum, 1n, 'cache should retain completed work');
-    assertEquals(calls, 1, 'retry should not dispatch an already consumed event');
-  } finally {
-    await app.cleanup();
+    await manager.sync(request([player(PLAYER_A, [valid, execution()])]));
+  } catch (error) {
+    rejected = error instanceof ExecutionRequestError;
   }
-});
-
-Deno.test('Execution sync asynchronously advances state and acknowledges effect sequences', async () => {
-  let resolveStep: ((response: Response) => void) | undefined;
-  let receivedStep: Uint8Array | undefined;
-  let receivedPlayer: string | undefined;
-  const app = await createTestApp(async (request) => {
-    receivedStep = new Uint8Array(await request.arrayBuffer());
-    return new Promise<Response>((resolve) => {
-      resolveStep = resolve;
-    });
-  }, (playerUUID) => {
-    receivedPlayer = playerUUID;
-  });
-  const initial = execution();
-  try {
-    const first = await decodeResponse(await app.handler(request([initial])));
-    assertEquals(
-      first.results[0]?.eventSeqNum,
-      0n,
-      'initial response should not await the program',
-    );
-    assertEquals(first.results[0]?.effectSeqNum, 1n, 'first effect sequence should be one');
-    await flushTasks();
-    if (receivedStep === undefined || resolveStep === undefined) {
-      throw new Error('program invocation was not started');
-    }
-    const step = fromBinary(Program.StepRequestSchema, receivedStep);
-    assertEquals(step.executionId?.high, 1n, 'program should receive the execution id');
-    assertEquals(step.event?.event.case, 'started', 'program should receive the queued event');
-    assertEquals(step.effectLimit, 50, 'program should receive the available effect capacity');
-    assertEquals(
-      receivedPlayer,
-      '00000000-0000-0003-0000-000000000004',
-      'program lookup should use the canonical player UUID',
-    );
-
-    resolveStep(stepResponse(
-      new Uint8Array([9]),
-      [create(Effects.EffectSchema, {
-        effect: { case: 'sendChat', value: create(Effects.SendChatSchema, { msg: 'hello' }) },
-      })],
-    ));
-    await flushTasks();
-
-    const completed = await decodeResponse(await app.handler(request([initial])));
-    const result = completed.results[0]!;
-    assertEquals(result.eventSeqNum, 1n, 'completion should consume the event');
-    assertEquals(
-      JSON.stringify([...result.finalState]),
-      JSON.stringify([9]),
-      'state should advance',
-    );
-    assertEquals(result.effectSeqNum, 1n, 'returned effect should start at one');
-    assertEquals(result.effects.length, 1, 'effect should remain until acknowledged');
-
-    const acknowledged = execution({
-      initialState: new Uint8Array([9]),
-      events: [],
-      eventSeqNum: 2n,
-      effectSeqNum: 1n,
-    });
-    const afterAcknowledgement = await decodeResponse(await app.handler(request([acknowledged])));
-    const acknowledgedResult = afterAcknowledgement.results[0]!;
-    assertEquals(acknowledgedResult.effects.length, 0, 'acknowledgement should remove the effect');
-    assertEquals(
-      acknowledgedResult.effectSeqNum,
-      2n,
-      'empty outbox should report the next sequence',
-    );
-  } finally {
-    await app.cleanup();
-  }
-});
-
-Deno.test('Execution sync crashes an execution when the program response is invalid', async () => {
-  let calls = 0;
-  const app = await createTestApp(() => {
-    calls += 1;
-    return Promise.resolve(
-      new Response(new Uint8Array([1, 2]), {
-        status: 200,
-        headers: { 'content-type': 'text/plain' },
-      }),
-    );
-  });
-  const initial = execution({
-    initialState: new Uint8Array([4]),
-    events: [startedEvent(7n), startedEvent(8n)],
-  });
-  try {
-    await decodeResponse(await app.handler(request([initial])));
-    await flushTasks();
-    const crashed = await decodeResponse(await app.handler(request([initial])));
-    const result = crashed.results[0]!;
-    assertEquals(
-      result.state,
-      Internal.ExecutionStatus.CRASHED,
-      'invalid response should crash execution',
-    );
-    assertEquals(result.eventSeqNum, 1n, 'only the failing event should be consumed');
-    assertEquals(
-      JSON.stringify([...result.finalState]),
-      JSON.stringify([4]),
-      'state should not change',
-    );
-    assertEquals(calls, 1, 'crashed execution should not dispatch more events');
-  } finally {
-    await app.cleanup();
-  }
-});
-
-Deno.test('Execution sync rejects an oversized final state before it reaches the Mod', async () => {
-  const app = await createTestApp(() => Promise.resolve(stepResponse(new Uint8Array([1, 2, 3]))));
-  const initial = execution({ initialState: new Uint8Array([4]), stateSizeLimit: 2n });
-  try {
-    await decodeResponse(await app.handler(request([initial])));
-    await flushTasks();
-    const response = await decodeResponse(await app.handler(request([initial])));
-    const result = response.results[0]!;
-    assertEquals(result.state, Internal.ExecutionStatus.CRASHED, 'oversized state should crash');
-    assertEquals(
-      result.failureReason,
-      Internal.ExecutionFailureReason.STATE_SIZE_LIMIT,
-      'crash should identify the state-size limit',
-    );
-    assertEquals(
-      JSON.stringify([...result.finalState]),
-      JSON.stringify([4]),
-      'old state should remain',
-    );
-    assertEquals(result.effects.length, 0, 'oversized response effects should be discarded');
-  } finally {
-    await app.cleanup();
-  }
-});
-
-Deno.test('Execution sync ignores a stale invocation after an authoritative re-sync', async () => {
-  let resolveStep: ((response: Response) => void) | undefined;
-  const app = await createTestApp(() =>
-    new Promise<Response>((resolve) => {
-      resolveStep = resolve;
-    })
+  assertEquals(rejected, true, 'duplicated execution id should be rejected');
+  worker.complete(0, stepResponse(new Uint8Array([2])));
+  await settle();
+  assertEquals(
+    (await manager.sync(request([player(PLAYER_A, [valid])]))).results[0]?.eventSeqNum,
+    1n,
+    'rejected request must not replace the valid in-flight window',
   );
-  const initial = execution({ initialState: new Uint8Array([1]) });
-  const replacement = execution({ initialState: new Uint8Array([7]), events: [] });
-  try {
-    await decodeResponse(await app.handler(request([initial])));
-    await flushTasks();
-    if (resolveStep === undefined) throw new Error('initial invocation was not started');
-
-    const resynced = await decodeResponse(await app.handler(request([replacement])));
-    assertEquals(
-      JSON.stringify([...resynced.results[0]!.finalState]),
-      JSON.stringify([7]),
-      'authoritative state should replace the incompatible cache entry',
-    );
-
-    resolveStep(stepResponse(new Uint8Array([9])));
-    await flushTasks();
-    const afterStaleCompletion = await decodeResponse(await app.handler(request([replacement])));
-    assertEquals(
-      JSON.stringify([...afterStaleCompletion.results[0]!.finalState]),
-      JSON.stringify([7]),
-      'stale invocation must not overwrite the re-synced state',
-    );
-  } finally {
-    await app.cleanup();
-  }
 });
 
-Deno.test('Execution sync retains at most ten events and refills after the Mod accepts a prefix', async () => {
-  const maxEvents = MAX_EVENTS_PER_EXECUTION;
-  let calls = 0;
-  const app = await createTestApp(() => {
-    calls += 1;
-    return Promise.resolve(stepResponse(new Uint8Array([maxEvents - 1])));
-  });
-  const firstBatch = execution({
-    events: Array.from({ length: maxEvents + 1 }, (_, index) => startedEvent(BigInt(index + 1))),
-  });
-  try {
-    let result: Internal.ExecutionResult | undefined;
-    for (let attempt = 0; attempt < 100; attempt += 1) {
-      result = (await decodeResponse(await app.handler(request([firstBatch])))).results[0];
-      if (result?.eventSeqNum === BigInt(maxEvents)) break;
-      await new Promise((resolve) => setTimeout(resolve, 0));
-    }
-    if (result === undefined || result.eventSeqNum !== BigInt(maxEvents)) {
-      throw new Error('the first ten events did not complete');
-    }
-    assertEquals(calls, maxEvents, 'only the event window should be dispatched');
+Deno.test('Execution sync drops a window when an in-window state SHA-1 differs', async () => {
+  const store = new TestProgramStore();
+  const manager = new ExecutionManager(store, 1024);
+  const original = execution({ initialState: new Uint8Array([1]) });
+  await manager.sync(request([player(PLAYER_A, [original])]));
+  const worker = store.created[0]!.worker;
+  await waitForRequests(worker, 1);
 
-    const remainingEvent = execution({
-      initialState: new Uint8Array([maxEvents - 1]),
-      events: [startedEvent(BigInt(maxEvents + 1))],
-      eventSeqNum: BigInt(maxEvents + 1),
-    });
-    for (let attempt = 0; attempt < 100; attempt += 1) {
-      result = (await decodeResponse(await app.handler(request([remainingEvent])))).results[0];
-      if (result?.eventSeqNum === BigInt(maxEvents + 1)) break;
-      await new Promise((resolve) => setTimeout(resolve, 0));
-    }
-    assertEquals(
-      result?.eventSeqNum,
-      BigInt(maxEvents + 1),
-      'the next sync should refill and dispatch event eleven',
-    );
-    assertEquals(calls, maxEvents + 1, 'the refilled event should dispatch once');
-  } finally {
-    await app.cleanup();
-  }
+  const replacement = execution({ initialState: new Uint8Array([7]) });
+  const resynced = await manager.sync(request([player(PLAYER_A, [replacement])]));
+  assertBytes(resynced.results[0]!.finalState, [7], 'authoritative replacement state');
+  worker.complete(0, stepResponse(new Uint8Array([9])));
+  await settle();
+  const afterStale = await manager.sync(request([player(PLAYER_A, [replacement])]));
+  assertBytes(afterStale.results[0]!.finalState, [7], 'stale invocation must not win');
 });
 
-Deno.test('Execution sync retains at most fifty unacknowledged effects', async () => {
-  const effects = Array.from({ length: 51 }, (_, index) =>
-    create(Effects.EffectSchema, {
-      effect: {
-        case: 'sendChat',
-        value: create(Effects.SendChatSchema, { msg: `effect ${index}` }),
-      },
-    }));
-  const app = await createTestApp(() =>
-    Promise.resolve(stepResponse(new Uint8Array([9]), effects))
+Deno.test('Execution sync advances matching windows and extends them with all new events', async () => {
+  const store = new TestProgramStore();
+  const manager = new ExecutionManager(store, 1024);
+  const initial = execution({ events: [event(1n), event(2n)] });
+  await manager.sync(request([player(PLAYER_A, [initial])]));
+  const worker = store.created[0]!.worker;
+  await waitForRequests(worker, 1);
+  worker.complete(0, stepResponse(new Uint8Array([2]), [effect('one')]));
+  await waitForRequests(worker, 2);
+
+  const advanced = execution({
+    initialState: new Uint8Array([2]),
+    eventSeqNum: 2n,
+    events: [event(2n), event(3n)],
+  });
+  const response = await manager.sync(request([player(PLAYER_A, [advanced])]));
+  assertEquals(response.results[0]?.effects.length, 0, 'advanced prefix effects are acknowledged');
+  worker.complete(1, stepResponse(new Uint8Array([3])));
+  await waitForRequests(worker, 3);
+  const dispatched = worker.requests[2]?.event?.event;
+  assertEquals(dispatched?.case, 'started', 'extended event is dispatched');
+  if (dispatched?.case !== 'started') throw new Error('extended event should be Started');
+  assertEquals(dispatched.value.tick, 3n, 'all new events are appended');
+});
+
+Deno.test('Execution sync failure consumes one event and resets after advancement', async () => {
+  const store = new TestProgramStore();
+  const manager = new ExecutionManager(store, 1024);
+  const initial = execution({ events: [event(1n), event(2n)] });
+  await manager.sync(request([player(PLAYER_A, [initial])]));
+  const worker = store.created[0]!.worker;
+  await waitForRequests(worker, 1);
+  worker.complete(0, new Response('bad', { headers: { 'content-type': 'text/plain' } }));
+  await settle();
+
+  const failed = await manager.sync(request([player(PLAYER_A, [initial])]));
+  assertEquals(failed.results[0]?.eventSeqNum, 1n, 'failed event is consumed');
+  assertEquals(failed.results[0]?.executionFailed, true, 'failure is reported');
+  assertEquals(worker.requests.length, 1, 'failed execution does not take another step');
+
+  const advanced = execution({
+    initialState: new Uint8Array([1]),
+    eventSeqNum: 2n,
+    events: [event(2n)],
+  });
+  const recovered = await manager.sync(request([player(PLAYER_A, [advanced])]));
+  assertEquals(recovered.results[0]?.executionFailed, false, 'advancing clears failure');
+});
+
+Deno.test('Execution sync rejects an oversized program state before returning it', async () => {
+  const store = new TestProgramStore();
+  const manager = new ExecutionManager(store, 1024);
+  const snapshot = execution({ initialState: new Uint8Array([1]), stateSizeLimit: 1n });
+  await manager.sync(request([player(PLAYER_A, [snapshot])]));
+  const worker = store.created[0]!.worker;
+  await waitForRequests(worker, 1);
+  worker.complete(0, stepResponse(new Uint8Array([2, 3])));
+  await settle();
+
+  const result = (await manager.sync(request([player(PLAYER_A, [snapshot])]))).results[0]!;
+  assertEquals(result.executionFailed, true, 'oversized state fails the execution');
+  assertEquals(
+    result.failureReason,
+    Internal.ExecutionFailureReason.STATE_SIZE_LIMIT,
+    'oversized state identifies its failure reason',
   );
-  const initial = execution();
-  try {
-    await decodeResponse(await app.handler(request([initial])));
-    await flushTasks();
-    const retained = (await decodeResponse(await app.handler(request([initial])))).results[0]!;
-    assertEquals(retained.effects.length, 50, 'only fifty effects should be retained');
-    assertEquals(retained.effectSeqNum, 1n, 'retained effects should begin at sequence one');
-    const lastEffect = retained.effects[49];
-    if (lastEffect === undefined || lastEffect.effect.case !== 'sendChat') {
-      throw new Error('the fiftieth retained effect should be SendChat');
-    }
-    assertEquals(
-      lastEffect.effect.value.msg,
-      'effect 49',
-      'the earliest fifty effects should be retained in order',
-    );
-
-    const acknowledged = execution({
-      initialState: new Uint8Array([9]),
-      events: [],
-      eventSeqNum: 2n,
-      effectSeqNum: 50n,
-    });
-    const acknowledgementResponse = await decodeResponse(
-      await app.handler(request([acknowledged])),
-    );
-    const afterAcknowledgement = acknowledgementResponse.results[0]!;
-    assertEquals(afterAcknowledgement.effects.length, 0, 'acknowledgement should clear the outbox');
-    assertEquals(
-      afterAcknowledgement.effectSeqNum,
-      51n,
-      'dropped effects must not leave a sequence gap',
-    );
-  } finally {
-    await app.cleanup();
-  }
+  assertBytes(result.finalState, [1], 'oversized state does not replace the current state');
 });
 
-Deno.test('Execution sync advertises the remaining effect capacity for each step', async () => {
-  const effect = create(Effects.EffectSchema, {
-    effect: { case: 'emitBeep', value: create(Effects.EmitBeepSchema, {}) },
-  });
-  const effectLimits: number[] = [];
-  let calls = 0;
-  const app = await createTestApp(async (request) => {
-    const step = fromBinary(Program.StepRequestSchema, new Uint8Array(await request.arrayBuffer()));
-    effectLimits.push(step.effectLimit);
-    const effectCount = calls++ === 0 ? 49 : 2;
-    return Promise.resolve(stepResponse(new Uint8Array([calls]), Array(effectCount).fill(effect)));
-  });
-  const initial = execution({ events: [startedEvent(1n), startedEvent(2n)] });
-  try {
-    let result: Internal.ExecutionResult | undefined;
-    for (let attempt = 0; attempt < 100; attempt += 1) {
-      result = (await decodeResponse(await app.handler(request([initial])))).results[0];
-      if (result?.eventSeqNum === 2n) break;
-      await new Promise((resolve) => setTimeout(resolve, 0));
-    }
-
-    assertEquals(result?.eventSeqNum, 2n, 'both events should complete');
-    assertEquals(JSON.stringify(effectLimits), JSON.stringify([50, 1]), 'effect limits');
-    assertEquals(result?.effects.length, 50, 'only the advertised capacity should be retained');
-  } finally {
-    await app.cleanup();
-  }
+Deno.test('Execution sync observes the per-execution soft outbox threshold', async () => {
+  const store = new TestProgramStore();
+  const manager = new ExecutionManager(store, 1024);
+  const snapshot = execution({ events: [event(1n), event(2n), event(3n)], outboxLimit: 1 });
+  await manager.sync(request([player(PLAYER_A, [snapshot])]));
+  const worker = store.created[0]!.worker;
+  await waitForRequests(worker, 1);
+  worker.complete(0, stepResponse(new Uint8Array([2]), [effect('one')]));
+  await waitForRequests(worker, 2);
+  worker.complete(1, stepResponse(new Uint8Array([3]), [effect('two')]));
+  await settle();
+  await manager.sync(request([player(PLAYER_A, [snapshot])]));
+  assertEquals(worker.requests.length, 2, 'more-than-limit outbox stops later steps');
 });
+
+Deno.test('Execution sync observes the per-player soft outstanding-effect threshold', async () => {
+  const store = new TestProgramStore();
+  const manager = new ExecutionManager(store, 1024);
+  const first = execution({ executionId: EXECUTION_A, outboxLimit: 2 });
+  const second = execution({ executionId: EXECUTION_B, outboxLimit: 2 });
+  await manager.sync(request([player(PLAYER_A, [first, second], 1)]));
+  const worker = store.created[0]!.worker;
+  await waitForRequests(worker, 1);
+  worker.complete(0, stepResponse(new Uint8Array([2]), [effect('one'), effect('two')]));
+  await settle();
+  await manager.sync(request([player(PLAYER_A, [first, second], 1)]));
+  assertEquals(worker.requests.length, 1, 'player total above limit blocks other executions');
+});
+
+Deno.test('Active program changes retire workers and invalidate windows out of band', async () => {
+  const store = new TestProgramStore();
+  const manager = new ExecutionManager(store, 1024);
+  const snapshot = request([player(PLAYER_A, [execution()])]);
+  await manager.sync(snapshot);
+  const worker = store.created[0]!.worker;
+  await waitForRequests(worker, 1);
+  assertEquals(store.activeReadCalls, 0, 'execution manager does not read the active program');
+
+  await manager.sync(snapshot);
+  assertEquals(store.activeReadCalls, 0, 'sync does not reread an active worker program');
+
+  store.active.set(uuidString(PLAYER_A), program(PROGRAM_B));
+  await manager.activeProgramChanged(uuidString(PLAYER_A), PROGRAM_B);
+  assertEquals(worker.retireCalls, 1, 'program change retires worker');
+  worker.complete(0, stepResponse(new Uint8Array([9])));
+  await settle();
+  const invalidated = await manager.sync(snapshot);
+  assertBytes(
+    invalidated.results[0]!.finalState,
+    [1],
+    'invalidated invocation cannot update state',
+  );
+
+  worker.close();
+  await settle();
+  await manager.sync(snapshot);
+  assertEquals(store.created.length, 2, 'next sync starts a replacement worker');
+
+  const replacement = store.created[1]!.worker;
+  await manager.sync(request([]));
+  assertEquals(replacement.retireCalls, 1, 'absent player retires worker');
+});
+
+Deno.test('Initializing workers reserve capacity without holding the manager lock', async () => {
+  const store = new TestProgramStore();
+  const manager = new ExecutionManager(store, 1024);
+  const startup = new Deferred<{ program: ActiveProgram; worker: CobblewareUserWorker }>();
+  store.pendingRuns.push(startup);
+  const first = request([player(PLAYER_A, [execution()])], 1);
+
+  await manager.sync(first);
+  await settle();
+  const initializingWorker = store.created[0]!.worker;
+
+  await manager.activeProgramChanged(uuidString(PLAYER_A), PROGRAM_B);
+  await manager.sync(request([
+    player(PLAYER_A, [execution()]),
+    player(PLAYER_B, [execution({ executionId: EXECUTION_B })]),
+  ], 1));
+  assertEquals(store.created.length, 1, 'initializing worker occupies the worker limit');
+
+  startup.resolve({ program: program(PROGRAM_A), worker: initializingWorker });
+  await settle();
+  assertEquals(initializingWorker.retireCalls, 1, 'retired initialization closes its worker');
+  initializingWorker.close();
+  await settle();
+
+  await manager.sync(request([player(PLAYER_B, [execution({ executionId: EXECUTION_B })])], 1));
+  assertEquals(store.created.length, 2, 'closed initialization frees capacity for another player');
+});
+
+Deno.test('Execution sync counts retired workers until their closed promise resolves', async () => {
+  const store = new TestProgramStore();
+  const manager = new ExecutionManager(store, 1024);
+  const first = request([player(PLAYER_A, [execution()])], 1);
+  await manager.sync(first);
+  const firstWorker = store.created[0]!.worker;
+  await waitForRequests(firstWorker, 1);
+  store.active.set(uuidString(PLAYER_A), program(PROGRAM_B));
+  await manager.sync(first);
+
+  const secondPlayer = request([
+    player(PLAYER_A, [execution()]),
+    player(PLAYER_B, [execution({ executionId: EXECUTION_B })]),
+  ], 1);
+  await manager.sync(secondPlayer);
+  assertEquals(store.created.length, 1, 'retired worker still occupies the worker limit');
+  firstWorker.close();
+  await settle();
+  await manager.sync(secondPlayer);
+  assertEquals(store.created.length, 2, 'closed retired worker frees the worker limit');
+});
+
+Deno.test('Execution sync does not create a worker once the requested worker limit is reached', async () => {
+  const store = new TestProgramStore();
+  const manager = new ExecutionManager(store, 1024);
+  await manager.sync(request([player(PLAYER_A, [execution()])], 1));
+  const worker = store.created[0]!.worker;
+  await waitForRequests(worker, 1);
+
+  await manager.sync(request([
+    player(PLAYER_A, [execution()]),
+    player(PLAYER_B, [execution({ executionId: EXECUTION_B })]),
+  ], 1));
+  assertEquals(store.created.length, 1, 'active worker occupies the requested worker limit');
+});
+
+Deno.test('Execution sync drops windows missing from the authoritative request and preserves result order', async () => {
+  const store = new TestProgramStore();
+  const manager = new ExecutionManager(store, 1024);
+  const first = execution({ executionId: EXECUTION_A });
+  const second = execution({ executionId: EXECUTION_B });
+  const combined = request([player(PLAYER_B, [second]), player(PLAYER_A, [first])]);
+  const response = await manager.sync(combined);
+  assertEquals(
+    response.results[0]?.executionId?.high,
+    EXECUTION_B.high,
+    'player order is preserved',
+  );
+  assertEquals(
+    response.results[1]?.executionId?.high,
+    EXECUTION_A.high,
+    'execution order is preserved',
+  );
+  await manager.sync(request([player(PLAYER_A, [first])]));
+  const reintroduced = await manager.sync(request([player(PLAYER_B, [second])]));
+  assertEquals(
+    reintroduced.results[0]?.eventSeqNum,
+    0n,
+    'omitted window is recreated from scratch',
+  );
+});
+
+function uuid(high: bigint, low: bigint): Common.Uuid {
+  return create(Common.UuidSchema, { high, low });
+}
+
+function uuidString(uuid: Common.Uuid): string {
+  const value = uuid.high.toString(16).padStart(16, '0') + uuid.low.toString(16).padStart(16, '0');
+  return `${value.slice(0, 8)}-${value.slice(8, 12)}-${value.slice(12, 16)}-${
+    value.slice(16, 20)
+  }-${value.slice(20)}`;
+}

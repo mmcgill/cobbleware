@@ -35,7 +35,7 @@ export async function handleExecutions(
   }
 
   try {
-    const response = manager.sync(decoded);
+    const response = await manager.sync(decoded);
     return binaryResponse(toBinary(Internal.ExecutionsResponseSchema, response));
   } catch (error) {
     if (error instanceof ExecutionRequestError) {

@@ -13,7 +13,7 @@
     "fmt": "deno fmt",
     "bundle": "deno run --allow-env --allow-read --allow-run --allow-write scripts/bundle.ts",
     "start": "deno task bundle && deno task --cwd ../event-worker bundle && COBBLEWARE_API_KEY=secret deno run --allow-env --allow-run scripts/start.ts",
-    "integrate": "deno task bundle && deno test --no-prompt --allow-env=COBBLEWARE_API_KEY,COBBLEWARE_GAME_DIR,EDGE_RUNTIME_BIN --allow-net=127.0.0.1 --allow-read --allow-run --allow-write integration"
+    "integrate": "deno task --cwd ../examples bundle && deno task bundle && deno test --no-prompt --allow-env=COBBLEWARE_API_KEY,COBBLEWARE_GAME_DIR,EDGE_RUNTIME_BIN --allow-net=127.0.0.1 --allow-read --allow-run --allow-write integration"
   },
   "fmt": {
     "useTabs": false,

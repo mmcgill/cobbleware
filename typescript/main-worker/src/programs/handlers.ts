@@ -15,10 +15,13 @@ const PROGRAM_FIELD = 'program';
 const NAME_FIELD = 'name';
 const MAX_PROGRAM_NAME_LENGTH = 128;
 
+type ActiveProgramChanged = (playerUUID: string, programId: string) => Promise<void>;
+
 export async function handleProgramCollection(
   request: Request,
   store: ProgramStore,
   playerUUID: string,
+  activeProgramChanged: ActiveProgramChanged,
 ): Promise<Response> {
   if (request.method === 'GET') {
     try {
@@ -68,6 +71,9 @@ export async function handleProgramCollection(
   const content = new Uint8Array(await file.arrayBuffer());
   try {
     const result = await store.upload(playerUUID, content, name);
+    if (result.created) {
+      await activeProgramChanged(playerUUID, result.metadata.id);
+    }
     const response = jsonResponse(result.metadata, result.created ? 201 : 200);
     response.headers.set('location', programLocation(result.metadata.id));
     return response;
@@ -105,9 +111,11 @@ export async function handleProgram(
   }
 
   try {
-    const worker = await store.run(playerUUID, { memoryQuotaBytes: playerMemoryQuotaBytes });
+    const { program: runningProgram, worker } = await store.run(playerUUID, {
+      memoryQuotaBytes: playerMemoryQuotaBytes,
+    });
     return jsonResponse({
-      ...program.metadata,
+      ...runningProgram.metadata,
       startStates: await invokeStartStates(worker),
     });
   } catch (error) {
@@ -139,7 +147,12 @@ export async function handlePlayerProgramStartStates(
   }
 
   try {
-    const worker = await store.run(playerUUID, { memoryQuotaBytes: playerMemoryQuotaBytes });
+    const { program: runningProgram, worker } = await store.run(playerUUID, {
+      memoryQuotaBytes: playerMemoryQuotaBytes,
+    });
+    if (runningProgram.metadata.id !== programId) {
+      return emptyResponse(404);
+    }
     const states = await invokeStartStates(worker);
     return jsonResponse({
       startStates: Object.keys(states),
@@ -199,7 +212,12 @@ export async function handleProgramStep(
     return emptyResponse(404);
   }
 
-  const worker = await store.run(playerUUID, { memoryQuotaBytes: playerMemoryQuotaBytes });
+  const { program: runningProgram, worker } = await store.run(playerUUID, {
+    memoryQuotaBytes: playerMemoryQuotaBytes,
+  });
+  if (runningProgram.metadata.id !== programId) {
+    return emptyResponse(404);
+  }
   const response = await invokeNextState(worker, stepRequest);
 
   try {

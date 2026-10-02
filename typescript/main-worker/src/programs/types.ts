@@ -32,6 +32,11 @@ export type RunOptions = {
   memoryQuotaBytes: number;
 };
 
+export type RunningProgram = {
+  program: ActiveProgram;
+  worker: CobblewareUserWorker;
+};
+
 export type ProgramStore = {
   list(playerUUID: string): Promise<ProgramList>;
   readActive(playerUUID: string): Promise<ActiveProgram | null>;
@@ -40,7 +45,7 @@ export type ProgramStore = {
     content: Uint8Array,
     name: string,
   ): Promise<UploadProgramResult>;
-  run(playerUUID: string, opts: RunOptions): Promise<CobblewareUserWorker>;
+  run(playerUUID: string, opts: RunOptions): Promise<RunningProgram>;
 };
 
 const ProgramMetadataSchema = z.strictObject({

@@ -34,7 +34,7 @@ async function createTestApp(
     list: () => Promise.resolve({ programs: [], quotaBytes: 0, usedBytes: 0, remainingBytes: 0 }),
     readActive,
     upload: () => Promise.resolve({ metadata: activeProgram.metadata, created: false }),
-    run: () => Promise.resolve(worker(fetch)),
+    run: () => Promise.resolve({ program: activeProgram, worker: worker(fetch) }),
   };
 
   return {
