@@ -36,10 +36,13 @@ capacity, queues a `Resumed` event on success, and otherwise leaves the Cobblepu
 online owner a chat error. Non-ticking, stopped, and crashed executions do not count toward the cap;
 pausing or making a running execution non-ticking releases its slot.
 
-The Mod publishes each execution lifecycle transition to the Main Worker through the existing execution-log
-publication connection. Every transition carries its owner's current running-execution usage and the configured cap,
-so the Browser UI can show a cached value and update it without polling. Publication is best-effort and happens only
-from normal server-tick processing; it does not alter the chunk-load persistence rule.
+The Mod publishes execution lifecycle transitions and execution-pool assignment changes to the Main Worker through the
+existing execution-log publication connection. Every lifecycle transition carries its owner's current
+running-execution usage and the configured cap, so the Browser UI can show a cached value and update it without
+polling. A pool entry reports the owner's resulting `GUARANTEED`, `BESTEFFORT`, `WAITING`, or `NONE` state. The Mod
+emits it only when that state changes, including the first assignment, best-effort rotation, and a player becoming
+ineligible after their last loaded running Cobbleputer stops. Publication is best-effort and happens only from normal
+server-tick processing; it does not alter the chunk-load persistence rule.
 
 For every execution-sync snapshot, the Mod supplies the Runtime with a per-execution `state_size_limit` equal to
 the space available after all of that owner's other durable states. The Runtime rejects a program response whose

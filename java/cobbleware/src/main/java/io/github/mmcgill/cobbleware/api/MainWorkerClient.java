@@ -1,6 +1,7 @@
 package io.github.mmcgill.cobbleware.api;
 
 import cobbleware.internal.ErrorResponse;
+import cobbleware.internal.ExecutionPoolTransition;
 import cobbleware.internal.ExecutionStatsTick;
 import cobbleware.internal.ExecutionTransition;
 import cobbleware.internal.ExecutionsRequest;
@@ -157,6 +158,12 @@ public final class MainWorkerClient implements MainWorker {
             long totalExecutionStateLimit) {
         executionTransitionPublisher.offer(
                 playerId, executionId, transition, executionCount, executionLimit, totalExecutionStateLimit);
+    }
+
+    /** Publishes a non-durable execution-pool transition without blocking the server tick. */
+    @Override
+    public void reportExecutionPoolTransition(UUID playerId, ExecutionPoolTransition transition) {
+        executionTransitionPublisher.offerPoolTransition(playerId, transition);
     }
 
     /** Publishes a non-durable state-limit log entry without blocking the server tick. */

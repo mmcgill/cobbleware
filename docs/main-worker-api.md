@@ -385,6 +385,11 @@ Every entry is displayable. An `ExecutionTransitionLogEntry` records an executio
 updates its Limits cache before forwarding this ordinary log entry. The Browser displays and filters it like other log
 types, and uses its count and limit to update its visible Limits view without another HTTP request.
 
+An `ExecutionPoolTransitionLogEntry` records the owning Player's resulting `GUARANTEED`, `BESTEFFORT`, `WAITING`, or
+`NONE` pool state. `NONE` means the Player is no longer eligible because they have no loaded running Cobbleputers.
+The Browser displays and filters this entry like other log types, but it does not change the Limits cache or visible
+Limits view.
+
 The stream requires the same-origin `Origin` header as the execution-statistics stream. It is
 read-only: client application messages cause the Main Worker to send a UTF-8 JSON error frame and
 close the socket with `1008` (`Policy Violation`). There may be only one open execution-logs WebSocket
@@ -471,8 +476,9 @@ the same authorization scope and are intended only for the local Runtime-to-Main
 When a log entry is received, the Main Worker checks for an active Player API Execution Logs WebSocket for the
 relevant player. If there is one, the event is forwarded as-is. If there is not, the event is immediately dropped.
 The Main Worker does not buffer or persist log entries. A valid `transition` entry also replaces the relevant Player's
-in-memory Limits snapshot before the forwarding decision. There are no publisher ids, sequence numbers, or stale-entry
-ordering rules for transitions.
+in-memory Limits snapshot before the forwarding decision. A `pool_transition` entry must contain a specified known
+pool-state enum and is otherwise forwarded without caching. There are no publisher ids, sequence numbers, or
+stale-entry ordering rules for transitions.
 
 Any number of authenticated producer sockets may be open concurrently. Producer frames must be binary,
 parse as an `ExecutionLogEntry`, and contain both `player_id` and an entry variant. The Main Worker uses

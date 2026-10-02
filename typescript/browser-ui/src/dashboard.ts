@@ -885,6 +885,15 @@ markBundledUi(document.documentElement);
           totalExecutionStateLimit: Number(value.totalExecutionStateLimit),
         };
       }
+      case 'poolTransition': {
+        const transition = executionPoolTransitionName(entry.inner.value.transition);
+        return {
+          type: 'pool-transition',
+          typeLabel: 'Execution-pool transition',
+          message: transition.message,
+          metadata: '',
+        };
+      }
       default:
         throw new Error('missing execution-log entry');
     }
@@ -917,6 +926,21 @@ markBundledUi(document.documentElement);
         return 'crashed';
       default:
         throw new Error('invalid execution transition');
+    }
+  }
+
+  function executionPoolTransitionName(transition) {
+    switch (transition) {
+      case Internal.ExecutionPoolTransition.GUARANTEED:
+        return { message: 'Entered the guaranteed pool.' };
+      case Internal.ExecutionPoolTransition.BESTEFFORT:
+        return { message: 'Entered the best-effort pool.' };
+      case Internal.ExecutionPoolTransition.WAITING:
+        return { message: 'Waiting for a best-effort pool slot.' };
+      case Internal.ExecutionPoolTransition.NONE:
+        return { message: 'No longer eligible for an execution pool.' };
+      default:
+        throw new Error('invalid execution-pool transition');
     }
   }
 

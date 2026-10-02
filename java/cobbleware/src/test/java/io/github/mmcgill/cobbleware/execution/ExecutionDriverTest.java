@@ -371,6 +371,62 @@ class ExecutionDriverTest {
     }
 
     @Test
+    void publishesPoolTransitionsForAssignmentChangesAndIneligibility() {
+        Fixture fixture = new Fixture(32, 200, 1, 1);
+        UUID guaranteedOwner = UUID.randomUUID();
+        UUID bestEffortOwner = UUID.randomUUID();
+        UUID waitingOwner = UUID.randomUUID();
+        fixture.startNewExecution(guaranteedOwner, new byte[] {1});
+        fixture.startNewExecution(bestEffortOwner, new byte[] {2});
+        fixture.startNewExecution(waitingOwner, new byte[] {3});
+        fixture.eligiblePlayers.put(
+                guaranteedOwner, new ExecutionPoolManager.EligiblePlayer(guaranteedOwner, "guaranteed", 1, 0));
+        fixture.eligiblePlayers.put(
+                bestEffortOwner, new ExecutionPoolManager.EligiblePlayer(bestEffortOwner, "best-effort", 2, 0));
+        fixture.eligiblePlayers.put(
+                waitingOwner, new ExecutionPoolManager.EligiblePlayer(waitingOwner, "waiting", 3, 0));
+
+        fixture.refreshAndAdvancePools();
+
+        UUID activeBestEffortOwner =
+                fixture.executionPoolManager.bestEffortMembers().getFirst().playerId();
+        UUID waitingAfterAssignment = activeBestEffortOwner.equals(bestEffortOwner) ? waitingOwner : bestEffortOwner;
+        assertEquals(3, fixture.worker.poolTransitions.size());
+        assertTrue(fixture.worker.poolTransitions.contains(new CapturingMainWorker.PoolTransitionReport(
+                guaranteedOwner, cobbleware.internal.ExecutionPoolTransition.EXECUTION_POOL_TRANSITION_GUARANTEED)));
+        assertTrue(fixture.worker.poolTransitions.contains(new CapturingMainWorker.PoolTransitionReport(
+                activeBestEffortOwner,
+                cobbleware.internal.ExecutionPoolTransition.EXECUTION_POOL_TRANSITION_BESTEFFORT)));
+        assertTrue(fixture.worker.poolTransitions.contains(new CapturingMainWorker.PoolTransitionReport(
+                waitingAfterAssignment,
+                cobbleware.internal.ExecutionPoolTransition.EXECUTION_POOL_TRANSITION_WAITING)));
+
+        fixture.refreshAndAdvancePools();
+        assertEquals(3, fixture.worker.poolTransitions.size());
+
+        fixture.eligiblePlayers.remove(waitingAfterAssignment);
+        fixture.refreshAndAdvancePools();
+        assertEquals(
+                new CapturingMainWorker.PoolTransitionReport(
+                        waitingAfterAssignment,
+                        cobbleware.internal.ExecutionPoolTransition.EXECUTION_POOL_TRANSITION_NONE),
+                fixture.worker.poolTransitions.getLast());
+
+        fixture.refreshAndAdvancePools();
+        assertEquals(4, fixture.worker.poolTransitions.size());
+
+        fixture.eligiblePlayers.put(
+                waitingAfterAssignment,
+                new ExecutionPoolManager.EligiblePlayer(waitingAfterAssignment, "returning", 3, 0));
+        fixture.refreshAndAdvancePools();
+        assertEquals(
+                new CapturingMainWorker.PoolTransitionReport(
+                        waitingAfterAssignment,
+                        cobbleware.internal.ExecutionPoolTransition.EXECUTION_POOL_TRANSITION_WAITING),
+                fixture.worker.poolTransitions.getLast());
+    }
+
+    @Test
     void appliesAQueuedBestEffortResponseAfterItsOwnerRotatesOut() {
         Fixture fixture = new Fixture(32, 200, 1, 1);
         UUID guaranteedOwner = UUID.randomUUID();
@@ -831,8 +887,7 @@ class ExecutionDriverTest {
         }
 
         private void refreshAndAdvancePools() {
-            executionPoolManager.refresh(eligiblePlayers.values());
-            executionPoolManager.advanceBestEffortPool();
+            driver.refreshExecutionPools(eligiblePlayers.values());
         }
 
         private void serverTick() {
@@ -877,6 +932,7 @@ class ExecutionDriverTest {
         private final List<ExecutionsRequest> syncRequests = new ArrayList<>();
         private final Deque<CompletableFuture<ExecutionSyncResult>> syncResults = new ArrayDeque<>();
         private final List<ExecutionTransition> transitions = new ArrayList<>();
+        private final List<PoolTransitionReport> poolTransitions = new ArrayList<>();
         private final List<String> limitReasons = new ArrayList<>();
 
         private CompletableFuture<ExecutionSyncResult> enqueueSyncResult() {
@@ -906,9 +962,17 @@ class ExecutionDriverTest {
         }
 
         @Override
+        public void reportExecutionPoolTransition(
+                UUID playerId, cobbleware.internal.ExecutionPoolTransition transition) {
+            poolTransitions.add(new PoolTransitionReport(playerId, transition));
+        }
+
+        @Override
         public void reportLimitExceeded(UUID playerId, UUID executionId, String reason) {
             limitReasons.add(reason);
         }
+
+        private record PoolTransitionReport(UUID playerId, cobbleware.internal.ExecutionPoolTransition transition) {}
     }
 
     private static final class FakeMinecraft implements ExecutionDriver.Minecraft {

@@ -2,6 +2,8 @@ package io.github.mmcgill.cobbleware.api;
 
 import cobbleware.common.Uuid;
 import cobbleware.internal.ExecutionLogEntry;
+import cobbleware.internal.ExecutionPoolTransition;
+import cobbleware.internal.ExecutionPoolTransitionLogEntry;
 import cobbleware.internal.ExecutionTransition;
 import cobbleware.internal.ExecutionTransitionLogEntry;
 import cobbleware.internal.LimitExceededLogEntry;
@@ -23,12 +25,12 @@ import java.util.concurrent.ScheduledFuture;
 import java.util.concurrent.TimeUnit;
 import org.slf4j.Logger;
 
-/** Publishes non-durable execution lifecycle entries over the existing log transport. */
+/** Publishes non-durable Mod execution log entries over the existing log transport. */
 final class ExecutionTransitionPublisher implements WebSocket.Listener {
     private static final Duration CONNECT_TIMEOUT = Duration.ofSeconds(5);
     private static final long INITIAL_RECONNECT_MILLIS = 1_000;
     private static final long MAX_RECONNECT_MILLIS = 30_000;
-    private static final int MAX_PENDING_TRANSITIONS = 10_000;
+    private static final int MAX_PENDING_LOG_ENTRIES = 10_000;
 
     private final CobblewareConfig config;
     private final HttpClient httpClient;
@@ -79,14 +81,30 @@ final class ExecutionTransitionPublisher implements WebSocket.Listener {
             if (closed) {
                 return;
             }
-            if (pending.size() == MAX_PENDING_TRANSITIONS) {
-                pending.removeFirst();
-                logger.warn("Dropping the oldest pending execution transition because the publication queue is full");
-            }
-            pending.addLast(transitionEntry(
+            offerLocked(transitionEntry(
                     playerId, executionId, transition, executionCount, executionLimit, totalExecutionStateLimit));
-            ensureConnectionLocked();
-            sendNextLocked();
+        }
+    }
+
+    void offerPoolTransition(UUID playerId, ExecutionPoolTransition transition) {
+        if (playerId == null
+                || transition == null
+                || transition == ExecutionPoolTransition.EXECUTION_POOL_TRANSITION_UNSPECIFIED
+                || transition == ExecutionPoolTransition.UNRECOGNIZED) {
+            throw new IllegalArgumentException("execution-pool transition is invalid");
+        }
+        if (!config.isEnabled()) {
+            return;
+        }
+        synchronized (lock) {
+            if (closed) {
+                return;
+            }
+            offerLocked(ExecutionLogEntry.newBuilder()
+                    .setPlayerId(protoUuid(playerId))
+                    .setPoolTransition(
+                            ExecutionPoolTransitionLogEntry.newBuilder().setTransition(transition))
+                    .build());
         }
     }
 
@@ -101,17 +119,21 @@ final class ExecutionTransitionPublisher implements WebSocket.Listener {
             if (closed) {
                 return;
             }
-            if (pending.size() == MAX_PENDING_TRANSITIONS) {
-                pending.removeFirst();
-                logger.warn("Dropping the oldest pending execution log because the publication queue is full");
-            }
-            pending.addLast(ExecutionLogEntry.newBuilder()
+            offerLocked(ExecutionLogEntry.newBuilder()
                     .setPlayerId(protoUuid(playerId))
                     .setLimited(LimitExceededLogEntry.newBuilder().setReason(reason))
                     .build());
-            ensureConnectionLocked();
-            sendNextLocked();
         }
+    }
+
+    private void offerLocked(ExecutionLogEntry entry) {
+        if (pending.size() == MAX_PENDING_LOG_ENTRIES) {
+            pending.removeFirst();
+            logger.warn("Dropping the oldest pending execution log because the publication queue is full");
+        }
+        pending.addLast(entry);
+        ensureConnectionLocked();
+        sendNextLocked();
     }
 
     private void sendNextLocked() {
@@ -128,7 +150,7 @@ final class ExecutionTransitionPublisher implements WebSocket.Listener {
                 }
                 sendPending = false;
                 if (failure != null) {
-                    logger.debug("Main Worker execution-transition send failed: {}", unwrap(failure));
+                    logger.debug("Main Worker execution-log send failed: {}", unwrap(failure));
                     socket = null;
                     target.abort();
                     scheduleReconnectLocked();
@@ -160,7 +182,7 @@ final class ExecutionTransitionPublisher implements WebSocket.Listener {
                     return;
                 }
                 if (failure != null) {
-                    logger.debug("Main Worker execution-transition connection failed: {}", unwrap(failure));
+                    logger.debug("Main Worker execution-log connection failed: {}", unwrap(failure));
                     scheduleReconnectLocked();
                     return;
                 }
@@ -196,7 +218,7 @@ final class ExecutionTransitionPublisher implements WebSocket.Listener {
 
     @Override
     public CompletionStage<?> onText(WebSocket webSocket, CharSequence data, boolean last) {
-        logger.debug("Main Worker execution-transition stream rejected a connection: {}", data);
+        logger.debug("Main Worker execution-log stream rejected a connection: {}", data);
         webSocket.request(1);
         return CompletableFuture.completedFuture(null);
     }
@@ -217,7 +239,7 @@ final class ExecutionTransitionPublisher implements WebSocket.Listener {
             if (socket != webSocket) {
                 return;
             }
-            logger.debug("Main Worker execution-transition stream {}", detail);
+            logger.debug("Main Worker execution-log stream {}", detail);
             socket = null;
             sendPending = false;
             scheduleReconnectLocked();

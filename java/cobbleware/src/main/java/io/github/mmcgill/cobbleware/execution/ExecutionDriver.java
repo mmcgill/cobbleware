@@ -11,6 +11,7 @@ import cobbleware.events.Started;
 import cobbleware.events.WirelessObserverPaired;
 import cobbleware.events.WirelessObserverUnpaired;
 import cobbleware.internal.ExecutionFailureReason;
+import cobbleware.internal.ExecutionPoolTransition;
 import cobbleware.internal.ExecutionResult;
 import cobbleware.internal.ExecutionState;
 import cobbleware.internal.ExecutionTransition;
@@ -28,6 +29,7 @@ import io.github.mmcgill.cobbleware.instrumentation.ExecutionStatsReporter;
 import io.github.mmcgill.cobbleware.instrumentation.Instrumentation;
 import java.util.ArrayDeque;
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.Collections;
 import java.util.Comparator;
 import java.util.HashMap;
@@ -146,6 +148,7 @@ public final class ExecutionDriver {
     private final Logger logger;
     private final Map<CobbleputerBlockEntity, EphemeralCobbleputerState> loadedCobbleputers = new IdentityHashMap<>();
     private final Map<UUID, Integer> queuedEventsByOwner = new HashMap<>();
+    private Map<UUID, ExecutionPoolTransition> publishedPoolTransitions = Map.of();
     private final Set<WirelessObserverBlockEntity> pendingObserverInitializations =
             Collections.newSetFromMap(new IdentityHashMap<>());
     private final Set<CobbleputerBlockEntity> pendingChunkLoadResumes =
@@ -221,8 +224,23 @@ public final class ExecutionDriver {
                     new ExecutionPoolManager.EligiblePlayer(ownerId, ownerName, priority, onlineTime),
                     (first, second) -> first.playerName().compareTo(second.playerName()) <= 0 ? first : second);
         }
-        executionPoolManager.refresh(eligible.values());
+        refreshExecutionPools(eligible.values());
+    }
+
+    /** Refreshes and reports pool assignments for the supplied eligible players. */
+    void refreshExecutionPools(Collection<ExecutionPoolManager.EligiblePlayer> eligiblePlayers) {
+        if (eligiblePlayers == null) {
+            throw new IllegalArgumentException("eligible players must not be null");
+        }
+        Map<UUID, ExecutionPoolManager.EligiblePlayer> eligibleById = new HashMap<>();
+        for (ExecutionPoolManager.EligiblePlayer player : eligiblePlayers) {
+            if (player == null || eligibleById.put(player.playerId(), player) != null) {
+                throw new IllegalArgumentException("eligible players must be non-null and have distinct ids");
+            }
+        }
+        executionPoolManager.refresh(eligibleById.values());
         executionPoolManager.advanceBestEffortPool();
+        reportExecutionPoolTransitions(eligibleById.keySet());
     }
 
     /** Adds a loaded Cobbleputer to the driver's loaded set. */
@@ -1308,6 +1326,45 @@ public final class ExecutionDriver {
                 runningExecutionCount(owner, Collections.emptySet()),
                 maxRunningExecutionsPerPlayer,
                 maxTotalExecutionStateBytesPerPlayer);
+    }
+
+    private void reportExecutionPoolTransitions(Set<UUID> eligiblePlayerIds) {
+        Map<UUID, ExecutionPoolTransition> next = new HashMap<>();
+        for (UUID playerId : eligiblePlayerIds) {
+            next.put(playerId, executionPoolTransition(playerId));
+        }
+
+        List<UUID> departed = new ArrayList<>();
+        for (UUID playerId : publishedPoolTransitions.keySet()) {
+            if (!next.containsKey(playerId)) {
+                departed.add(playerId);
+            }
+        }
+        departed.sort(UUID::compareTo);
+        for (UUID playerId : departed) {
+            mainWorker.reportExecutionPoolTransition(playerId, ExecutionPoolTransition.EXECUTION_POOL_TRANSITION_NONE);
+        }
+
+        List<UUID> playerIds = new ArrayList<>(next.keySet());
+        playerIds.sort(UUID::compareTo);
+        for (UUID playerId : playerIds) {
+            ExecutionPoolTransition transition = next.get(playerId);
+            if (transition != publishedPoolTransitions.get(playerId)) {
+                mainWorker.reportExecutionPoolTransition(playerId, transition);
+            }
+        }
+        publishedPoolTransitions = Map.copyOf(next);
+    }
+
+    private ExecutionPoolTransition executionPoolTransition(UUID playerId) {
+        Optional<ExecutionPoolManager.Pool> pool = executionPoolManager.poolFor(playerId);
+        if (pool.isEmpty()) {
+            return ExecutionPoolTransition.EXECUTION_POOL_TRANSITION_WAITING;
+        }
+        return switch (pool.orElseThrow()) {
+            case GUARANTEED -> ExecutionPoolTransition.EXECUTION_POOL_TRANSITION_GUARANTEED;
+            case BEST_EFFORT -> ExecutionPoolTransition.EXECUTION_POOL_TRANSITION_BESTEFFORT;
+        };
     }
 
     private static String ownerName(CobbleputerBlockEntity blockEntity, UUID ownerId) {

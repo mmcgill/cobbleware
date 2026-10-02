@@ -239,6 +239,24 @@ message ExecutionTransitionLogEntry {
   uint64 total_execution_state_limit = 5;
 }
 
+enum ExecutionPoolTransition {
+  // No execution-pool state was specified.
+  EXECUTION_POOL_TRANSITION_UNSPECIFIED = 0;
+  // The player occupies a guaranteed-pool slot.
+  EXECUTION_POOL_TRANSITION_GUARANTEED = 1;
+  // The player occupies an active best-effort-pool slot.
+  EXECUTION_POOL_TRANSITION_BESTEFFORT = 2;
+  // The player is eligible but waiting for a best-effort-pool slot.
+  EXECUTION_POOL_TRANSITION_WAITING = 3;
+  // The player has no loaded running Cobbleputers and is not eligible for a pool.
+  EXECUTION_POOL_TRANSITION_NONE = 4;
+}
+
+// Records the owner's resulting execution-pool state.
+message ExecutionPoolTransitionLogEntry {
+  ExecutionPoolTransition transition = 1;
+}
+
 message ExecutionLogEntry {
   cobbleware.common.Uuid player_id = 1;
   oneof inner {
@@ -246,5 +264,6 @@ message ExecutionLogEntry {
     LimitExceededLogEntry limited = 3;
     ProgramLogEntry log = 4;
     ExecutionTransitionLogEntry transition = 5;
+    ExecutionPoolTransitionLogEntry pool_transition = 6;
   }
 }

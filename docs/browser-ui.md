@@ -58,8 +58,9 @@ For ease of troubleshooting, Execution statistics and Logs are alternative tabs 
 section. Logs displays a streaming, non-durable feed of events for the Player's program executions while retaining
 up to 10k received events locally, including while the Execution statistics tab is selected. The scrollable feed
 auto-scrolls by default, but the Player can toggle that behavior. It is filterable by program-log level
-(Debug, Info, Warn, Error) and event type (program log, exception, CPU/memory limit exceeded, or execution
-transition). The logs stream
+(Debug, Info, Warn, Error) and event type (program log, exception, CPU/memory limit exceeded, execution lifecycle
+transition, or execution-pool transition). Pool entries show whether the Player entered the guaranteed or active
+best-effort pool, is waiting for a best-effort slot, or is no longer eligible for a pool. The logs stream
 has independent connection status and retry handling; the documented already-open-in-another-window error is shown
 without retrying automatically. Each feed row records the client-side time at which the Browser received that event.
 

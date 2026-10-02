@@ -114,6 +114,8 @@ export class ExecutionLogHub {
       playerId = uuidString(entry.playerId);
       if (entry.inner.case === 'transition') {
         this.recordExecutionTransition(playerId, entry.inner.value);
+      } else if (entry.inner.case === 'poolTransition') {
+        validateExecutionPoolTransition(entry.inner.value);
       }
     } catch (error) {
       rejectSocket(
@@ -222,6 +224,21 @@ function isExecutionTransition(value: Internal.ExecutionTransition): boolean {
     value === Internal.ExecutionTransition.STOPPED ||
     value === Internal.ExecutionTransition.RESUMED ||
     value === Internal.ExecutionTransition.CRASHED;
+}
+
+function validateExecutionPoolTransition(
+  transition: Internal.ExecutionPoolTransitionLogEntry,
+): void {
+  if (!isExecutionPoolTransition(transition.transition)) {
+    throw new Error('execution-pool transition is invalid');
+  }
+}
+
+function isExecutionPoolTransition(value: Internal.ExecutionPoolTransition): boolean {
+  return value === Internal.ExecutionPoolTransition.GUARANTEED ||
+    value === Internal.ExecutionPoolTransition.BESTEFFORT ||
+    value === Internal.ExecutionPoolTransition.WAITING ||
+    value === Internal.ExecutionPoolTransition.NONE;
 }
 
 function isWebSocketUpgrade(request: Request): boolean {

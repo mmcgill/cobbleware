@@ -51,6 +51,22 @@ Deno.test('Execution logs flow from an authenticated producer only to the owning
     if (actual.inner.case !== 'log') throw new Error('missing program log');
     assertEquals(actual.inner.value.msg, 'hello from the Event Worker', 'log text changed');
     await expectNoMessage(secondPlayer, 200);
+
+    const poolExpected = poolEntry(uuidFromString(PLAYER_ONE_UUID));
+    const poolReceived = nextBinary(firstPlayer);
+    producer.send(toBinary(Internal.ExecutionLogEntrySchema, poolExpected));
+    const poolActual = fromBinary(
+      Internal.ExecutionLogEntrySchema,
+      await within(5_000, poolReceived, 'owner pool-transition frame'),
+    );
+    assertEquals(poolActual.inner.case, 'poolTransition', 'wrong pool-transition entry type');
+    if (poolActual.inner.case !== 'poolTransition') throw new Error('missing pool transition');
+    assertEquals(
+      poolActual.inner.value.transition,
+      Internal.ExecutionPoolTransition.WAITING,
+      'pool transition changed',
+    );
+    await expectNoMessage(secondPlayer, 200);
   } finally {
     producer?.close();
     firstPlayer?.close();
@@ -184,6 +200,18 @@ function entry(playerId: Common.Uuid): Internal.ExecutionLogEntry {
       value: create(Internal.ProgramLogEntrySchema, {
         level: Internal.LogLevel.INFO,
         msg: 'hello from the Event Worker',
+      }),
+    },
+  });
+}
+
+function poolEntry(playerId: Common.Uuid): Internal.ExecutionLogEntry {
+  return create(Internal.ExecutionLogEntrySchema, {
+    playerId,
+    inner: {
+      case: 'poolTransition',
+      value: create(Internal.ExecutionPoolTransitionLogEntrySchema, {
+        transition: Internal.ExecutionPoolTransition.WAITING,
       }),
     },
   });

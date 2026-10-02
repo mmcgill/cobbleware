@@ -32,12 +32,13 @@ tick, the Main Worker enriches that player-only copy with the current User Worke
 Browser UI performs its own aggregation and retention, independently of the Mod's in-memory
 instrumentation window.
 
-The Mod publishes execution lifecycle transitions through the existing execution-log publication path. Each transition
-includes the Player's current running-execution count and configured limits, including the total execution-state byte
-cap. The Mod supplies the live state-byte census through the execution-statistics stream. The Main Worker caches those values for
-the Browser Limits read API and forwards the same displayable transition on the existing player Logs WebSocket. The
-Browser reads the cache on page load and updates its visible Limits view directly from later transitions, without
-allowing the Runtime to poll or connect back to the Mod.
+The Mod publishes execution lifecycle transitions and execution-pool assignment changes through the existing
+execution-log publication path. Each lifecycle transition includes the Player's current running-execution count and
+configured limits, including the total execution-state byte cap. Pool entries report the resulting guaranteed,
+best-effort, waiting, or ineligible state. The Mod supplies the live state-byte census through the execution-statistics
+stream. The Main Worker caches lifecycle values for the Browser Limits read API and forwards both displayable entry
+types on the existing player Logs WebSocket. The Browser reads the cache on page load and updates its visible Limits
+view directly from later lifecycle transitions, without allowing the Runtime to poll or connect back to the Mod.
 
 The Main Worker is written in Typescript; its code is located in [typescript/main-worker](../typescript/main-worker/).
 
