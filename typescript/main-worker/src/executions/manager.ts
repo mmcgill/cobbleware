@@ -361,6 +361,18 @@ export class ExecutionManager {
         this.schedulePlayer(window.playerId);
       });
     } catch (error) {
+      if (isWorkerAlreadyRetired(error)) {
+        await this.withLock(() => {
+          if (!this.isCurrentInvocation(window, worker, token, eventSeqNum)) {
+            return;
+          }
+          // The Runtime rejected this request before it reached the program. Keep the event
+          // pending while the retired worker's existing `closed` callback releases its slot.
+          this.clearInvocation(window, worker, token);
+          worker.lifecycleState = 'RETIRED';
+        });
+        return;
+      }
       const stateSha = await sha1(window.currentState);
       await this.withLock(() => {
         if (!this.isCurrentInvocation(window, worker, token, eventSeqNum)) {
@@ -631,6 +643,10 @@ function invalidRequest(message: string): never {
 }
 
 class StateSizeLimitError extends Error {}
+
+function isWorkerAlreadyRetired(error: unknown): boolean {
+  return error instanceof Error && error.name === 'WorkerAlreadyRetired';
+}
 
 async function sha1(value: Uint8Array): Promise<Uint8Array> {
   const bytes = new Uint8Array(value);

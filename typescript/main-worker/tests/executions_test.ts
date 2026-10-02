@@ -15,15 +15,21 @@ const EXECUTION_B = uuid(4n, 4n);
 class Deferred<T> {
   readonly promise: Promise<T>;
   private resolvePromise!: (value: T) => void;
+  private rejectPromise!: (reason?: unknown) => void;
 
   constructor() {
-    this.promise = new Promise((resolve) => {
+    this.promise = new Promise((resolve, reject) => {
       this.resolvePromise = resolve;
+      this.rejectPromise = reject;
     });
   }
 
   resolve(value: T): void {
     this.resolvePromise(value);
+  }
+
+  reject(reason: unknown): void {
+    this.rejectPromise(reason);
   }
 }
 
@@ -51,6 +57,10 @@ class TestWorker implements CobblewareUserWorker {
 
   complete(index: number, response: Response): void {
     this.responses[index]?.resolve(response);
+  }
+
+  fail(index: number, error: Error): void {
+    this.responses[index]?.reject(error);
   }
 
   close(): void {
@@ -333,6 +343,41 @@ Deno.test('Execution sync failure consumes one event and resets after advancemen
   });
   const recovered = await manager.sync(request([player(PLAYER_A, [advanced])]));
   assertEquals(recovered.results[0]?.executionFailed, false, 'advancing clears failure');
+});
+
+Deno.test('A retired worker leaves its rejected event pending for a replacement worker', async () => {
+  const store = new TestProgramStore();
+  const manager = new ExecutionManager(store, 1024);
+  const snapshot = request([player(PLAYER_A, [execution()])], 1);
+  await manager.sync(snapshot);
+  const retired = store.created[0]!.worker;
+  await waitForRequests(retired, 1);
+
+  const error = new Error('request cannot be handled because the worker has already retired');
+  error.name = 'WorkerAlreadyRetired';
+  retired.fail(0, error);
+  await settle();
+
+  const pending = await manager.sync(snapshot);
+  assertEquals(pending.results[0]?.eventSeqNum, 0n, 'retired worker does not consume the event');
+  assertEquals(
+    pending.results[0]?.executionFailed,
+    false,
+    'retired worker does not fail the execution',
+  );
+  assertEquals(store.created.length, 1, 'retired worker holds its slot until it closes');
+
+  retired.close();
+  await settle();
+  await manager.sync(snapshot);
+  const replacement = store.created[1]!.worker;
+  await waitForRequests(replacement, 1);
+  replacement.complete(0, stepResponse(new Uint8Array([9])));
+  await settle();
+
+  const completed = await manager.sync(snapshot);
+  assertEquals(completed.results[0]?.eventSeqNum, 1n, 'replacement worker retries the event');
+  assertBytes(completed.results[0]!.finalState, [9], 'replacement state is applied');
 });
 
 Deno.test('Execution sync rejects an oversized program state before returning it', async () => {
