@@ -137,9 +137,9 @@ A server assigns running Cobbleputers to one of two execution pools:
 
 * Executions in the guaranteed pool are synced every game tick. Every execution in the guaranteed
   pool has a dedicated User Worker slot in the runtime.
-* Executions in the best-effort pool are round-robin rotated through a fixed number of
-  User Worker slots. If there are more executions in the pool than best-effort slots,
-  these programs only make progress periodically.
+* Eligible players outside the guaranteed pool wait in a FIFO best-effort queue. They enter
+  the fixed-size best-effort pool for five-second slices and are round-robin rotated through its
+  User Worker slots, so queued programs make progress periodically.
 
 Executions are assigned to the pools according to the _execution priority_ of their owning player.
 

@@ -10,8 +10,8 @@ import org.junit.jupiter.api.Test;
 
 class ExecutionPoolManagerTest {
     @Test
-    void assignsAllEligiblePlayersByPriorityThenOnlineTime() {
-        ExecutionPoolManager manager = manager(2);
+    void assignsGuaranteedPlayersByPriorityThenOnlineTime() {
+        ExecutionPoolManager manager = manager(2, 1);
         UUID lowPriority = UUID.randomUUID();
         UUID newerOnline = UUID.randomUUID();
         UUID olderOnline = UUID.randomUUID();
@@ -20,6 +20,7 @@ class ExecutionPoolManagerTest {
                 eligible(lowPriority, "low", 3, 0),
                 eligible(newerOnline, "newer", 2, 50),
                 eligible(olderOnline, "older", 2, 10)));
+        manager.advanceBestEffortPool();
 
         assertEquals(
                 ExecutionPoolManager.Pool.GUARANTEED,
@@ -50,7 +51,7 @@ class ExecutionPoolManagerTest {
 
         assertEquals(firstWinner, manager.guaranteedMembers().getFirst().playerId());
         assertEquals(1, manager.guaranteedMembers().size());
-        assertEquals(1, manager.bestEffortMembers().size());
+        assertEquals(0, manager.bestEffortMembers().size());
 
         manager.refresh(List.of(eligible(second, "second", 2, 10)));
 
@@ -60,23 +61,74 @@ class ExecutionPoolManagerTest {
     }
 
     @Test
-    void resolvesDefaultGuaranteedCapacityAndDoesNotCapBestEffortMembership() {
-        ExecutionPoolManager manager = manager(0);
+    void resolvesDefaultGuaranteedCapacityAndLeavesQueuedPlayersWithoutAnAssignment() {
+        ExecutionPoolManager manager = manager(0, 0);
         UUID first = UUID.randomUUID();
         UUID second = UUID.randomUUID();
         UUID third = UUID.randomUUID();
 
         manager.refresh(List.of(
                 eligible(first, "first", 1, 0), eligible(second, "second", 2, 0), eligible(third, "third", 3, 0)));
+        manager.advanceBestEffortPool();
 
         assertEquals(2, manager.guaranteedPoolSize());
         assertEquals(0, manager.bestEffortPoolSize());
         assertEquals(2, manager.guaranteedMembers().size());
-        assertEquals(List.of("third"), names(manager.bestEffortMembers()));
+        assertEquals(List.of(), names(manager.bestEffortMembers()));
+        assertTrue(manager.poolFor(third).isEmpty());
     }
 
-    private static ExecutionPoolManager manager(int guaranteedSize) {
-        ExecutionPoolManager manager = new ExecutionPoolManager(guaranteedSize, 0, () -> 0);
+    @Test
+    void rotatesBestEffortPlayersInFifoOrderAfterTheirTickDurationExpires() {
+        ExecutionPoolManager manager = manager(1, 2);
+        UUID guaranteed = UUID.randomUUID();
+        UUID first = UUID.randomUUID();
+        UUID second = UUID.randomUUID();
+        UUID third = UUID.randomUUID();
+
+        manager.refresh(List.of(
+                eligible(guaranteed, "guaranteed", 1, 0),
+                eligible(first, "first", 2, 0),
+                eligible(second, "second", 2, 1),
+                eligible(third, "third", 2, 2)));
+        manager.advanceBestEffortPool();
+
+        assertEquals(List.of("first", "second"), names(manager.bestEffortMembers()));
+        for (int tick = 0; tick < ExecutionPoolManager.BEST_EFFORT_POOL_DURATION_TICKS; tick += 1) {
+            manager.advanceBestEffortPool();
+        }
+
+        assertEquals(List.of("third", "first"), names(manager.bestEffortMembers()));
+    }
+
+    @Test
+    void removesPromotedPlayersFromBestEffortAndFillsTheirSlotFromTheQueue() {
+        ExecutionPoolManager manager = manager(1, 1);
+        UUID first = UUID.randomUUID();
+        UUID promoted = UUID.randomUUID();
+        UUID waiting = UUID.randomUUID();
+
+        manager.refresh(List.of(
+                eligible(first, "first", 1, 0),
+                eligible(promoted, "promoted", 2, 0),
+                eligible(waiting, "waiting", 3, 0)));
+        manager.advanceBestEffortPool();
+        assertEquals(List.of("promoted"), names(manager.bestEffortMembers()));
+
+        manager.refresh(List.of(
+                eligible(first, "first", 2, 0),
+                eligible(promoted, "promoted", 1, 0),
+                eligible(waiting, "waiting", 3, 0)));
+        manager.advanceBestEffortPool();
+
+        assertEquals(List.of("promoted"), names(manager.guaranteedMembers()));
+        assertEquals(List.of("waiting"), names(manager.bestEffortMembers()));
+        assertEquals(
+                ExecutionPoolManager.Pool.GUARANTEED, manager.poolFor(promoted).orElseThrow());
+    }
+
+    private static ExecutionPoolManager manager(int guaranteedSize, int bestEffortSize) {
+        ExecutionPoolManager manager = new ExecutionPoolManager(guaranteedSize, bestEffortSize, () -> 0);
         manager.initialize(2);
         return manager;
     }

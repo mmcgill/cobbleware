@@ -2,17 +2,22 @@ package io.github.mmcgill.cobbleware.execution;
 
 import java.util.ArrayList;
 import java.util.Collection;
+import java.util.Collections;
 import java.util.Comparator;
 import java.util.HashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.ThreadLocalRandom;
 import java.util.function.LongSupplier;
 
 /** Maintains the current, non-durable assignment of eligible players to execution pools. */
 public final class ExecutionPoolManager {
+    static final int BEST_EFFORT_POOL_DURATION_TICKS = 20 * 5;
+
     /** The execution pools available to eligible players. */
     public enum Pool {
         GUARANTEED,
@@ -47,6 +52,11 @@ public final class ExecutionPoolManager {
     private final int bestEffortPoolSize;
     private final LongSupplier randomLongs;
     private final Map<UUID, Long> randomTieBreakers = new HashMap<>();
+    private Map<UUID, EligiblePlayer> eligiblePlayers = Map.of();
+    private Set<UUID> guaranteedPlayerIds = Set.of();
+    private final List<UUID> bestEffortPlayerIds = new ArrayList<>();
+    private final LinkedHashSet<UUID> bestEffortQueue = new LinkedHashSet<>();
+    private final Map<UUID, Integer> bestEffortTicksRemaining = new HashMap<>();
     private Map<UUID, Pool> assignments = Map.of();
     private List<Member> guaranteedMembers = List.of();
     private List<Member> bestEffortMembers = List.of();
@@ -83,7 +93,7 @@ public final class ExecutionPoolManager {
         initialized = true;
     }
 
-    /** Recomputes pool membership from the complete current eligible-player set. */
+    /** Recomputes guaranteed-pool membership and reconciles the best-effort scheduler's eligible players. */
     public void refresh(Collection<EligiblePlayer> eligiblePlayers) {
         requireInitialized();
         if (eligiblePlayers == null) {
@@ -104,23 +114,55 @@ public final class ExecutionPoolManager {
                         randomTieBreakers.computeIfAbsent(player.playerId(), ignored -> randomLongs.getAsLong()))
                 .thenComparing(EligiblePlayer::playerId));
 
-        Map<UUID, Pool> nextAssignments = new HashMap<>();
-        List<Member> nextGuaranteed = new ArrayList<>();
-        List<Member> nextBestEffort = new ArrayList<>();
+        Set<UUID> nextGuaranteedPlayerIds = new LinkedHashSet<>();
         for (int index = 0; index < ordered.size(); index += 1) {
             EligiblePlayer player = ordered.get(index);
-            Member member = new Member(player.playerId(), player.playerName());
             if (index < guaranteedPoolSize) {
-                nextAssignments.put(player.playerId(), Pool.GUARANTEED);
-                nextGuaranteed.add(member);
-            } else {
-                nextAssignments.put(player.playerId(), Pool.BEST_EFFORT);
-                nextBestEffort.add(member);
+                nextGuaranteedPlayerIds.add(player.playerId());
             }
         }
-        assignments = Map.copyOf(nextAssignments);
-        guaranteedMembers = List.copyOf(nextGuaranteed);
-        bestEffortMembers = List.copyOf(nextBestEffort);
+        this.eligiblePlayers = Map.copyOf(byId);
+        guaranteedPlayerIds = Collections.unmodifiableSet(new LinkedHashSet<>(nextGuaranteedPlayerIds));
+
+        bestEffortPlayerIds.removeIf(playerId -> !isBestEffortEligible(playerId));
+        bestEffortTicksRemaining.keySet().retainAll(bestEffortPlayerIds);
+        bestEffortQueue.removeIf(playerId -> !isBestEffortEligible(playerId) || bestEffortPlayerIds.contains(playerId));
+        for (EligiblePlayer player : ordered) {
+            UUID playerId = player.playerId();
+            if (isBestEffortEligible(playerId) && !bestEffortPlayerIds.contains(playerId)) {
+                bestEffortQueue.add(playerId);
+            }
+        }
+        rebuildMembershipViews();
+    }
+
+    /** Advances active best-effort members by one server tick and fills every vacant best-effort slot. */
+    void advanceBestEffortPool() {
+        requireInitialized();
+        List<UUID> expired = new ArrayList<>();
+        for (UUID playerId : bestEffortPlayerIds) {
+            int remaining = bestEffortTicksRemaining.getOrDefault(playerId, BEST_EFFORT_POOL_DURATION_TICKS) - 1;
+            if (remaining <= 0) {
+                expired.add(playerId);
+            } else {
+                bestEffortTicksRemaining.put(playerId, remaining);
+            }
+        }
+        for (UUID playerId : expired) {
+            bestEffortPlayerIds.remove(playerId);
+            bestEffortTicksRemaining.remove(playerId);
+            bestEffortQueue.add(playerId);
+        }
+        while (bestEffortPlayerIds.size() < bestEffortPoolSize && !bestEffortQueue.isEmpty()) {
+            UUID playerId = bestEffortQueue.iterator().next();
+            bestEffortQueue.remove(playerId);
+            if (!isBestEffortEligible(playerId)) {
+                continue;
+            }
+            bestEffortPlayerIds.add(playerId);
+            bestEffortTicksRemaining.put(playerId, BEST_EFFORT_POOL_DURATION_TICKS);
+        }
+        rebuildMembershipViews();
     }
 
     /** Returns the currently configured guaranteed-pool size. */
@@ -129,12 +171,12 @@ public final class ExecutionPoolManager {
         return guaranteedPoolSize;
     }
 
-    /** Returns the configured best-effort worker-slot count for a future scheduling increment. */
+    /** Returns the configured best-effort worker-slot count. */
     public int bestEffortPoolSize() {
         return bestEffortPoolSize;
     }
 
-    /** Returns a player's current pool, when they are eligible. */
+    /** Returns a player's current active pool, when they occupy a pool slot. */
     public Optional<Pool> poolFor(UUID playerId) {
         requireInitialized();
         if (playerId == null) {
@@ -153,6 +195,37 @@ public final class ExecutionPoolManager {
     public List<Member> bestEffortMembers() {
         requireInitialized();
         return bestEffortMembers;
+    }
+
+    private boolean isBestEffortEligible(UUID playerId) {
+        return eligiblePlayers.containsKey(playerId) && !guaranteedPlayerIds.contains(playerId);
+    }
+
+    private void rebuildMembershipViews() {
+        Map<UUID, Pool> nextAssignments = new HashMap<>();
+        List<Member> nextGuaranteed = new ArrayList<>();
+        for (UUID playerId : guaranteedPlayerIds) {
+            EligiblePlayer player = eligiblePlayers.get(playerId);
+            if (player != null) {
+                nextAssignments.put(playerId, Pool.GUARANTEED);
+                nextGuaranteed.add(member(player));
+            }
+        }
+        List<Member> nextBestEffort = new ArrayList<>();
+        for (UUID playerId : bestEffortPlayerIds) {
+            EligiblePlayer player = eligiblePlayers.get(playerId);
+            if (player != null) {
+                nextAssignments.put(playerId, Pool.BEST_EFFORT);
+                nextBestEffort.add(member(player));
+            }
+        }
+        assignments = Map.copyOf(nextAssignments);
+        guaranteedMembers = List.copyOf(nextGuaranteed);
+        bestEffortMembers = List.copyOf(nextBestEffort);
+    }
+
+    private static Member member(EligiblePlayer player) {
+        return new Member(player.playerId(), player.playerName());
     }
 
     private void requireInitialized() {

@@ -267,7 +267,48 @@ class ExecutionDriverTest {
     }
 
     @Test
-    void syncsOnlyGuaranteedPoolMembers() {
+    void appliesResultsInGroupedRequestOrderForInterleavedOwners() {
+        Fixture fixture = new Fixture(32);
+        UUID firstOwner = UUID.randomUUID();
+        UUID secondOwner = UUID.randomUUID();
+        List<CobbleputerBlockEntity> cobbleputers = new ArrayList<>();
+        for (int index = 0; index < 10; index += 1) {
+            cobbleputers.add(fixture.startNewExecution(firstOwner, new byte[] {(byte) index}));
+            cobbleputers.add(fixture.startNewExecution(secondOwner, new byte[] {(byte) index}));
+        }
+        CompletableFuture<MainWorker.ExecutionSyncResult> first = fixture.worker.enqueueSyncResult();
+        fixture.worker.enqueueSyncResult();
+
+        fixture.serverTick();
+
+        ExecutionsRequest request = fixture.worker.syncRequests.getFirst();
+        assertEquals(2, request.getPlayersCount());
+        assertEquals(20, executionCount(request));
+        Map<UUID, byte[]> expectedStates = new HashMap<>();
+        ExecutionsResponse.Builder response = ExecutionsResponse.newBuilder();
+        for (int index = 0; index < executionCount(request); index += 1) {
+            ExecutionState execution = execution(request, index);
+            byte[] finalState = new byte[] {(byte) (index + 20)};
+            expectedStates.put(
+                    new UUID(
+                            execution.getExecutionId().getHigh(),
+                            execution.getExecutionId().getLow()),
+                    finalState);
+            response.addResults(resultFor(execution, 1, finalState));
+        }
+        first.complete(MainWorker.ExecutionSyncResult.success(response.build()));
+
+        fixture.serverTick();
+
+        for (CobbleputerBlockEntity cobbleputer : cobbleputers) {
+            assertArrayEquals(
+                    expectedStates.get(cobbleputer.executionId().orElseThrow()),
+                    cobbleputer.executionState().orElseThrow());
+        }
+    }
+
+    @Test
+    void syncsOnlyGuaranteedPoolMembersWhenBestEffortIsDisabled() {
         Fixture fixture = new Fixture(32, 200, 1);
         UUID firstOwner = UUID.randomUUID();
         UUID secondOwner = UUID.randomUUID();
@@ -288,6 +329,104 @@ class ExecutionDriverTest {
                 guaranteedOwner.getLeastSignificantBits(),
                 request.getPlayers(0).getPlayerId().getLow());
         assertEquals(1, executionCount(request));
+    }
+
+    @Test
+    void syncsGuaranteedAndActiveBestEffortPoolMembers() {
+        Fixture fixture = new Fixture(32, 200, 1, 1);
+        UUID guaranteedOwner = UUID.randomUUID();
+        UUID bestEffortOwner = UUID.randomUUID();
+        UUID thirdOwner = UUID.randomUUID();
+        fixture.startNewExecution(guaranteedOwner, new byte[] {1});
+        fixture.startNewExecution(bestEffortOwner, new byte[] {2});
+        fixture.startNewExecution(thirdOwner, new byte[] {3});
+        fixture.eligiblePlayers.put(
+                guaranteedOwner, new ExecutionPoolManager.EligiblePlayer(guaranteedOwner, "guaranteed", 1, 0));
+        fixture.eligiblePlayers.put(
+                bestEffortOwner, new ExecutionPoolManager.EligiblePlayer(bestEffortOwner, "best-effort", 2, 0));
+        fixture.eligiblePlayers.put(thirdOwner, new ExecutionPoolManager.EligiblePlayer(thirdOwner, "queued", 3, 0));
+        fixture.refreshAndAdvancePools();
+        fixture.worker.enqueueSyncResult();
+
+        fixture.serverTick();
+
+        ExecutionsRequest request = fixture.worker.syncRequests.getFirst();
+        UUID activeBestEffortOwner =
+                fixture.executionPoolManager.bestEffortMembers().getFirst().playerId();
+        UUID queuedAfterAdmission = activeBestEffortOwner.equals(bestEffortOwner) ? thirdOwner : bestEffortOwner;
+        assertEquals(2, request.getWorkerLimit());
+        assertEquals(2, request.getPlayersCount());
+        assertEquals(2, executionCount(request));
+        assertEquals(
+                ExecutionPoolManager.Pool.GUARANTEED,
+                fixture.executionPoolManager.poolFor(guaranteedOwner).orElseThrow());
+        assertEquals(
+                ExecutionPoolManager.Pool.BEST_EFFORT,
+                fixture.executionPoolManager.poolFor(activeBestEffortOwner).orElseThrow());
+        assertTrue(fixture.executionPoolManager.poolFor(queuedAfterAdmission).isEmpty());
+        executionForOwner(request, activeBestEffortOwner);
+        assertFalse(request.getPlayersList().stream()
+                .anyMatch(player -> player.getPlayerId().getHigh() == queuedAfterAdmission.getMostSignificantBits()
+                        && player.getPlayerId().getLow() == queuedAfterAdmission.getLeastSignificantBits()));
+    }
+
+    @Test
+    void appliesAQueuedBestEffortResponseAfterItsOwnerRotatesOut() {
+        Fixture fixture = new Fixture(32, 200, 1, 1);
+        UUID guaranteedOwner = UUID.randomUUID();
+        UUID firstBestEffortCandidate = UUID.randomUUID();
+        UUID secondBestEffortCandidate = UUID.randomUUID();
+        fixture.startNewExecution(guaranteedOwner, new byte[] {1});
+        CobbleputerBlockEntity firstCandidate = fixture.startNewExecution(firstBestEffortCandidate, new byte[] {2});
+        CobbleputerBlockEntity secondCandidate = fixture.startNewExecution(secondBestEffortCandidate, new byte[] {3});
+        fixture.eligiblePlayers.put(
+                guaranteedOwner, new ExecutionPoolManager.EligiblePlayer(guaranteedOwner, "guaranteed", 1, 0));
+        fixture.eligiblePlayers.put(
+                firstBestEffortCandidate,
+                new ExecutionPoolManager.EligiblePlayer(firstBestEffortCandidate, "first", 2, 0));
+        fixture.eligiblePlayers.put(
+                secondBestEffortCandidate,
+                new ExecutionPoolManager.EligiblePlayer(secondBestEffortCandidate, "second", 3, 0));
+        fixture.refreshAndAdvancePools();
+        CompletableFuture<MainWorker.ExecutionSyncResult> first = fixture.worker.enqueueSyncResult();
+        fixture.worker.enqueueSyncResult();
+
+        fixture.serverTick();
+        ExecutionsRequest request = fixture.worker.syncRequests.getFirst();
+        UUID rotatedOwner =
+                fixture.executionPoolManager.bestEffortMembers().getFirst().playerId();
+        CobbleputerBlockEntity rotated =
+                rotatedOwner.equals(firstBestEffortCandidate) ? firstCandidate : secondCandidate;
+        ExecutionState rotatedExecution = executionForOwner(request, rotatedOwner);
+        for (int tick = 0; tick < ExecutionPoolManager.BEST_EFFORT_POOL_DURATION_TICKS; tick += 1) {
+            fixture.executionPoolManager.advanceBestEffortPool();
+        }
+        assertTrue(fixture.executionPoolManager.poolFor(rotatedOwner).isEmpty());
+        assertFalse(fixture.executionPoolManager
+                .bestEffortMembers()
+                .getFirst()
+                .playerId()
+                .equals(rotatedOwner));
+
+        ExecutionsResponse.Builder response = ExecutionsResponse.newBuilder();
+        for (int index = 0; index < executionCount(request); index += 1) {
+            ExecutionState offered = execution(request, index);
+            ExecutionResult result = resultFor(offered, 1, new byte[] {9});
+            if (offered.equals(rotatedExecution)) {
+                result = result.toBuilder()
+                        .addEffects(Effect.newBuilder()
+                                .setSendChat(SendChat.newBuilder().setMsg("rotated"))
+                                .build())
+                        .build();
+            }
+            response.addResults(result);
+        }
+        first.complete(MainWorker.ExecutionSyncResult.success(response.build()));
+
+        fixture.serverTick();
+
+        assertArrayEquals(new byte[] {9}, rotated.executionState().orElseThrow());
+        assertEquals(List.of("rotated"), fixture.minecraft.nearbyMessages);
     }
 
     @Test
@@ -625,6 +764,16 @@ class ExecutionDriverTest {
         throw new IndexOutOfBoundsException("execution index " + index + " is not present");
     }
 
+    private static ExecutionState executionForOwner(ExecutionsRequest request, UUID owner) {
+        for (cobbleware.internal.PlayerExecutionState player : request.getPlayersList()) {
+            if (player.getPlayerId().getHigh() == owner.getMostSignificantBits()
+                    && player.getPlayerId().getLow() == owner.getLeastSignificantBits()) {
+                return player.getExecutions(0);
+            }
+        }
+        throw new IllegalArgumentException("owner is not present in execution request");
+    }
+
     private static final class Fixture {
         private final FakeExecutionStateAccess stateStore;
         private final CapturingMainWorker worker = new CapturingMainWorker();
@@ -646,8 +795,12 @@ class ExecutionDriverTest {
         }
 
         private Fixture(long stateLimit, int queuedEventLimit, int guaranteedPoolSize) {
+            this(stateLimit, queuedEventLimit, guaranteedPoolSize, 0);
+        }
+
+        private Fixture(long stateLimit, int queuedEventLimit, int guaranteedPoolSize, int bestEffortPoolSize) {
             stateStore = new FakeExecutionStateAccess(stateLimit);
-            executionPoolManager = new ExecutionPoolManager(guaranteedPoolSize, 0);
+            executionPoolManager = new ExecutionPoolManager(guaranteedPoolSize, bestEffortPoolSize);
             executionPoolManager.initialize(10);
             driver = new ExecutionDriver(
                     worker,
@@ -675,6 +828,11 @@ class ExecutionDriverTest {
             eligiblePlayers.put(owner, new ExecutionPoolManager.EligiblePlayer(owner, "owner", 2, 0));
             executionPoolManager.refresh(eligiblePlayers.values());
             return cobbleputer;
+        }
+
+        private void refreshAndAdvancePools() {
+            executionPoolManager.refresh(eligiblePlayers.values());
+            executionPoolManager.advanceBestEffortPool();
         }
 
         private void serverTick() {

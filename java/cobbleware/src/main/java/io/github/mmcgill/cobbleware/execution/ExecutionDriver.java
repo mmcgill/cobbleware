@@ -59,7 +59,7 @@ import net.minecraft.world.level.block.state.properties.Property;
 import net.minecraft.world.phys.Vec3;
 import org.slf4j.Logger;
 
-/** Drives asynchronous synchronization of guaranteed-pool Cobbleputer executions. */
+/** Drives asynchronous synchronization of active-pool Cobbleputer executions. */
 public final class ExecutionDriver {
     private static final int OUTBOX_LIMIT = 20;
     private static final double CHAT_RADIUS = 16.0;
@@ -222,6 +222,7 @@ public final class ExecutionDriver {
                     (first, second) -> first.playerName().compareTo(second.playerName()) <= 0 ? first : second);
         }
         executionPoolManager.refresh(eligible.values());
+        executionPoolManager.advanceBestEffortPool();
     }
 
     /** Adds a loaded Cobbleputer to the driver's loaded set. */
@@ -896,7 +897,7 @@ public final class ExecutionDriver {
     }
 
     private Flight buildFlight() {
-        Map<UUID, List<ExecutionState>> executionsByOwner = new LinkedHashMap<>();
+        Map<UUID, PlayerFlight> playersByOwner = new LinkedHashMap<>();
         Map<String, OfferedExecution> offered = new HashMap<>();
         List<OfferedExecution> orderedOffered = new ArrayList<>();
         for (Map.Entry<CobbleputerBlockEntity, EphemeralCobbleputerState> entry : loadedCobbleputers.entrySet()) {
@@ -906,7 +907,7 @@ public final class ExecutionDriver {
             }
             UUID executionId = blockEntity.executionId().orElseThrow();
             UUID ownerId = blockEntity.ownerPlayerId().orElseThrow();
-            if (executionPoolManager.poolFor(ownerId).orElse(null) != ExecutionPoolManager.Pool.GUARANTEED) {
+            if (executionPoolManager.poolFor(ownerId).isEmpty()) {
                 continue;
             }
             byte[] executionState = blockEntity.executionState().orElseThrow();
@@ -917,32 +918,34 @@ public final class ExecutionDriver {
             long firstEventSequence = entry.getValue().events.isEmpty()
                     ? blockEntity.nextEventSequenceNum()
                     : entry.getValue().events.getFirst().sequenceNum;
-            executionsByOwner
-                    .computeIfAbsent(ownerId, ignored -> new ArrayList<>())
-                    .add(ExecutionState.newBuilder()
-                            .setExecutionId(protoUuid(executionId))
-                            .setInitialState(com.google.protobuf.ByteString.copyFrom(executionState))
-                            .addAllEvents(events)
-                            .setEventSeqNum(firstEventSequence)
-                            .setStateSizeLimit(stateSizeLimit(ownerId, blockEntity.cobbleputerId()))
-                            .setOutboxLimit(OUTBOX_LIMIT)
-                            .build());
+            PlayerFlight playerFlight = playersByOwner.computeIfAbsent(ownerId, ignored -> new PlayerFlight());
+            playerFlight.executions.add(ExecutionState.newBuilder()
+                    .setExecutionId(protoUuid(executionId))
+                    .setInitialState(com.google.protobuf.ByteString.copyFrom(executionState))
+                    .addAllEvents(events)
+                    .setEventSeqNum(firstEventSequence)
+                    .setStateSizeLimit(stateSizeLimit(ownerId, blockEntity.cobbleputerId()))
+                    .setOutboxLimit(OUTBOX_LIMIT)
+                    .build());
             OfferedExecution offeredExecution = new OfferedExecution(blockEntity, firstEventSequence, events.size());
             offered.put(uuidKey(executionId), offeredExecution);
-            orderedOffered.add(offeredExecution);
+            playerFlight.offered.add(offeredExecution);
         }
         List<PlayerExecutionState> players = new ArrayList<>();
-        for (Map.Entry<UUID, List<ExecutionState>> entry : executionsByOwner.entrySet()) {
+        for (Map.Entry<UUID, PlayerFlight> entry : playersByOwner.entrySet()) {
+            PlayerFlight playerFlight = entry.getValue();
             players.add(PlayerExecutionState.newBuilder()
                     .setPlayerId(protoUuid(entry.getKey()))
-                    .addAllExecutions(entry.getValue())
+                    .addAllExecutions(playerFlight.executions)
                     .setOutstandingEffectLimit(maxPendingEffectsPerPlayer)
                     .build());
+            orderedOffered.addAll(playerFlight.offered);
         }
         return new Flight(
                 ExecutionsRequest.newBuilder()
                         .addAllPlayers(players)
-                        .setWorkerLimit(executionPoolManager.guaranteedPoolSize())
+                        .setWorkerLimit(Math.addExact(
+                                executionPoolManager.guaranteedPoolSize(), executionPoolManager.bestEffortPoolSize()))
                         .build(),
                 offered,
                 orderedOffered);
@@ -1334,6 +1337,11 @@ public final class ExecutionDriver {
 
     private record OfferedExecution(
             CobbleputerBlockEntity blockEntity, long firstEventSequence, int offeredEventCount) {}
+
+    private static final class PlayerFlight {
+        private final List<ExecutionState> executions = new ArrayList<>();
+        private final List<OfferedExecution> offered = new ArrayList<>();
+    }
 
     private record Flight(
             ExecutionsRequest request,

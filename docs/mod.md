@@ -201,19 +201,6 @@ It presents an API for activating/deactivating Cobbleputer block entities. That 
 execution commands and by full-chunk block-ticking transitions, to ensure that the `ExecutionDriver`
 has references only to Cobbleputers in block-ticking chunks.
 
-It manages at most one in-flight async request to the `/modapi/v1/executions` endpoint.
-At most once per tick (via `ServerTickEvents.END_SERVER_TICK`), the `ExecutionDriver` does the following:
-
-* If there is an in-flight `/modapi/v1/executions` request with no response:
-  * Do nothing further.
-* If there is a response to a previously issued `/modapi/v1/executions` request:
-  * Apply all effects in the response.
-  * Pop all events from queues whose event sequence numbers are less than or equal to the `event_seq_num` in the response.
-* Update active Cobbleputer execution records with new states/sequence numbers.
-    * If a Cobbleputer block entity goes inactive before in-flight events are processed, the resulting state is discarded.
-* Construct and send a new `/modapi/v1/executions` request.
-  * Include up to 50 events for each active Cobbleputer.
-
 ### Wireless Observers
 
 A placed Wireless Observer stores a randomly generated UUID in its block entity. The UUID is
@@ -282,16 +269,40 @@ Whenever the eligible player set changes or a player joins/leaves the server,
 the Mod recomputes membership in the guaranteed
 execution pool by sorting the eligible player set according to the triple
 (player priority, online time, random number) and assigning players to the guaranteed
-pool in order until it is full. Any remaining players are assigned to the
-best-effort pool.
+pool in order until it is full. When a player is added to the guaranteed pool,
+they are automatically removed from the best-effort pool/queue if necessary.
+
+All eligible players not in the guaranteed pool are rotated through the best-effort pool.
+The _best-effort queue_ holds eligible players waiting to enter the best-effort pool.
+When a player enters the best-effort pool, the driver sets a server tick countdown.
+Every tick, players in the best-effort pool whose server tick countdown (defaulting to
+20 * 5 server ticks, roughly 5 seconds) has expired
+are removed from the pool and placed at the back of the best-effort queue.
+When the best-effort pool has empty slots, players are polled from the front of the
+best-effort queue.
+
+When processing a sync request, the driver will attempt to process executions for
+players even when those players are no longer in either execution pool, as long as
+the Cobbleputers associated with the executions are still loaded. Execution
+states are stored like usual and effects are applied. Execution resutls for executions whose Cobbleputers
+are no longer loaded are discarded.
 
 ### Execution Syncs
 
-At the end of each server tick the Mod syncs execution states with the Runtime.
-The Mod submits a sync request with all the active executions of all the players
-in the guaranteed pool. The Mod processes the sync response by storing the states
-of all executions that have advanced in their respective Cobbleputer block entities,
-and attempting to apply all associated effects.
+The `ExecutionDriver` manages at most one in-flight async request to the `/modapi/v1/executions` endpoint.
+At most once per tick (via `ServerTickEvents.END_SERVER_TICK`), the `ExecutionDriver` does the following:
+
+* If there is an in-flight `/modapi/v1/executions` request with no response:
+  * Do nothing further.
+* If there is a response to a previously issued `/modapi/v1/executions` request:
+  * Apply all effects in the response.
+  * Pop all events from queues whose event sequence numbers are less than or equal to the `event_seq_num` in the response.
+* Update active Cobbleputer execution records with new states/sequence numbers.
+    * If a Cobbleputer block entity goes inactive before in-flight events are processed, the resulting state is discarded.
+* Construct and send a new `/modapi/v1/executions` request.
+
+The driver constructs an `ExecutionsRequest` that contains all the active executions
+of all the players in the guaranteed and best-effort pools.
 
 ## Instrumentation
 
