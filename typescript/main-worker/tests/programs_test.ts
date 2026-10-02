@@ -4,7 +4,12 @@ import { DurableAuthStore } from '../src/auth/store.ts';
 import { BYTES_PER_MEBIBYTE } from '../src/config.ts';
 import { createHandler } from '../src/index.ts';
 import { handleProgramCollection } from '../src/programs/handlers.ts';
-import { DurableProgramStore } from '../src/programs/store.ts';
+import { DurableProgramStore, workerServicePath } from '../src/programs/store.ts';
+import {
+  PROGRAM_OPERATIONS_WORKER_UUID,
+  type ProgramOperations,
+  RuntimeProgramOperations,
+} from '../src/programs/worker.ts';
 import {
   type ActiveProgram,
   ProgramOperationConflictError,
@@ -28,6 +33,7 @@ type TestApp = {
 async function createTestApp(
   playerProgramQuotaBytes: number,
   programStore?: ProgramStore,
+  operations: ProgramOperations = successfulProgramOperations(),
 ): Promise<TestApp> {
   const storageDir = await Deno.makeTempDir({ prefix: 'cobbleware-program-test-' });
   const config = configFromEnv({
@@ -38,14 +44,65 @@ async function createTestApp(
   const authStore = await DurableAuthStore.open(config);
 
   return {
-    handler: await createHandler({ config, store: authStore, programStore }),
+    handler: await createHandler({
+      config,
+      store: authStore,
+      programStore,
+      programOperations: operations,
+    }),
     config,
     cleanup: () => Deno.remove(storageDir, { recursive: true }),
   };
 }
 
+function successfulProgramOperations(): ProgramOperations {
+  return {
+    exclusive: (operation) => operation({ startStates: () => Promise.resolve({ default: [1] }) }),
+  };
+}
+
 function worker(fetch: CobblewareUserWorker['fetch']): CobblewareUserWorker {
   return { closed: Promise.resolve({}), retire: () => {}, fetch };
+}
+
+class Deferred<T> {
+  readonly promise: Promise<T>;
+  private resolvePromise!: (value: T) => void;
+
+  constructor() {
+    this.promise = new Promise((resolve) => {
+      this.resolvePromise = resolve;
+    });
+  }
+
+  resolve(value: T): void {
+    this.resolvePromise(value);
+  }
+}
+
+class TransientWorker implements CobblewareUserWorker {
+  readonly closedDeferred = new Deferred<CobblewareUserWorkerClosed>();
+  readonly closed = this.closedDeferred.promise;
+  readonly responseDeferred = new Deferred<Response>();
+  readonly requests: Request[] = [];
+  retireCalls: number[] = [];
+
+  retire(shutdownMs: number): void {
+    this.retireCalls.push(shutdownMs);
+  }
+
+  fetch(request: Request): Promise<Response> {
+    this.requests.push(request);
+    return this.responseDeferred.promise;
+  }
+
+  respond(response: Response): void {
+    this.responseDeferred.resolve(response);
+  }
+
+  close(): void {
+    this.closedDeferred.resolve({});
+  }
 }
 
 function startStatesResponse(startStates: Record<string, number[]>): Response {
@@ -90,7 +147,10 @@ Deno.test('Player program start states returns names for the active program', as
         ),
       }),
   };
-  const app = await createTestApp(1024, programStore);
+  const app = await createTestApp(1024, programStore, {
+    exclusive: (operation) =>
+      operation({ startStates: () => Promise.resolve({ default: [1], paused: [2] }) }),
+  });
   try {
     const cookie = await authenticatePlayerSession(app.handler);
     const response = await app.handler(new Request(START_STATES_PATH, { headers: { cookie } }));
@@ -147,6 +207,115 @@ Deno.test('Program store creates an active-program worker with the requested mem
   }
 });
 
+Deno.test('Transient program operations serialize workers and wait for retirement', async () => {
+  const previousRuntime = Object.getOwnPropertyDescriptor(globalThis, 'EdgeRuntime');
+  const firstWorker = new TransientWorker();
+  const secondWorker = new TransientWorker();
+  const workers = [firstWorker, secondWorker];
+  const options: CobblewareUserWorkerOptions[] = [];
+  Object.defineProperty(globalThis, 'EdgeRuntime', {
+    configurable: true,
+    value: {
+      userWorkers: {
+        create: (value: CobblewareUserWorkerOptions) => {
+          options.push(value);
+          const worker = workers.shift();
+          if (worker === undefined) throw new Error('unexpected transient worker creation');
+          return Promise.resolve(worker);
+        },
+        memStats: () => Promise.resolve({}),
+      },
+    },
+  });
+
+  try {
+    const operations = new RuntimeProgramOperations(3 * BYTES_PER_MEBIBYTE);
+    const first = operations.exclusive((locked) => locked.startStates(new Uint8Array([1])));
+    await waitFor(() => firstWorker.requests.length === 1);
+
+    const second = operations.exclusive((locked) => locked.startStates(new Uint8Array([2])));
+    await Promise.resolve();
+    assertEquals(options.length, 1, 'second operation created a worker before the first completed');
+
+    firstWorker.respond(startStatesResponse({ first: [1] }));
+    await waitFor(() => firstWorker.retireCalls.length === 1);
+    assertEquals(firstWorker.retireCalls[0], 0, 'first worker should retire immediately');
+    assertEquals(options.length, 1, 'second worker started before the first closed');
+    firstWorker.close();
+    await first;
+
+    await waitFor(() => secondWorker.requests.length === 1);
+    secondWorker.respond(startStatesResponse({ second: [2] }));
+    await waitFor(() => secondWorker.retireCalls.length === 1);
+    secondWorker.close();
+    await second;
+
+    assertEquals(
+      options[0]?.servicePath,
+      workerServicePath(PROGRAM_OPERATIONS_WORKER_UUID, 'program-operations'),
+      'first operation used the wrong shared service path',
+    );
+    assertEquals(
+      options[1]?.servicePath,
+      options[0]?.servicePath,
+      'program operations must share one Runtime pool key',
+    );
+    assertEquals(options[0]?.memoryLimitMb, 3, 'transient worker memory quota changed');
+    assertEquals(
+      JSON.stringify([...options[1]!.maybeEszip]),
+      JSON.stringify([2]),
+      'second operation did not receive its candidate program bytes',
+    );
+  } finally {
+    if (previousRuntime === undefined) {
+      delete (globalThis as { EdgeRuntime?: unknown }).EdgeRuntime;
+    } else {
+      Object.defineProperty(globalThis, 'EdgeRuntime', previousRuntime);
+    }
+  }
+});
+
+Deno.test('Program upload rejects a validation failure without activating the candidate', async () => {
+  let uploaded = false;
+  let notified = false;
+  const store: ProgramStore = {
+    list: () => Promise.reject(new Error('not used')),
+    readActive: () => Promise.reject(new Error('not used')),
+    upload: async (_playerUUID, _content, _name, validate) => {
+      await validate?.();
+      uploaded = true;
+      throw new Error('not used');
+    },
+    run: () => Promise.reject(new Error('not used')),
+  };
+  const form = new FormData();
+  form.append('program', new File([new Uint8Array([1])], 'invalid.eszip'));
+
+  const response = await handleProgramCollection(
+    new Request(PROGRAMS_PATH, {
+      method: 'POST',
+      headers: { origin: 'http://localhost' },
+      body: form,
+    }),
+    store,
+    {
+      exclusive: (operation) =>
+        operation({
+          startStates: () => Promise.reject(new Error('invalid program')),
+        }),
+    },
+    PLAYER_UUID,
+    () => {
+      notified = true;
+      return Promise.resolve();
+    },
+  );
+
+  await assertErrorResponse(response, 422);
+  assertEquals(uploaded, false, 'validation failure should not store the candidate');
+  assertEquals(notified, false, 'validation failure should not notify execution management');
+});
+
 function jsonRequest(url: string, body: unknown): Request {
   return new Request(url, {
     method: 'POST',
@@ -185,6 +354,14 @@ function assertEquals<T>(actual: T, expected: T, message: string): void {
   }
 }
 
+async function waitFor(condition: () => boolean): Promise<void> {
+  for (let attempt = 0; attempt < 100; attempt += 1) {
+    if (condition()) return;
+    await Promise.resolve();
+  }
+  throw new Error('condition was not reached');
+}
+
 async function assertErrorResponse(response: Response, status: number): Promise<void> {
   assertEquals(response.status, status, 'unexpected response status');
   const body = await response.json();
@@ -219,6 +396,7 @@ Deno.test('Program upload notifies execution management when the active program 
         body: form,
       }),
       store,
+      successfulProgramOperations(),
       PLAYER_UUID,
       (playerId, programId) => {
         changes.push([playerId, programId]);

@@ -28,6 +28,8 @@ export type UploadProgramResult = {
   created: boolean;
 };
 
+export type UploadProgramValidator = () => Promise<void>;
+
 export type RunOptions = {
   memoryQuotaBytes: number;
 };
@@ -44,6 +46,7 @@ export type ProgramStore = {
     playerUUID: string,
     content: Uint8Array,
     name: string,
+    validate?: UploadProgramValidator,
   ): Promise<UploadProgramResult>;
   run(playerUUID: string, opts: RunOptions): Promise<RunningProgram>;
 };

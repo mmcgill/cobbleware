@@ -18,6 +18,7 @@ import {
 } from './programs/handlers.ts';
 import { DurableProgramStore } from './programs/store.ts';
 import { PROGRAM_ID_PATTERN, type ProgramStore } from './programs/types.ts';
+import { type ProgramOperations, RuntimeProgramOperations } from './programs/worker.ts';
 import { normalizePlayerUUID } from './auth/validation.ts';
 import { handleExecutions } from './executions/handlers.ts';
 import { ExecutionManager } from './executions/manager.ts';
@@ -39,6 +40,7 @@ export type AppOptions = {
   config?: AppConfig;
   store?: AuthStore;
   programStore?: ProgramStore;
+  programOperations?: ProgramOperations;
   executionManager?: ExecutionManager;
   executionStatsHub?: ExecutionStatsHub;
   executionLogHub?: ExecutionLogHub;
@@ -50,6 +52,9 @@ export async function createHandler(
   const config = options.config ?? configFromEnv();
   const store = options.store ?? await DurableAuthStore.open(config);
   const programStore = options.programStore ?? new DurableProgramStore(config);
+  const programOperations = options.programOperations ?? new RuntimeProgramOperations(
+    config.playerMemoryQuotaBytes,
+  );
   const executionManager = options.executionManager ?? new ExecutionManager(
     programStore,
     config.playerMemoryQuotaBytes,
@@ -66,6 +71,7 @@ export async function createHandler(
         config,
         store,
         programStore,
+        programOperations,
         executionManager,
         executionStatsHub,
         executionLogHub,
@@ -81,6 +87,7 @@ async function routeRequest(
   config: AppConfig,
   store: AuthStore,
   programStore: ProgramStore,
+  programOperations: ProgramOperations,
   executionManager: ExecutionManager,
   executionStatsHub: ExecutionStatsHub,
   executionLogHub: ExecutionLogHub,
@@ -166,6 +173,7 @@ async function routeRequest(
     return authError ?? handleProgramCollection(
       request,
       programStore,
+      programOperations,
       context.player!.playerUUID,
       (playerId, programId) => executionManager.activeProgramChanged(playerId, programId),
     );
@@ -193,7 +201,7 @@ async function routeRequest(
     return handlePlayerProgramStartStates(
       request,
       programStore,
-      config.playerMemoryQuotaBytes,
+      programOperations,
       context.player!.playerUUID,
       programId,
     );
@@ -251,7 +259,7 @@ async function routeRequest(
       } catch {
         return new Response(null, { status: 404 });
       }
-      return handleProgram(request, programStore, config.playerMemoryQuotaBytes, playerUUID);
+      return handleProgram(request, programStore, programOperations, playerUUID);
     }
     const authError = requireModAuth(request, config);
     return authError ?? new Response(null, { status: 404 });

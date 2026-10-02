@@ -2,7 +2,9 @@ import { create, Program, toBinary } from '@cobbleware/core';
 import { type AppConfig, configFromEnv } from '../src/config.ts';
 import { DurableAuthStore } from '../src/auth/store.ts';
 import { createHandler } from '../src/index.ts';
+import { invokeStartStates } from '../src/programs/program-api.ts';
 import type { ActiveProgram, ProgramStore } from '../src/programs/types.ts';
+import type { ProgramOperations } from '../src/programs/worker.ts';
 
 const API_KEY = 'test-api-key';
 const PROGRAM_PATH = 'http://localhost/modapi/v1/players/ABC-Player/program';
@@ -38,8 +40,22 @@ async function createTestApp(
   };
 
   return {
-    handler: await createHandler({ config, store: authStore, programStore }),
+    handler: await createHandler({
+      config,
+      store: authStore,
+      programStore,
+      programOperations: programOperations(fetch),
+    }),
     cleanup: () => Deno.remove(storageDir, { recursive: true }),
+  };
+}
+
+function programOperations(fetch: CobblewareUserWorker['fetch']): ProgramOperations {
+  return {
+    exclusive: (operation) =>
+      operation({
+        startStates: () => invokeStartStates(worker(fetch)),
+      }),
   };
 }
 

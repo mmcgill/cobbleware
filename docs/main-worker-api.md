@@ -191,8 +191,9 @@ Program names are display metadata and are not used as storage paths. A name mus
 must be no longer than 128 Unicode characters, and must not contain NUL or other control characters.
 Duplicate program names are allowed; program ids are the unique identifiers.
 
-The Runtime stores the uploaded bytes without validating the ESZip structure; validation is deferred until the
-program is loaded for execution. It enforces the player's program quota, configured by the
+Before making an upload active, the Runtime loads the submitted ESZip in a transient User Worker and requires a valid
+`/startStates` response. This validates both the bundle and the Program API start-state contract. A validation failure
+does not change the active program. The Runtime enforces the player's program quota, configured by the
 `COBBLEWARE_PLAYER_PROGRAM_QUOTA_BYTES` environment variable and defaulting to 10 MiB. Because a player has at most
 one active program, quota usage is the size of that active program; the quota remains a maximum size for the active
 program. The `sizeBytes` value and quota usage count only the ESZip payload, not multipart encoding overhead.
@@ -235,6 +236,7 @@ Content-Type: application/json; charset=utf-8
 * `403` for a request rejected by the browser-facing cross-origin request policy
 * `413` when the bundle exceeds the player's quota
 * `415` when the request is not `multipart/form-data`
+* `422` when the bundle cannot be loaded or cannot provide a valid `/startStates` response
 * `409` when another program operation for the player is already in progress
 
 The program id is the uppercase, unpadded RFC 4648 Base32 encoding of the SHA-256 hash of the exact uploaded
@@ -484,7 +486,7 @@ methods receive `405` with `Allow: GET`.
 
 The authenticated `GET /modapi/v1/players/{playerUUID}/program` endpoint queries the given player's
 currently active program and its start states. A successful response requires that the given player has
-previously uploaded a valid program that correctly serves start states. On success, the response has the
+an active program and that it can serve start states at query time. On success, the response has the
 shape:
 
 ```json
@@ -502,9 +504,8 @@ shape:
 The metadata fields have the same meanings and formats as the Player API's program metadata. In the
 case where the given player has not uploaded a program, the response is a 404.
 
-In the case where the player has uploaded a program but that program does not return a valid
-`/startStates` response, the response status is 200 (because the request to the Mod API was successful)
-and the response body has the shape:
+If an active program cannot provide a valid `/startStates` response at query time, the response status is
+200 (because the request to the Mod API was successful) and the response body has the shape:
 
 ```json
 {

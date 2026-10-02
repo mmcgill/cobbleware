@@ -14,6 +14,7 @@ import {
   type RunningProgram,
   type RunOptions,
   type UploadProgramResult,
+  type UploadProgramValidator,
 } from './types.ts';
 
 const MANIFEST_FILENAME = 'programs.json';
@@ -104,6 +105,7 @@ export class DurableProgramStore implements ProgramStore {
     playerUUID: string,
     content: Uint8Array,
     name: string,
+    validate?: UploadProgramValidator,
   ): Promise<UploadProgramResult> {
     return this.withPlayerLock(playerUUID, async () => {
       const manifest = await this.readManifest(playerUUID);
@@ -121,6 +123,8 @@ export class DurableProgramStore implements ProgramStore {
       if (content.byteLength > this.config.playerProgramQuotaBytes) {
         throw new ProgramQuotaExceededError('player program quota exceeded');
       }
+
+      await validate?.();
 
       await this.removeUnreferencedPrograms(playerUUID, manifest);
 

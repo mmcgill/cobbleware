@@ -2,12 +2,13 @@ import { emptyResponse, isJsonRequest, jsonError, jsonResponse, readJson } from 
 import { fromBinary, fromJson, Program, toJson } from '@cobbleware/core';
 import type { JsonValue } from '@bufbuild/protobuf';
 import { requireSameOrigin } from '../auth/middleware.ts';
-import { invokeNextState, invokeStartStates, PROGRAM_BINARY_CONTENT_TYPE } from './program-api.ts';
+import { invokeNextState, PROGRAM_BINARY_CONTENT_TYPE } from './program-api.ts';
 import {
   ProgramOperationConflictError,
   ProgramQuotaExceededError,
   type ProgramStore,
 } from './types.ts';
+import type { ProgramOperations } from './worker.ts';
 
 const MULTIPART_CONTENT_TYPE = 'multipart/form-data';
 const JSON_CONTENT_TYPE = 'application/json';
@@ -17,9 +18,14 @@ const MAX_PROGRAM_NAME_LENGTH = 128;
 
 type ActiveProgramChanged = (playerUUID: string, programId: string) => Promise<void>;
 
+class ProgramValidationError extends Error {
+  override name = 'ProgramValidationError';
+}
+
 export async function handleProgramCollection(
   request: Request,
   store: ProgramStore,
+  operations: ProgramOperations,
   playerUUID: string,
   activeProgramChanged: ActiveProgramChanged,
 ): Promise<Response> {
@@ -70,14 +76,25 @@ export async function handleProgramCollection(
 
   const content = new Uint8Array(await file.arrayBuffer());
   try {
-    const result = await store.upload(playerUUID, content, name);
-    if (result.created) {
-      await activeProgramChanged(playerUUID, result.metadata.id);
-    }
-    const response = jsonResponse(result.metadata, result.created ? 201 : 200);
-    response.headers.set('location', programLocation(result.metadata.id));
-    return response;
+    return await operations.exclusive(async (locked) => {
+      const result = await store.upload(playerUUID, content, name, async () => {
+        try {
+          await locked.startStates(content);
+        } catch (error) {
+          throw new ProgramValidationError(describeError(error));
+        }
+      });
+      if (result.created) {
+        await activeProgramChanged(playerUUID, result.metadata.id);
+      }
+      const response = jsonResponse(result.metadata, result.created ? 201 : 200);
+      response.headers.set('location', programLocation(result.metadata.id));
+      return response;
+    });
   } catch (error) {
+    if (error instanceof ProgramValidationError) {
+      return jsonError(`program could not be validated: ${error.message}`, 422);
+    }
     if (error instanceof ProgramQuotaExceededError) {
       return jsonError('player program quota exceeded', 413);
     }
@@ -89,34 +106,37 @@ export async function handleProgramCollection(
 export async function handleProgram(
   request: Request,
   store: ProgramStore,
-  playerMemoryQuotaBytes: number,
+  operations: ProgramOperations,
   playerUUID: string,
 ): Promise<Response> {
   if (request.method !== 'GET') {
     return methodNotAllowed('GET');
   }
 
-  let program;
   try {
-    program = await store.readActive(playerUUID);
-  } catch (error) {
-    if (error instanceof ProgramOperationConflictError) {
-      return jsonError('another program operation is in progress', 409);
-    }
-    return jsonResponse({ programError: describeError(error) });
-  }
+    return await operations.exclusive(async (locked) => {
+      let program;
+      try {
+        program = await store.readActive(playerUUID);
+      } catch (error) {
+        if (error instanceof ProgramOperationConflictError) {
+          return jsonError('another program operation is in progress', 409);
+        }
+        return jsonResponse({ programError: describeError(error) });
+      }
 
-  if (program === null) {
-    return emptyResponse(404);
-  }
+      if (program === null) {
+        return emptyResponse(404);
+      }
 
-  try {
-    const { program: runningProgram, worker } = await store.run(playerUUID, {
-      memoryQuotaBytes: playerMemoryQuotaBytes,
-    });
-    return jsonResponse({
-      ...runningProgram.metadata,
-      startStates: await invokeStartStates(worker),
+      try {
+        return jsonResponse({
+          ...program.metadata,
+          startStates: await locked.startStates(program.content),
+        });
+      } catch (error) {
+        return jsonResponse({ programError: describeError(error) });
+      }
     });
   } catch (error) {
     return jsonResponse({ programError: describeError(error) });
@@ -127,7 +147,7 @@ export async function handleProgram(
 export async function handlePlayerProgramStartStates(
   request: Request,
   store: ProgramStore,
-  playerMemoryQuotaBytes: number,
+  operations: ProgramOperations,
   playerUUID: string,
   programId: string,
 ): Promise<Response> {
@@ -135,32 +155,27 @@ export async function handlePlayerProgramStartStates(
     return methodNotAllowed('GET');
   }
 
-  let program;
-  try {
-    program = await store.readActive(playerUUID);
-  } catch (error) {
-    return handleStoreError(error);
-  }
+  return await operations.exclusive(async (locked) => {
+    let program;
+    try {
+      program = await store.readActive(playerUUID);
+    } catch (error) {
+      return handleStoreError(error);
+    }
 
-  if (program === null || program.metadata.id !== programId) {
-    return emptyResponse(404);
-  }
-
-  try {
-    const { program: runningProgram, worker } = await store.run(playerUUID, {
-      memoryQuotaBytes: playerMemoryQuotaBytes,
-    });
-    if (runningProgram.metadata.id !== programId) {
+    if (program === null || program.metadata.id !== programId) {
       return emptyResponse(404);
     }
-    const states = await invokeStartStates(worker);
-    return jsonResponse({
-      startStates: Object.keys(states),
-    });
-  } catch (error) {
-    const detail = error instanceof Error ? error.message : String(error);
-    return jsonError(`program could not provide start states: ${detail}`, 422);
-  }
+
+    try {
+      const states = await locked.startStates(program.content);
+      return jsonResponse({
+        startStates: Object.keys(states),
+      });
+    } catch (error) {
+      return jsonError(`program could not provide start states: ${describeError(error)}`, 422);
+    }
+  });
 }
 
 export async function handleProgramStep(

@@ -32,7 +32,7 @@ The per-player User Worker memory limit is configured with
 number of MiB. The Main Worker passes this limit to Edge Runtime for every User Worker and reports
 it as the maximum in the Player execution-statistics stream.
 
-See [Main Worker API](../../docs/api.md) for API documentation.
+See [Main Worker API](../../docs/main-worker-api.md) for API documentation.
 
 The bundle task first builds the Browser UI from `../browser-ui` into its
 generated `static/` staging directory, then tree-shakes the Main Worker with
