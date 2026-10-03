@@ -655,6 +655,9 @@ class ExecutionDriverTest {
         assertEquals(CobbleputerState.CRASHED, cobbleputer.getBlockState().getValue(CobbleputerBlock.STATE));
         assertTrue(cobbleputer.executionId().isEmpty());
         assertArrayEquals(new byte[] {1}, cobbleputer.executionState().orElseThrow());
+        ExecutionStateStore.ExecutionRecord persisted = fixture.stateStore.recordFor(cobbleputer);
+        assertEquals(null, persisted.executionId());
+        assertArrayEquals(new byte[] {1}, persisted.executionState());
         assertEquals(List.of("TotalExecutionStateSize"), fixture.worker.limitReasons);
         assertEquals(
                 List.of(
@@ -921,6 +924,7 @@ class ExecutionDriverTest {
 
     private static final class FakeExecutionStateAccess implements ExecutionStateAccess {
         private final long stateLimit;
+        private final Map<UUID, ExecutionStateStore.ExecutionRecord> records = new HashMap<>();
 
         private FakeExecutionStateAccess(long stateLimit) {
             this.stateLimit = stateLimit;
@@ -930,7 +934,13 @@ class ExecutionDriverTest {
         public void attach(CobbleputerBlockEntity blockEntity) {}
 
         @Override
-        public void update(CobbleputerBlockEntity blockEntity, UUID priorOwner) {}
+        public void update(CobbleputerBlockEntity blockEntity, UUID priorOwner) {
+            blockEntity.executionRecord().ifPresent(record -> records.put(blockEntity.cobbleputerId(), record));
+        }
+
+        private ExecutionStateStore.ExecutionRecord recordFor(CobbleputerBlockEntity blockEntity) {
+            return records.get(blockEntity.cobbleputerId());
+        }
 
         @Override
         public void remove(CobbleputerBlockEntity blockEntity) {}

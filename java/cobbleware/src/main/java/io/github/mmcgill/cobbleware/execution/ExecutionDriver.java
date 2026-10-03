@@ -1024,8 +1024,8 @@ public final class ExecutionDriver {
                     == ExecutionFailureReason.EXECUTION_FAILURE_REASON_STEP_RESPONSE_SIZE_LIMIT) {
                 mainWorker.reportLimitExceeded(owner, executionId, "ProgramStepResponseSize");
             }
-            offered.blockEntity.crashExecution();
             updateVisibleState(minecraft, offered.blockEntity, CobbleputerState.CRASHED);
+            offered.blockEntity.crashExecution();
             reportExecutionTransition(owner, executionId, ExecutionTransition.EXECUTION_TRANSITION_CRASHED);
             return;
         }
@@ -1035,8 +1035,8 @@ public final class ExecutionDriver {
         if (!fitsStateUpdate(owner, offered.blockEntity.cobbleputerId(), finalState)) {
             discardPendingEvents(offered.blockEntity, active);
             mainWorker.reportLimitExceeded(owner, executionId, "TotalExecutionStateSize");
-            offered.blockEntity.crashExecution();
             updateVisibleState(minecraft, offered.blockEntity, CobbleputerState.CRASHED);
+            offered.blockEntity.crashExecution();
             reportExecutionTransition(owner, executionId, ExecutionTransition.EXECUTION_TRANSITION_CRASHED);
             return;
         }
