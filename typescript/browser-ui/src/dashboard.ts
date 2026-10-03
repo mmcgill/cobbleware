@@ -37,6 +37,8 @@ markBundledUi(document.documentElement);
     statsWindow: document.querySelector('#stats-window'),
     statsMemoryProgress: document.querySelector('#stats-memory-progress'),
     statsMemoryText: document.querySelector('#stats-memory-text'),
+    statsBurstChatTokens: document.querySelector('#stats-burst-chat-tokens'),
+    statsSlowChatTokens: document.querySelector('#stats-slow-chat-tokens'),
     statsEventsPerSync: document.querySelector('#stats-events-per-sync'),
     statsEvents: document.querySelector('#stats-events'),
     statsEffects: document.querySelector('#stats-effects'),
@@ -519,6 +521,7 @@ markBundledUi(document.documentElement);
         statsGapObserved ? ' (gaps observed)' : ''
       }`;
     renderStatsMemory(statsTicks.at(-1));
+    renderStatsChatTokens(statsTicks.at(-1));
     elements.statsEventsPerSync.textContent = `${
       formatBigInt(player.eventsPerSyncCount)
     } records; average ${
@@ -556,6 +559,15 @@ markBundledUi(document.documentElement);
     const text = `${formatStatBytes(usedBytes)} of ${formatStatBytes(maxBytes)}`;
     elements.statsMemoryProgress.setAttribute('aria-label', `Player memory usage: ${text}`);
     elements.statsMemoryText.textContent = text;
+  }
+
+  function renderStatsChatTokens(tick) {
+    const burst = `${tick.burstChatTokens.toLocaleString()} of 10`;
+    const slow = `${tick.slowChatTokens.toLocaleString()} of 100`;
+    elements.statsBurstChatTokens.textContent = burst;
+    elements.statsBurstChatTokens.setAttribute('aria-label', `Available burst chat tokens: ${burst}`);
+    elements.statsSlowChatTokens.textContent = slow;
+    elements.statsSlowChatTokens.setAttribute('aria-label', `Available slow chat tokens: ${slow}`);
   }
 
   function renderStatsGraphs() {
@@ -989,6 +1001,11 @@ markBundledUi(document.documentElement);
     );
     const usedBytes = protoVarint(playerFields, 6);
     const maxBytes = protoVarint(playerFields, 7);
+    const burstChatTokens = protoNumber(playerFields, 8);
+    const slowChatTokens = protoNumber(playerFields, 9);
+    if (burstChatTokens > 10 || slowChatTokens > 100) {
+      throw new Error('invalid chat token counts');
+    }
     return {
       sampledAt,
       sequence,
@@ -997,6 +1014,8 @@ markBundledUi(document.documentElement);
       effects,
       usedBytes,
       maxBytes,
+      burstChatTokens,
+      slowChatTokens,
       stateBytes,
       graph: summarizeStatsTickGraph(events, effects),
     };

@@ -78,6 +78,8 @@ Deno.test('Execution statistics flow from the Mod API to a Player WebSocket', as
     assertUuidEquals(player.playerId, PLAYER_ID, 'received the wrong player statistics');
     assertEquals(player.usedBytes, 0n, 'a player without a User Worker should use no memory');
     assertEquals(player.maxBytes, 128n * 1024n * 1024n, 'memory quota changed');
+    assertEquals(player.burstChatTokens, 4, 'burst chat tokens changed');
+    assertEquals(player.slowChatTokens, 96, 'slow chat tokens changed');
     assertEquals(player.events[0].accepted, 4n, 'accepted-event count changed');
     assertEquals(player.events[0].dropped, 5n, 'dropped-event count changed');
     assertEquals(player.eventsPerSync[0].count, 2n, 'events-per-sync count changed');
@@ -207,6 +209,8 @@ function executionStatsReport(): Internal.ExecutionStatsTick {
     players: [
       create(Internal.ExecutionStatsTick_PlayerStatsSchema, {
         playerId: PLAYER_ID,
+        burstChatTokens: 4,
+        slowChatTokens: 96,
         events: [create(Internal.ExecutionStatsTick_EventMeasurementSchema, {
           cobbleputer,
           type: Internal.InstrumentationEventType.CHAT_MESSAGE,

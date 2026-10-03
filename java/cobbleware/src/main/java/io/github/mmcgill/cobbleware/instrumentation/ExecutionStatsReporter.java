@@ -10,6 +10,7 @@ import cobbleware.internal.ExecutionStatsTick;
 import cobbleware.internal.InstrumentationEffectType;
 import cobbleware.internal.InstrumentationEventType;
 import cobbleware.internal.InstrumentationLifecycleState;
+import io.github.mmcgill.cobbleware.execution.ExecutionStateAccess;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.HashMap;
@@ -23,7 +24,7 @@ public final class ExecutionStatsReporter {
 
     /** Builds one complete, non-durable raw tick report. */
     public static ExecutionStatsTick report(Instrumentation.TickSnapshot snapshot, long sampledAtUnixMillis) {
-        return report(snapshot, sampledAtUnixMillis, Map.of());
+        return report(snapshot, sampledAtUnixMillis, Map.of(), Map.of());
     }
 
     /** Builds one complete report, including durable state records that are not currently block-ticking. */
@@ -31,11 +32,20 @@ public final class ExecutionStatsReporter {
             Instrumentation.TickSnapshot snapshot,
             long sampledAtUnixMillis,
             Map<UUID, Map<UUID, Long>> stateSizeCensus) {
+        return report(snapshot, sampledAtUnixMillis, stateSizeCensus, Map.of());
+    }
+
+    /** Builds one complete report, including durable state records and current chat-token snapshots. */
+    public static ExecutionStatsTick report(
+            Instrumentation.TickSnapshot snapshot,
+            long sampledAtUnixMillis,
+            Map<UUID, Map<UUID, Long>> stateSizeCensus,
+            Map<UUID, ExecutionStateAccess.ChatTokens> chatTokenCensus) {
         if (snapshot == null || snapshot.tick() <= 0 || sampledAtUnixMillis <= 0) {
             throw new IllegalArgumentException("raw tick snapshot and positive sample time are required");
         }
-        if (stateSizeCensus == null) {
-            throw new IllegalArgumentException("state-size census must not be null");
+        if (stateSizeCensus == null || chatTokenCensus == null) {
+            throw new IllegalArgumentException("state-size and chat-token censuses must not be null");
         }
         Map<UUID, PlayerMeasurements> players = new HashMap<>();
         snapshot.events()
@@ -94,6 +104,12 @@ public final class ExecutionStatsReporter {
                         .build());
             });
         });
+        chatTokenCensus.forEach((playerId, tokens) -> {
+            PlayerMeasurements measurements = players.get(playerId);
+            if (measurements != null) {
+                measurements.chatTokens = tokens;
+            }
+        });
 
         ExecutionStatsTick.Builder report = ExecutionStatsTick.newBuilder()
                 .setSampledAtUnixMillis(sampledAtUnixMillis)
@@ -109,13 +125,17 @@ public final class ExecutionStatsReporter {
         measurements.eventsPerSync.sort(Comparator.comparing(ExecutionStatsReporter::eventsPerSyncKey));
         measurements.effects.sort(Comparator.comparing(ExecutionStatsReporter::effectKey));
         measurements.states.sort(Comparator.comparing(ExecutionStatsReporter::stateKey));
-        return ExecutionStatsTick.PlayerStats.newBuilder()
+        ExecutionStatsTick.PlayerStats.Builder player = ExecutionStatsTick.PlayerStats.newBuilder()
                 .setPlayerId(uuid(playerId))
                 .addAllEvents(measurements.events)
                 .addAllEventsPerSync(measurements.eventsPerSync)
                 .addAllEffects(measurements.effects)
-                .addAllCobbleputerStates(measurements.states)
-                .build();
+                .addAllCobbleputerStates(measurements.states);
+        if (measurements.chatTokens != null) {
+            player.setBurstChatTokens(measurements.chatTokens.burst())
+                    .setSlowChatTokens(measurements.chatTokens.slow());
+        }
+        return player.build();
     }
 
     private static String eventKey(ExecutionStatsTick.EventMeasurement value) {
@@ -210,6 +230,7 @@ public final class ExecutionStatsReporter {
         private final List<ExecutionStatsTick.EventsPerSyncMeasurement> eventsPerSync = new ArrayList<>();
         private final List<ExecutionStatsTick.EffectMeasurement> effects = new ArrayList<>();
         private final List<ExecutionStatsTick.CobbleputerState> states = new ArrayList<>();
+        private ExecutionStateAccess.ChatTokens chatTokens;
 
         private ExecutionStatsTick.PlayerStats toProto(UUID playerId) {
             return toPlayer(playerId, this);

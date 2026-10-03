@@ -772,6 +772,8 @@ class ExecutionDriverTest {
         assertFalse(fixture.minecraft.nearbyMessages.contains("dropped"));
         assertEquals(0, fixture.worker.syncRequests.get(1).getPlayers(0).getBurstChatTokens());
         assertEquals(100, fixture.worker.syncRequests.get(1).getPlayers(0).getSlowChatTokens());
+        assertEquals(0, fixture.worker.executionStats.getLast().getPlayers(0).getBurstChatTokens());
+        assertEquals(100, fixture.worker.executionStats.getLast().getPlayers(0).getSlowChatTokens());
     }
 
     @Test
@@ -1050,6 +1052,13 @@ class ExecutionDriverTest {
         }
 
         @Override
+        public Map<UUID, ChatTokens> chatTokenCensus(long gameTime) {
+            Map<UUID, ChatTokens> census = new HashMap<>();
+            chatTokens.forEach((owner, bucket) -> census.put(owner, bucket.snapshot(gameTime)));
+            return Map.copyOf(census);
+        }
+
+        @Override
         public Map<UUID, Map<UUID, Long>> stateSizeCensus() {
             return Map.of();
         }
@@ -1102,6 +1111,7 @@ class ExecutionDriverTest {
         private final List<ExecutionTransition> transitions = new ArrayList<>();
         private final List<PoolTransitionReport> poolTransitions = new ArrayList<>();
         private final List<String> limitReasons = new ArrayList<>();
+        private final List<cobbleware.internal.ExecutionStatsTick> executionStats = new ArrayList<>();
 
         private CompletableFuture<ExecutionSyncResult> enqueueSyncResult() {
             CompletableFuture<ExecutionSyncResult> result = new CompletableFuture<>();
@@ -1116,7 +1126,9 @@ class ExecutionDriverTest {
         }
 
         @Override
-        public void reportExecutionStats(cobbleware.internal.ExecutionStatsTick stats) {}
+        public void reportExecutionStats(cobbleware.internal.ExecutionStatsTick stats) {
+            executionStats.add(stats);
+        }
 
         @Override
         public void reportExecutionTransition(
@@ -1166,6 +1178,11 @@ class ExecutionDriverTest {
         @Override
         public OptionalLong gameTime(CobbleputerBlockEntity blockEntity) {
             return OptionalLong.of(gameTime);
+        }
+
+        @Override
+        public long serverGameTime() {
+            return gameTime;
         }
 
         private void advanceGameTime() {

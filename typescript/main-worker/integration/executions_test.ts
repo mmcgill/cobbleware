@@ -67,6 +67,9 @@ function executionSnapshot(
         outboxLimit: 10,
       })],
       outstandingEffectLimit: 20,
+      totalExecutionStateLimit: 1024n,
+      burstChatTokens: 10,
+      slowChatTokens: 100,
     })],
     workerLimit: 1,
   });

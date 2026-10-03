@@ -255,6 +255,27 @@ public final class ExecutionStateStore implements AutoCloseable, ExecutionStateA
         return consumed;
     }
 
+    /** Returns an immutable snapshot of each loaded owner's current chat-token buckets. */
+    @Override
+    public synchronized Map<UUID, ChatTokens> chatTokenCensus(long gameTime) {
+        requireInitialized();
+        if (gameTime < 0) {
+            throw new IllegalArgumentException("non-negative game time is required");
+        }
+        if (closing) {
+            return Map.of();
+        }
+        Map<UUID, ChatTokens> census = new HashMap<>();
+        for (Map.Entry<UUID, PlayerState> entry : players.entrySet()) {
+            PlayerState player = entry.getValue();
+            if (player.chatTokens.advance(gameTime)) {
+                markDirty(player);
+            }
+            census.put(entry.getKey(), player.chatTokens.snapshot());
+        }
+        return Map.copyOf(census);
+    }
+
     /** Returns a read-only census of every durable execution-state byte length, grouped by owner. */
     public synchronized Map<UUID, Map<UUID, Long>> stateSizeCensus() {
         requireInitialized();

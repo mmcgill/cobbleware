@@ -314,6 +314,9 @@ function validate(report: Internal.ExecutionStatsTick): void {
 }
 
 function validatePlayer(player: Internal.ExecutionStatsTick_PlayerStats): void {
+  if (player.burstChatTokens > 10 || player.slowChatTokens > 100) {
+    throw new Error('chat token counts exceed their configured capacities');
+  }
   const events = new Set<string>();
   for (const metric of player.events) {
     const key = `${cobbleputerKey(metric.cobbleputer)}:${metric.type}`;

@@ -26,6 +26,7 @@ class ExecutionStateStoreTest {
                 () -> assertThrows(IllegalStateException.class, () -> store.remove(null)),
                 () -> assertThrows(IllegalStateException.class, () -> store.stateSizeLimit(null, null, 0)),
                 () -> assertThrows(IllegalStateException.class, () -> store.fitsStateUpdate(null, null, null, 0)),
+                () -> assertThrows(IllegalStateException.class, () -> store.chatTokenCensus(0)),
                 () -> assertThrows(IllegalStateException.class, store::stateSizeCensus),
                 () -> assertThrows(IllegalStateException.class, store::beforeSave),
                 () -> assertThrows(IllegalStateException.class, store::close));

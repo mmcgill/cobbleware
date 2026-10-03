@@ -28,7 +28,11 @@ class ExecutionStatsReporterTest {
         instrumentation.recordCobbleputerStates(Map.of(
                 TARGET, new Instrumentation.CobbleputerStateMeasurement(Instrumentation.LifecycleState.RUNNING, 12)));
 
-        ExecutionStatsTick report = ExecutionStatsReporter.report(instrumentation.currentTickSnapshot(), 1234);
+        ExecutionStatsTick report = ExecutionStatsReporter.report(
+                instrumentation.currentTickSnapshot(),
+                1234,
+                Map.of(),
+                Map.of(PLAYER, new io.github.mmcgill.cobbleware.execution.ExecutionStateAccess.ChatTokens(4, 96)));
 
         assertEquals(1234, report.getSampledAtUnixMillis());
         assertEquals(1, report.getTickSequence());
@@ -46,5 +50,7 @@ class ExecutionStatsReporterTest {
         assertEquals(1, player.getEffects(0).getFailed());
         assertEquals(1, player.getCobbleputerStatesCount());
         assertEquals(12, player.getCobbleputerStates(0).getStateSizeBytes());
+        assertEquals(4, player.getBurstChatTokens());
+        assertEquals(96, player.getSlowChatTokens());
     }
 }

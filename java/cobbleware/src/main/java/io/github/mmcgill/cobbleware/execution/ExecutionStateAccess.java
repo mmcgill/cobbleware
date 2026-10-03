@@ -30,6 +30,9 @@ public interface ExecutionStateAccess {
     /** Advances an owner's chat buckets and spends one burst token when one is available. */
     boolean tryConsumeBurstChatToken(UUID owner, long gameTime);
 
+    /** Advances known owners' chat buckets through {@code gameTime} and returns their current contents. */
+    Map<UUID, ChatTokens> chatTokenCensus(long gameTime);
+
     /** Returns durable execution-state byte lengths grouped by owner and Cobbleputer. */
     Map<UUID, Map<UUID, Long>> stateSizeCensus();
 }

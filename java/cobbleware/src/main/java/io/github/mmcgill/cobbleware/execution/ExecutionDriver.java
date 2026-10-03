@@ -96,6 +96,9 @@ public final class ExecutionDriver {
         /** Returns the game time for an entity attached to a server level. */
         OptionalLong gameTime(CobbleputerBlockEntity blockEntity);
 
+        /** Returns the current server game time without resolving a block entity or loading a chunk. */
+        long serverGameTime();
+
         /** Returns a global position in an entity's server level. */
         Optional<net.minecraft.core.GlobalPos> globalPos(BlockEntity blockEntity, BlockPos pos);
 
@@ -1319,7 +1322,8 @@ public final class ExecutionDriver {
         mainWorker.reportExecutionStats(ExecutionStatsReporter.report(
                 instrumentation.currentTickSnapshot(),
                 System.currentTimeMillis(),
-                executionStateAccess.stateSizeCensus()));
+                executionStateAccess.stateSizeCensus(),
+                executionStateAccess.chatTokenCensus(minecraft.serverGameTime())));
     }
 
     private void reportExecutionTransition(CobbleputerBlockEntity blockEntity, ExecutionTransition transition) {
@@ -1465,6 +1469,11 @@ public final class ExecutionDriver {
             return serverLevel(blockEntity).isPresent()
                     ? OptionalLong.of(serverLevel(blockEntity).orElseThrow().getGameTime())
                     : OptionalLong.empty();
+        }
+
+        @Override
+        public long serverGameTime() {
+            return server.overworld().getGameTime();
         }
 
         @Override

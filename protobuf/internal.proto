@@ -167,6 +167,10 @@ message ExecutionStatsTick {
     // used_bytes and max_bytes are 0 in messages from the Mod; these fields are only used by the runtime.
     uint64 used_bytes = 6;
     uint64 max_bytes = 7;
+    // The Mod-authoritative current number of available burst chat tokens. This is instantaneous, not a window aggregate.
+    uint32 burst_chat_tokens = 8;
+    // The Mod-authoritative current number of available slow chat tokens. This is instantaneous, not a window aggregate.
+    uint32 slow_chat_tokens = 9;
     repeated EventMeasurement events = 2;
     repeated EventsPerSyncMeasurement events_per_sync = 3;
     repeated EffectMeasurement effects = 4;
