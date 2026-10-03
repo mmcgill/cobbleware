@@ -76,14 +76,7 @@ export const echoHandler: Program = function handle(state, event) {
     const props = JSON.stringify(v.newState?.properties);
     const msg =
       `Observer colored ${v.observerColor} saw block change: ${v.newState?.blockType?.path} ${props}`;
-    effects = [create(Effects.EffectSchema, {
-      effect: {
-        case: 'sendChat',
-        value: create(Effects.SendChatSchema, {
-          msg,
-        }),
-      },
-    })];
+    console.info(msg);
   } else if (
     event.event.case === 'wirelessObserverPaired' || event.event.case == 'wirelessObserverUnpaired'
   ) {
@@ -91,14 +84,7 @@ export const echoHandler: Program = function handle(state, event) {
     const msg = `${event.event.case}: ${ev.observerId} ${ev.observerColor} ${
       JSON.stringify(ev.observerPos)
     }`;
-    effects = [create(Effects.EffectSchema, {
-      effect: {
-        case: 'sendChat',
-        value: create(Effects.SendChatSchema, {
-          msg,
-        }),
-      },
-    })];
+    console.info(msg);
     if (event.event.case === 'wirelessObserverPaired' && ev.observerColor === DyeColor.BLACK) {
       const { observerId } = event.event.value;
       effects.push(create(Effects.EffectSchema, {
