@@ -122,18 +122,6 @@
                 </dd>
               </div>
               <div>
-                <dt>Burst chat tokens</dt>
-                <dd id="stats-burst-chat-tokens"></dd>
-              </div>
-              <div>
-                <dt>Slow chat tokens</dt>
-                <dd id="stats-slow-chat-tokens"></dd>
-              </div>
-              <div>
-                <dt>Program log tokens</dt>
-                <dd id="stats-log-tokens"></dd>
-              </div>
-              <div>
                 <dt>Events per sync</dt>
                 <dd id="stats-events-per-sync"></dd>
               </div>
@@ -199,7 +187,7 @@
           </div>
           <p id="limits-status" class="muted" role="status" aria-live="polite">Loading limits...</p>
           <dl id="limits-details" class="limits-details" hidden>
-            <div>
+            <div id="limits-running-executions">
               <dt>Running executions</dt>
               <dd class="limits-usage">
                 <progress id="limits-running-executions-progress" max="1" value="0"
@@ -207,7 +195,7 @@
                 <span id="limits-running-executions-text"></span>
               </dd>
             </div>
-            <div>
+            <div id="limits-total-execution-state">
               <dt>Total execution state</dt>
               <dd class="limits-usage">
                 <progress id="limits-total-execution-state-progress" max="1" value="0"
@@ -215,7 +203,19 @@
                 <span id="limits-total-execution-state-text"></span>
               </dd>
             </div>
-            <div>
+            <div id="limits-burst-chat-tokens">
+              <dt>Burst chat tokens</dt>
+              <dd></dd>
+            </div>
+            <div id="limits-slow-chat-tokens">
+              <dt>Slow chat tokens</dt>
+              <dd></dd>
+            </div>
+            <div id="limits-program-log-tokens">
+              <dt>Program log tokens</dt>
+              <dd></dd>
+            </div>
+            <div id="limits-updated">
               <dt>Updated</dt>
               <dd id="limits-updated-at"></dd>
             </div>

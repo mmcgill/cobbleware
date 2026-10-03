@@ -37,9 +37,6 @@ markBundledUi(document.documentElement);
     statsWindow: document.querySelector('#stats-window'),
     statsMemoryProgress: document.querySelector('#stats-memory-progress'),
     statsMemoryText: document.querySelector('#stats-memory-text'),
-    statsBurstChatTokens: document.querySelector('#stats-burst-chat-tokens'),
-    statsSlowChatTokens: document.querySelector('#stats-slow-chat-tokens'),
-    statsLogTokens: document.querySelector('#stats-log-tokens'),
     statsEventsPerSync: document.querySelector('#stats-events-per-sync'),
     statsEvents: document.querySelector('#stats-events'),
     statsEffects: document.querySelector('#stats-effects'),
@@ -58,12 +55,18 @@ markBundledUi(document.documentElement);
     limitsStatus: document.querySelector('#limits-status'),
     limitsDetails: document.querySelector('#limits-details'),
     limitsRetryButton: document.querySelector('#limits-retry-button'),
+    limitsRunningExecutions: document.querySelector('#limits-running-executions'),
     limitsRunningExecutionsProgress: document.querySelector('#limits-running-executions-progress'),
     limitsRunningExecutionsText: document.querySelector('#limits-running-executions-text'),
+    limitsTotalExecutionState: document.querySelector('#limits-total-execution-state'),
     limitsTotalExecutionStateProgress: document.querySelector(
       '#limits-total-execution-state-progress',
     ),
     limitsTotalExecutionStateText: document.querySelector('#limits-total-execution-state-text'),
+    limitsBurstChatTokens: document.querySelector('#limits-burst-chat-tokens'),
+    limitsSlowChatTokens: document.querySelector('#limits-slow-chat-tokens'),
+    limitsProgramLogTokens: document.querySelector('#limits-program-log-tokens'),
+    limitsUpdated: document.querySelector('#limits-updated'),
     limitsUpdatedAt: document.querySelector('#limits-updated-at'),
   };
 
@@ -352,21 +355,36 @@ markBundledUi(document.documentElement);
   }
 
   function renderLimits() {
-    elements.limitsDetails.hidden = limits === null;
-    if (limits === null) return;
-    const { used, limit } = limits.runningExecutions;
-    elements.limitsRunningExecutionsProgress.max = limit;
-    elements.limitsRunningExecutionsProgress.value = used;
-    elements.limitsRunningExecutionsText.textContent =
-      `${used.toLocaleString()} of ${limit.toLocaleString()} running executions`;
-    const stateBytes = limits.totalExecutionStateBytes;
-    elements.limitsTotalExecutionStateProgress.max = stateBytes.limit;
-    elements.limitsTotalExecutionStateProgress.value = stateBytes.used;
-    elements.limitsTotalExecutionStateText.textContent = `${formatBytes(stateBytes.used)} of ${
-      formatBytes(stateBytes.limit)
-    } execution state`;
-    elements.limitsUpdatedAt.textContent = formatDate(limits.updatedAt);
-    elements.limitsUpdatedAt.title = limits.updatedAt;
+    const latestStatsTick = statsTicks.at(-1);
+    const hasLimitSnapshot = limits !== null;
+    elements.limitsDetails.hidden = !hasLimitSnapshot && latestStatsTick === undefined;
+    elements.limitsRunningExecutions.hidden = !hasLimitSnapshot;
+    elements.limitsTotalExecutionState.hidden = !hasLimitSnapshot;
+    elements.limitsUpdated.hidden = !hasLimitSnapshot;
+    elements.limitsBurstChatTokens.hidden = latestStatsTick === undefined;
+    elements.limitsSlowChatTokens.hidden = latestStatsTick === undefined;
+    elements.limitsProgramLogTokens.hidden = latestStatsTick === undefined;
+
+    if (hasLimitSnapshot) {
+      const { used, limit } = limits.runningExecutions;
+      elements.limitsRunningExecutionsProgress.max = limit;
+      elements.limitsRunningExecutionsProgress.value = used;
+      elements.limitsRunningExecutionsText.textContent =
+        `${used.toLocaleString()} of ${limit.toLocaleString()} running executions`;
+      const stateBytes = limits.totalExecutionStateBytes;
+      elements.limitsTotalExecutionStateProgress.max = stateBytes.limit;
+      elements.limitsTotalExecutionStateProgress.value = stateBytes.used;
+      elements.limitsTotalExecutionStateText.textContent = `${formatBytes(stateBytes.used)} of ${
+        formatBytes(stateBytes.limit)
+      } execution state`;
+      elements.limitsUpdatedAt.textContent = formatDate(limits.updatedAt);
+      elements.limitsUpdatedAt.title = limits.updatedAt;
+    }
+
+    if (latestStatsTick !== undefined) {
+      renderLimitsChatTokens(latestStatsTick);
+      renderLimitsLogTokens(latestStatsTick);
+    }
   }
 
   function parseLimits(body) {
@@ -526,8 +544,6 @@ markBundledUi(document.documentElement);
         statsGapObserved ? ' (gaps observed)' : ''
       }`;
     renderStatsMemory(statsTicks.at(-1));
-    renderStatsChatTokens(statsTicks.at(-1));
-    renderStatsLogTokens(statsTicks.at(-1));
     elements.statsEventsPerSync.textContent = `${
       formatBigInt(player.eventsPerSyncCount)
     } records; average ${
@@ -567,28 +583,34 @@ markBundledUi(document.documentElement);
     elements.statsMemoryText.textContent = text;
   }
 
-  function renderStatsChatTokens(tick) {
+  function renderLimitsChatTokens(tick) {
     const burst = `${tick.burstChatTokens.toLocaleString()} of 10`;
     const slow = `${tick.slowChatTokens.toLocaleString()} of 100`;
-    elements.statsBurstChatTokens.textContent = burst;
-    elements.statsBurstChatTokens.setAttribute(
+    elements.limitsBurstChatTokens.querySelector('dd').textContent = burst;
+    elements.limitsBurstChatTokens.setAttribute(
       'aria-label',
       `Available burst chat tokens: ${burst}`,
     );
-    elements.statsSlowChatTokens.textContent = slow;
-    elements.statsSlowChatTokens.setAttribute('aria-label', `Available slow chat tokens: ${slow}`);
+    elements.limitsSlowChatTokens.querySelector('dd').textContent = slow;
+    elements.limitsSlowChatTokens.setAttribute('aria-label', `Available slow chat tokens: ${slow}`);
   }
 
-  function renderStatsLogTokens(tick) {
+  function renderLimitsLogTokens(tick) {
     if (tick.logTokens === undefined) {
-      elements.statsLogTokens.textContent = 'Unavailable';
-      elements.statsLogTokens.setAttribute('aria-label', 'Program log tokens are unavailable');
+      elements.limitsProgramLogTokens.querySelector('dd').textContent = 'Unavailable';
+      elements.limitsProgramLogTokens.setAttribute(
+        'aria-label',
+        'Program log tokens are unavailable',
+      );
       return;
     }
     const available = tokenFormatter.format(Math.floor(tick.logTokens.available));
     const value = `${available} of ${tick.logTokens.capacity.toLocaleString()}`;
-    elements.statsLogTokens.textContent = value;
-    elements.statsLogTokens.setAttribute('aria-label', `Available program log tokens: ${value}`);
+    elements.limitsProgramLogTokens.querySelector('dd').textContent = value;
+    elements.limitsProgramLogTokens.setAttribute(
+      'aria-label',
+      `Available program log tokens: ${value}`,
+    );
   }
 
   function renderStatsGraphs() {
@@ -1128,9 +1150,10 @@ markBundledUi(document.documentElement);
   }
 
   function updateLimitsFromStats(tick) {
-    if (limits === null || tick.stateBytes > BigInt(Number.MAX_SAFE_INTEGER)) return;
-    limits.totalExecutionStateBytes.used = Number(tick.stateBytes);
-    limits.totalExecutionStateBytes.updatedAt = new Date(Number(tick.sampledAt)).toISOString();
+    if (limits !== null && tick.stateBytes <= BigInt(Number.MAX_SAFE_INTEGER)) {
+      limits.totalExecutionStateBytes.used = Number(tick.stateBytes);
+      limits.totalExecutionStateBytes.updatedAt = new Date(Number(tick.sampledAt)).toISOString();
+    }
     renderLimits();
   }
 

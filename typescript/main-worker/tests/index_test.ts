@@ -43,9 +43,9 @@ Deno.test('/index.html contains the generated programs UI', async () => {
       'stats-activity-graph',
       'stats-graph-tooltip',
       'stats-memory-progress',
-      'Program log tokens',
       'Limits',
       'limits-running-executions-progress',
+      'limits-program-log-tokens',
     ]
   ) {
     if (!html.includes(landmark)) {
@@ -56,6 +56,17 @@ Deno.test('/index.html contains the generated programs UI', async () => {
   for (const removedControl of ['Program storage', 'Program name', 'id="drop-zone"']) {
     if (html.includes(removedControl)) {
       throw new Error(`index page still contains removed UI: ${removedControl}`);
+    }
+  }
+
+  const statsPanel = html.slice(html.indexOf('id="stats-panel"'), html.indexOf('id="logs-panel"'));
+  if (statsPanel.includes('chat tokens') || statsPanel.includes('Program log tokens')) {
+    throw new Error('execution statistics panel still contains token-bucket details');
+  }
+  const limitsPanel = html.slice(html.indexOf('id="limits-panel"'));
+  for (const tokenBucket of ['Burst chat tokens', 'Slow chat tokens', 'Program log tokens']) {
+    if (!limitsPanel.includes(tokenBucket)) {
+      throw new Error(`limits panel is missing ${tokenBucket}`);
     }
   }
 
