@@ -23,13 +23,13 @@ class WirelessObserverBlockTest {
     }
 
     @Test
-    void clampsUnsignedPowerAndOnlyEmitsWeaklyInItsFacingDirection() {
+    void clampsUnsignedPowerAndOnlyEmitsWeaklyOutItsBack() {
         assertEquals(15, WirelessObserverBlock.clampedPower(16));
         assertEquals(15, WirelessObserverBlock.clampedPower(-1));
-        assertEquals(7, WirelessObserverBlock.weakPowerFor(Direction.EAST, 7, Direction.WEST));
-        for (Direction direction : Direction.values()) {
-            if (direction != Direction.WEST) {
-                assertEquals(0, WirelessObserverBlock.weakPowerFor(Direction.EAST, 7, direction));
+        for (Direction facing : Direction.values()) {
+            for (Direction direction : Direction.values()) {
+                int expectedPower = direction == facing ? 7 : 0;
+                assertEquals(expectedPower, WirelessObserverBlock.weakPowerFor(facing, 7, direction));
             }
         }
     }

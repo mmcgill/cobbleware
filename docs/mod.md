@@ -254,7 +254,7 @@ so changes are best-effort and are not replayed after a later pairing, resume, o
 
 A Wireless Observer has a redstone power level from 0 to 15, stored in block state.
 The Polymer-managed client state only differentiates between powered (level > 0) and unpowered (level == 0).
-A powered Wireless Observer only emits signal in the direction it's facing, and only weakly
+A powered Wireless Observer only emits signal out its back, in the direction opposite its facing, and only weakly
 (i.e. via `getWeakRedstonePower`).
 
 `SetRedstonePower` effects apply only to loaded observers currently paired to the

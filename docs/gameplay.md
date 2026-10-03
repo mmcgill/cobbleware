@@ -192,7 +192,7 @@ specific color or one specific observer; when both selectors are present, an
 observer must match both. Observers paired to another Cobbleputer, unloaded
 observers, and invalid color selectors are not affected.
 Pairing a Wireless Observer to a different Cobbleputer resets its power level to 0.
-Wireless Observers emit redstone signal in the direction they're facing.
+Wireless Observers emit weak redstone signal out their backs, in the direction opposite their facing.
 
 ## Cobblemeter
 

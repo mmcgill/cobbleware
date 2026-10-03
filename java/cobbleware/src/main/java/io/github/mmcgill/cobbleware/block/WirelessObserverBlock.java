@@ -58,7 +58,7 @@ public final class WirelessObserverBlock extends Block implements EntityBlock, P
 
     static int weakPowerFor(Direction facing, int power, Direction direction) {
         // Minecraft supplies the direction from the receiving block back toward this block.
-        return direction == facing.getOpposite() ? power : 0;
+        return direction == facing ? power : 0;
     }
 
     /** Changes the output level and notifies neighboring redstone components when it changed. */
