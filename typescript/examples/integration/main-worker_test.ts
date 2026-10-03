@@ -101,17 +101,12 @@ async function assertExecutionSync(): Promise<void> {
   );
 
   const acknowledged = await syncExecutions([
-    executionState(FIRST_EXECUTION_ID, new Uint8Array([1]), [], 3n, 2n),
-    executionState(SECOND_EXECUTION_ID, new Uint8Array([2, 1]), [], 3n, 2n),
+    executionState(FIRST_EXECUTION_ID, new Uint8Array([1]), [], 3n),
+    executionState(SECOND_EXECUTION_ID, new Uint8Array([2, 1]), [], 3n),
   ]);
   for (const result of acknowledged.results) {
     assertEquals(result.eventSeqNum, 2n, 'acknowledgement must retain the consumed event sequence');
     assertEquals(result.effects.length, 0, 'acknowledgement must remove all returned effects');
-    assertEquals(
-      result.effectSeqNum,
-      3n,
-      'empty effect outbox must report the next sequence number',
-    );
   }
 }
 
@@ -174,7 +169,17 @@ async function syncExecutions(
 ): Promise<Internal.ExecutionsResponse> {
   const body = toBinary(
     Internal.ExecutionsRequestSchema,
-    create(Internal.ExecutionsRequestSchema, { executions }),
+    create(Internal.ExecutionsRequestSchema, {
+      players: [create(Internal.PlayerExecutionStateSchema, {
+        playerId: PLAYER_ID,
+        executions,
+        outstandingEffectLimit: 20,
+        totalExecutionStateLimit: 1024n,
+        burstChatTokens: 10,
+        slowChatTokens: 100,
+      })],
+      workerLimit: 1,
+    }),
   );
   const response = await fetch(`${BASE_URL}/modapi/v1/executions`, {
     method: 'POST',
@@ -201,16 +206,14 @@ function executionState(
   initialState: Uint8Array,
   events: Events.Event[],
   eventSeqNum = 1n,
-  effectSeqNum = 0n,
 ): Internal.ExecutionState {
   return create(Internal.ExecutionStateSchema, {
     executionId,
     initialState,
     events,
     eventSeqNum,
-    effectSeqNum,
-    playerId: PLAYER_ID,
-    state: Internal.ExecutionStatus.RUNNING,
+    stateSizeLimit: 1024n,
+    outboxLimit: 20,
   });
 }
 
@@ -257,9 +260,8 @@ function assertExecutionResult(
   if (!sameUuid(result.executionId, executionId)) {
     throw new Error('execution result has the wrong execution id');
   }
-  assertEquals(result.state, Internal.ExecutionStatus.RUNNING, 'execution must remain running');
+  assertEquals(result.executionFailed, false, 'execution must remain running');
   assertEquals(result.eventSeqNum, 2n, 'two events must be consumed');
-  assertEquals(result.effectSeqNum, 1n, 'first effect sequence must be one');
   assertEquals(
     JSON.stringify([...result.finalState]),
     JSON.stringify(expectedState),
