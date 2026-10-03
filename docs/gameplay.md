@@ -131,6 +131,24 @@ and the Cobbleputer crashes while retaining its prior state for `/cobbleware res
 limit-exceeded log entry and the usual crash transition. The Browser Limits tab shows the total state-byte usage and
 cap with live updates from execution statistics.
 
+#### Chat Effect Rate Limit Per Player
+
+Chat provides convenient and low-effort interactivity, but is also easily abused. Cobbleputer
+programs must not be able to flood chat in a way that makes it unusable for players.
+
+Chat effects are rate-limited via a two-level token bucket approach, with a "slow" chat bucket feeding
+into a "burst" chat bucket.
+The slow bucket holds up to 100 tokens, replenishing at a rate of 1 token every 60 seconds.
+The burst bucket holds up to 10 tokens, drawing tokens from the long-term bucket at a rate
+of one token every five second.
+
+Each chat effect emitted by an execution draws a token from the player's burst chat bucket.
+If it contains no tokens, the effect is dropped.
+
+The result of this approach is that a program can send brief bursts of messages, but is quickly
+limited to one message per 5 seconds. A program that emits chat messages at that rate continuously
+will, within ~10 minutes, be further restricted to one message per minute.
+
 ## Execution Pools
 
 A server assigns running Cobbleputers to one of two execution pools:

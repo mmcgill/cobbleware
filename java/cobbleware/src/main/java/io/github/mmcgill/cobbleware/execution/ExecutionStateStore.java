@@ -26,7 +26,11 @@ import org.slf4j.Logger;
 
 /** Stores durable Cobbleputer execution records in one atomic-replacement file per owner. */
 public final class ExecutionStateStore implements AutoCloseable, ExecutionStateAccess {
-    public static final int CURRENT_EXECUTION_STATE_FORMAT_VERSION = 1;
+    public static final int CURRENT_EXECUTION_STATE_FORMAT_VERSION = 2;
+    private static final int BURST_CHAT_TOKEN_CAPACITY = 10;
+    private static final int SLOW_CHAT_TOKEN_CAPACITY = 100;
+    private static final long BURST_CHAT_TRANSFER_TICKS = 20L * 5L;
+    private static final long SLOW_CHAT_REFILL_TICKS = 20L * 20L;
 
     private final Logger logger;
     private final Map<UUID, PlayerState> players = new HashMap<>();
@@ -211,6 +215,46 @@ public final class ExecutionStateStore implements AutoCloseable, ExecutionStateA
         return candidate.length <= stateSizeLimit(owner, cobbleputerId, ownerLimit);
     }
 
+    @Override
+    public synchronized ChatTokens chatTokens(UUID owner, long gameTime) {
+        requireInitialized();
+        if (owner == null || gameTime < 0) {
+            throw new IllegalArgumentException("owner and non-negative game time are required");
+        }
+        if (closing) {
+            return new ChatTokens(0, 0);
+        }
+        PlayerState player = load(owner);
+        if (player == null) {
+            return new ChatTokens(0, 0);
+        }
+        if (player.chatTokens.advance(gameTime)) {
+            markDirty(player);
+        }
+        return player.chatTokens.snapshot();
+    }
+
+    @Override
+    public synchronized boolean tryConsumeBurstChatToken(UUID owner, long gameTime) {
+        requireInitialized();
+        if (owner == null || gameTime < 0) {
+            throw new IllegalArgumentException("owner and non-negative game time are required");
+        }
+        if (closing) {
+            return false;
+        }
+        PlayerState player = load(owner);
+        if (player == null) {
+            return false;
+        }
+        boolean changed = player.chatTokens.advance(gameTime);
+        boolean consumed = player.chatTokens.tryConsumeBurst();
+        if (changed || consumed) {
+            markDirty(player);
+        }
+        return consumed;
+    }
+
     /** Returns a read-only census of every durable execution-state byte length, grouped by owner. */
     public synchronized Map<UUID, Map<UUID, Long>> stateSizeCensus() {
         requireInitialized();
@@ -256,7 +300,7 @@ public final class ExecutionStateStore implements AutoCloseable, ExecutionStateA
         }
         for (Map.Entry<UUID, PlayerState> entry : snapshot.entrySet()) {
             try {
-                writeAtomically(fileFor(entry.getKey()), encode(entry.getValue().records));
+                writeAtomically(fileFor(entry.getKey()), encode(entry.getValue()));
             } catch (IOException exception) {
                 logger.error("Could not synchronously save execution state for player {}", entry.getKey(), exception);
             }
@@ -280,14 +324,16 @@ public final class ExecutionStateStore implements AutoCloseable, ExecutionStateA
             return existing;
         }
         Path file = fileFor(owner);
-        Map<UUID, ExecutionRecord> records;
+        DecodedPlayerState decoded;
         try {
-            records = Files.exists(file) ? decode(Files.readAllBytes(file)) : new HashMap<>();
+            decoded = Files.exists(file)
+                    ? decodePlayerState(Files.readAllBytes(file))
+                    : new DecodedPlayerState(new HashMap<>(), ChatTokenBucket.uninitialized());
         } catch (IOException | RuntimeException exception) {
             logger.error("Could not load execution state for player {} from {}", owner, file, exception);
             return null;
         }
-        PlayerState loaded = new PlayerState(records);
+        PlayerState loaded = new PlayerState(decoded.records(), decoded.chatTokens());
         players.put(owner, loaded);
         return loaded;
     }
@@ -302,7 +348,7 @@ public final class ExecutionStateStore implements AutoCloseable, ExecutionStateA
             return;
         }
         long generation = player.generation;
-        byte[] bytes = encode(player.records);
+        byte[] bytes = encode(player);
         player.queuedGeneration = generation;
         player.writeTail = player.writeTail
                 .handle((ignored, failure) -> null)
@@ -357,10 +403,16 @@ public final class ExecutionStateStore implements AutoCloseable, ExecutionStateA
         return directory.resolve(owner.toString().toLowerCase(java.util.Locale.ROOT) + ".pb");
     }
 
-    static byte[] encode(Map<UUID, ExecutionRecord> records) {
-        PlayerExecutionStates.Builder file =
-                PlayerExecutionStates.newBuilder().setFormatVersion(CURRENT_EXECUTION_STATE_FORMAT_VERSION);
-        for (Map.Entry<UUID, ExecutionRecord> entry : records.entrySet()) {
+    static byte[] encode(PlayerState player) {
+        PlayerExecutionStates.Builder file = PlayerExecutionStates.newBuilder()
+                .setFormatVersion(player.chatTokens.isInitialized() ? CURRENT_EXECUTION_STATE_FORMAT_VERSION : 1);
+        if (player.chatTokens.isInitialized()) {
+            file.setBurstChatTokens(player.chatTokens.burstTokens)
+                    .setSlowChatTokens(player.chatTokens.slowTokens)
+                    .setNextSlowChatRefillTick(player.chatTokens.nextSlowRefillTick)
+                    .setNextBurstChatTransferTick(player.chatTokens.nextBurstTransferTick);
+        }
+        for (Map.Entry<UUID, ExecutionRecord> entry : player.records.entrySet()) {
             ExecutionRecord record = entry.getValue();
             StoredExecutionState.Builder stored = StoredExecutionState.newBuilder()
                     .setCobbleputerId(protoUuid(entry.getKey()))
@@ -380,10 +432,24 @@ public final class ExecutionStateStore implements AutoCloseable, ExecutionStateA
         return file.build().toByteArray();
     }
 
+    static byte[] encode(Map<UUID, ExecutionRecord> records) {
+        return encode(new PlayerState(
+                new HashMap<>(records),
+                ChatTokenBucket.persisted(
+                        BURST_CHAT_TOKEN_CAPACITY,
+                        SLOW_CHAT_TOKEN_CAPACITY,
+                        SLOW_CHAT_REFILL_TICKS,
+                        BURST_CHAT_TRANSFER_TICKS)));
+    }
+
     static Map<UUID, ExecutionRecord> decode(byte[] bytes) throws IOException {
+        return decodePlayerState(bytes).records();
+    }
+
+    private static DecodedPlayerState decodePlayerState(byte[] bytes) throws IOException {
         try {
             PlayerExecutionStates file = PlayerExecutionStates.parseFrom(bytes);
-            if (file.getFormatVersion() != CURRENT_EXECUTION_STATE_FORMAT_VERSION) {
+            if (file.getFormatVersion() != 1 && file.getFormatVersion() != CURRENT_EXECUTION_STATE_FORMAT_VERSION) {
                 throw new IOException("Unsupported execution state format version " + file.getFormatVersion());
             }
             Map<UUID, ExecutionRecord> records = new HashMap<>();
@@ -406,7 +472,17 @@ public final class ExecutionStateStore implements AutoCloseable, ExecutionStateA
                     throw new IOException("Execution state file contains an invalid or duplicate record");
                 }
             }
-            return records;
+            ChatTokenBucket chatTokens = file.getFormatVersion() == 1
+                    ? ChatTokenBucket.uninitialized()
+                    : ChatTokenBucket.persisted(
+                            file.getBurstChatTokens(),
+                            file.getSlowChatTokens(),
+                            file.getNextSlowChatRefillTick(),
+                            file.getNextBurstChatTransferTick());
+            if (file.getFormatVersion() != 1 && !chatTokens.isValid()) {
+                throw new IOException("Execution state file contains invalid chat token bucket data");
+            }
+            return new DecodedPlayerState(records, chatTokens);
         } catch (com.google.protobuf.InvalidProtocolBufferException exception) {
             throw new IOException("Could not decode execution state protobuf", exception);
         }
@@ -440,6 +516,83 @@ public final class ExecutionStateStore implements AutoCloseable, ExecutionStateA
 
     private static UUID javaUuid(Uuid uuid) {
         return new UUID(uuid.getHigh(), uuid.getLow());
+    }
+
+    private record DecodedPlayerState(Map<UUID, ExecutionRecord> records, ChatTokenBucket chatTokens) {}
+
+    static final class ChatTokenBucket {
+        private int burstTokens;
+        private int slowTokens;
+        private long nextSlowRefillTick;
+        private long nextBurstTransferTick;
+
+        private ChatTokenBucket(int burstTokens, int slowTokens, long nextSlowRefillTick, long nextBurstTransferTick) {
+            this.burstTokens = burstTokens;
+            this.slowTokens = slowTokens;
+            this.nextSlowRefillTick = nextSlowRefillTick;
+            this.nextBurstTransferTick = nextBurstTransferTick;
+        }
+
+        static ChatTokenBucket uninitialized() {
+            return new ChatTokenBucket(BURST_CHAT_TOKEN_CAPACITY, SLOW_CHAT_TOKEN_CAPACITY, 0, 0);
+        }
+
+        static ChatTokenBucket persisted(
+                int burstTokens, int slowTokens, long nextSlowRefillTick, long nextBurstTransferTick) {
+            return new ChatTokenBucket(burstTokens, slowTokens, nextSlowRefillTick, nextBurstTransferTick);
+        }
+
+        boolean isValid() {
+            return burstTokens >= 0
+                    && burstTokens <= BURST_CHAT_TOKEN_CAPACITY
+                    && slowTokens >= 0
+                    && slowTokens <= SLOW_CHAT_TOKEN_CAPACITY
+                    && nextSlowRefillTick > 0
+                    && nextBurstTransferTick > 0;
+        }
+
+        boolean isInitialized() {
+            return nextSlowRefillTick != 0 || nextBurstTransferTick != 0;
+        }
+
+        boolean advance(long gameTime) {
+            if (nextSlowRefillTick == 0 && nextBurstTransferTick == 0) {
+                nextSlowRefillTick = addTicks(gameTime, SLOW_CHAT_REFILL_TICKS);
+                nextBurstTransferTick = addTicks(gameTime, BURST_CHAT_TRANSFER_TICKS);
+                return true;
+            }
+            boolean changed = false;
+            while (nextSlowRefillTick <= gameTime || nextBurstTransferTick <= gameTime) {
+                if (nextSlowRefillTick <= nextBurstTransferTick) {
+                    slowTokens = Math.min(SLOW_CHAT_TOKEN_CAPACITY, slowTokens + 1);
+                    nextSlowRefillTick = addTicks(nextSlowRefillTick, SLOW_CHAT_REFILL_TICKS);
+                } else if (burstTokens < BURST_CHAT_TOKEN_CAPACITY && slowTokens > 0) {
+                    slowTokens -= 1;
+                    burstTokens += 1;
+                    nextBurstTransferTick = addTicks(nextBurstTransferTick, BURST_CHAT_TRANSFER_TICKS);
+                } else {
+                    nextBurstTransferTick = addTicks(nextBurstTransferTick, BURST_CHAT_TRANSFER_TICKS);
+                }
+                changed = true;
+            }
+            return changed;
+        }
+
+        boolean tryConsumeBurst() {
+            if (burstTokens == 0) {
+                return false;
+            }
+            burstTokens -= 1;
+            return true;
+        }
+
+        ChatTokens snapshot() {
+            return new ChatTokens(burstTokens, slowTokens);
+        }
+
+        private static long addTicks(long tick, long delta) {
+            return tick > Long.MAX_VALUE - delta ? Long.MAX_VALUE : tick + delta;
+        }
     }
 
     /** Immutable copy of the durable state stored for one Cobbleputer. */
@@ -479,14 +632,16 @@ public final class ExecutionStateStore implements AutoCloseable, ExecutionStateA
 
     private static final class PlayerState {
         private final Map<UUID, ExecutionRecord> records;
+        private final ChatTokenBucket chatTokens;
         private final Map<CobbleputerBlockEntity, Long> awaitingMigrationCompletion = new HashMap<>();
         private long generation;
         private long queuedGeneration;
         private long persistedGeneration;
         private CompletableFuture<Void> writeTail = CompletableFuture.completedFuture(null);
 
-        private PlayerState(Map<UUID, ExecutionRecord> records) {
+        private PlayerState(Map<UUID, ExecutionRecord> records, ChatTokenBucket chatTokens) {
             this.records = records;
+            this.chatTokens = chatTokens;
         }
     }
 

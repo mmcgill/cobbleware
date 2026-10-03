@@ -67,6 +67,48 @@ class ExecutionStateStoreTest {
     }
 
     @Test
+    void migratesVersionOneRecordsAndWritesFullVersionTwoChatBuckets() throws Exception {
+        UUID cobbleputer = UUID.randomUUID();
+        PlayerExecutionStates versionOne = PlayerExecutionStates.newBuilder()
+                .setFormatVersion(1)
+                .addExecutions(cobbleware.internal.StoredExecutionState.newBuilder()
+                        .setCobbleputerId(cobbleware.common.Uuid.newBuilder()
+                                .setHigh(cobbleputer.getMostSignificantBits())
+                                .setLow(cobbleputer.getLeastSignificantBits()))
+                        .setOwnerPlayerName("owner")
+                        .setExecutionState(com.google.protobuf.ByteString.copyFrom(new byte[] {1}))
+                        .setNextEventSequenceNum(1)
+                        .setEffectSequenceNum(0)
+                        .setWasRunningWhenUnloaded(false))
+                .build();
+
+        assertEquals(1, ExecutionStateStore.decode(versionOne.toByteArray()).size());
+        PlayerExecutionStates migrated = PlayerExecutionStates.parseFrom(ExecutionStateStore.encode(Map.of()));
+
+        assertEquals(2, migrated.getFormatVersion());
+        assertEquals(10, migrated.getBurstChatTokens());
+        assertEquals(100, migrated.getSlowChatTokens());
+        assertEquals(100, migrated.getNextBurstChatTransferTick());
+        assertEquals(1200, migrated.getNextSlowChatRefillTick());
+    }
+
+    @Test
+    void chatBucketTransfersAndRefillsOnlyAfterItsGameTimeDeadlines() {
+        ExecutionStateStore.ChatTokenBucket bucket = ExecutionStateStore.ChatTokenBucket.uninitialized();
+
+        assertEquals(true, bucket.advance(100));
+        assertEquals(new ExecutionStateAccess.ChatTokens(10, 100), bucket.snapshot());
+        for (int index = 0; index < 10; index += 1) {
+            assertEquals(true, bucket.tryConsumeBurst());
+        }
+        assertEquals(false, bucket.tryConsumeBurst());
+        assertEquals(false, bucket.advance(199));
+        assertEquals(new ExecutionStateAccess.ChatTokens(0, 100), bucket.snapshot());
+        assertEquals(true, bucket.advance(200));
+        assertEquals(new ExecutionStateAccess.ChatTokens(1, 99), bucket.snapshot());
+    }
+
+    @Test
     void executionRecordDefensivelyCopiesStateBytes() {
         byte[] original = {1, 2};
         ExecutionStateStore.ExecutionRecord record =

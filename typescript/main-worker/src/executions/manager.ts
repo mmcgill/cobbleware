@@ -53,6 +53,8 @@ type ValidatedPlayer = {
   playerId: string;
   outstandingEffectLimit: number;
   totalExecutionStateLimit: bigint;
+  burstChatTokens: number;
+  slowChatTokens: number;
   executions: ValidatedExecution[];
 };
 
@@ -70,6 +72,7 @@ export class ExecutionManager {
   private readonly executionWindows = new Map<string, ExecutionWindow>();
   private readonly playerExecutionIds = new Map<string, Set<string>>();
   private readonly playerEffectLimits = new Map<string, number>();
+  private readonly playerChatTokens = new Map<string, { burst: number; slow: number }>();
   private workerLimit = 0;
   private serial = Promise.resolve();
 
@@ -117,11 +120,16 @@ export class ExecutionManager {
     for (const playerId of this.playerEffectLimits.keys()) {
       if (!requestedPlayers.has(playerId)) {
         this.playerEffectLimits.delete(playerId);
+        this.playerChatTokens.delete(playerId);
       }
     }
 
     for (const player of validated.players) {
       this.playerEffectLimits.set(player.playerId, player.outstandingEffectLimit);
+      this.playerChatTokens.set(player.playerId, {
+        burst: player.burstChatTokens,
+        slow: player.slowChatTokens,
+      });
       for (const execution of player.executions) {
         const executionId = uuidKey(execution.execution.executionId!);
         const existing = this.executionWindows.get(executionId);
@@ -347,6 +355,8 @@ export class ExecutionManager {
           event: cloneEvent(slot.event),
           effectLimit: window.outboxLimit,
           stateSizeLimit: window.stateSizeLimit,
+          burstChatTokens: this.playerChatTokens.get(window.playerId)?.burst ?? 0,
+          slowChatTokens: this.playerChatTokens.get(window.playerId)?.slow ?? 0,
         }),
         window.responseSizeLimit,
       );
@@ -538,8 +548,24 @@ async function validateRequest(
       Internal.PlayerExecutionStateSchema.field.totalExecutionStateLimit,
       'total_execution_state_limit',
     );
+    requireRequestField(
+      player,
+      Internal.PlayerExecutionStateSchema.field.burstChatTokens,
+      'burst_chat_tokens',
+    );
+    requireRequestField(
+      player,
+      Internal.PlayerExecutionStateSchema.field.slowChatTokens,
+      'slow_chat_tokens',
+    );
     if (player.totalExecutionStateLimit <= 0n) {
       invalidRequest('total_execution_state_limit must be positive');
+    }
+    if (player.burstChatTokens > 10) {
+      invalidRequest('burst_chat_tokens must not exceed 10');
+    }
+    if (player.slowChatTokens > 100) {
+      invalidRequest('slow_chat_tokens must not exceed 100');
     }
     const playerId = uuidString(player.playerId!);
     if (playerIds.has(playerId)) {
@@ -596,6 +622,8 @@ async function validateRequest(
       playerId,
       outstandingEffectLimit: player.outstandingEffectLimit,
       totalExecutionStateLimit: player.totalExecutionStateLimit,
+      burstChatTokens: player.burstChatTokens,
+      slowChatTokens: player.slowChatTokens,
       executions,
     });
   }
@@ -605,6 +633,8 @@ async function validateRequest(
       playerId: player.playerId,
       outstandingEffectLimit: player.outstandingEffectLimit,
       totalExecutionStateLimit: player.totalExecutionStateLimit,
+      burstChatTokens: player.burstChatTokens,
+      slowChatTokens: player.slowChatTokens,
       executions: await Promise.all(player.executions.map(async (execution) => ({
         playerId: player.playerId,
         execution,

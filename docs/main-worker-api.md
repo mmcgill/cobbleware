@@ -558,6 +558,11 @@ The outbox and player outstanding-effect limits are soft. A step may take an out
 most its limit to above its limit, but the Runtime will not schedule a later step for that
 execution or player until the Mod advances the corresponding execution window.
 
+Each `PlayerExecutionState` also contains required `burst_chat_tokens` and `slow_chat_tokens` values.
+The Mod is authoritative for these per-player buckets; the Main Worker validates their fixed capacities,
+retains the latest snapshot for an active player, and copies it into each resulting `Program.StepRequest`.
+It does not refill or spend chat tokens, and it does not filter chat effects.
+
 The execution sync operation maintains the following invariants:
 
 * An execution does not take steps if its outbox contains more effects than the Mod-specified outbox limit.

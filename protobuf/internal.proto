@@ -49,6 +49,10 @@ message PlayerExecutionState {
   uint32 outstanding_effect_limit = 3;
   // Configured cap on all of this player's durable execution-state byte arrays. Required by the application contract.
   uint64 total_execution_state_limit = 4;
+  // The Mod-authoritative number of available burst chat tokens. Required by the application contract.
+  uint32 burst_chat_tokens = 5;
+  // The Mod-authoritative number of available slow chat tokens. Required by the application contract.
+  uint32 slow_chat_tokens = 6;
 }
 
 message ExecutionsRequest {
@@ -89,6 +93,14 @@ message PlayerExecutionStates {
   // Version of this file format. Required by the application contract.
   uint32 format_version = 1;
   repeated StoredExecutionState executions = 2;
+  // Current per-player burst chat tokens. Present in format version 2 and later.
+  uint32 burst_chat_tokens = 3;
+  // Current per-player slow chat tokens. Present in format version 2 and later.
+  uint32 slow_chat_tokens = 4;
+  // Minecraft game time at which the next slow token becomes available. Present in format version 2 and later.
+  uint64 next_slow_chat_refill_tick = 5;
+  // Minecraft game time at which a slow token may move to the burst bucket. Present in format version 2 and later.
+  uint64 next_burst_chat_transfer_tick = 6;
 }
 
 // One Cobbleputer's durable execution record in a PlayerExecutionStates file.

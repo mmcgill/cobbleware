@@ -139,12 +139,16 @@ function player(
   executions: Internal.ExecutionState[],
   outstandingEffectLimit = 20,
   totalExecutionStateLimit = 1024n,
+  burstChatTokens = 10,
+  slowChatTokens = 100,
 ): Internal.PlayerExecutionState {
   return create(Internal.PlayerExecutionStateSchema, {
     playerId,
     executions,
     outstandingEffectLimit,
     totalExecutionStateLimit,
+    burstChatTokens,
+    slowChatTokens,
   });
 }
 
@@ -213,6 +217,8 @@ Deno.test('Execution sync is immediate and asynchronously records states and eff
   const worker = store.created[0]!.worker;
   await waitForRequests(worker, 1);
   assertEquals(worker.requests[0]?.effectLimit, 10, 'step receives the execution outbox limit');
+  assertEquals(worker.requests[0]?.burstChatTokens, 10, 'step receives the burst chat token count');
+  assertEquals(worker.requests[0]?.slowChatTokens, 100, 'step receives the slow chat token count');
   worker.complete(0, stepResponse(new Uint8Array([9]), [effect('hello')]));
   await settle();
 
@@ -221,6 +227,22 @@ Deno.test('Execution sync is immediate and asynchronously records states and eff
   assertEquals(result.eventSeqNum, 1n, 'completed event should be consumed');
   assertBytes(result.finalState, [9], 'completed state');
   assertEquals(result.effects.length, 1, 'completed effects');
+});
+
+Deno.test('Later execution snapshots replace the chat token counts conveyed to program steps', async () => {
+  const store = new TestProgramStore();
+  const manager = new ExecutionManager(store, 1024);
+  const snapshot = execution({ events: [event(1n), event(2n)] });
+  await manager.sync(request([player(PLAYER_A, [snapshot], 20, 1024n, 10, 100)]));
+  const worker = store.created[0]!.worker;
+  await waitForRequests(worker, 1);
+
+  await manager.sync(request([player(PLAYER_A, [snapshot], 20, 1024n, 2, 91)]));
+  worker.complete(0, stepResponse(new Uint8Array([2])));
+  await waitForRequests(worker, 2);
+
+  assertEquals(worker.requests[1]?.burstChatTokens, 2, 'later burst count replaces the snapshot');
+  assertEquals(worker.requests[1]?.slowChatTokens, 91, 'later slow count replaces the snapshot');
 });
 
 Deno.test('Execution sync endpoint keeps protobuf success and error responses', async () => {
@@ -298,6 +320,29 @@ Deno.test('Execution sync requires a positive total execution-state limit for ea
       rejected = error instanceof ExecutionRequestError;
     }
     assertEquals(rejected, true, 'invalid total execution-state limit is rejected');
+  }
+});
+
+Deno.test('Execution sync requires in-range chat token counts for each player', async () => {
+  const manager = new ExecutionManager(new TestProgramStore(), 1024);
+  const missing = create(Internal.PlayerExecutionStateSchema, {
+    playerId: PLAYER_A,
+    executions: [execution()],
+    outstandingEffectLimit: 20,
+    totalExecutionStateLimit: 1024n,
+    slowChatTokens: 100,
+  });
+  const overBurst = player(PLAYER_A, [execution()], 20, 1024n, 11, 100);
+  const overSlow = player(PLAYER_A, [execution()], 20, 1024n, 10, 101);
+
+  for (const invalid of [missing, overBurst, overSlow]) {
+    let rejected = false;
+    try {
+      await manager.sync(request([invalid]));
+    } catch (error) {
+      rejected = error instanceof ExecutionRequestError;
+    }
+    assertEquals(rejected, true, 'invalid chat token counts are rejected');
   }
 });
 

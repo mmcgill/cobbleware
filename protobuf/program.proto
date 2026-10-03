@@ -28,6 +28,10 @@ message StepRequest {
   uint32 effect_limit = 4;
   // The maximum size in bytes the Runtime will accept for the next execution state.
   uint64 state_size_limit = 5;
+  // The Mod's current number of available per-player burst chat tokens.
+  uint32 burst_chat_tokens = 6;
+  // The Mod's current number of available per-player slow chat tokens.
+  uint32 slow_chat_tokens = 7;
 }
 
 message StepResponse {

@@ -505,7 +505,7 @@ public final class ExecutionDriver {
         // minimizing end-to-end latency.
         drainObserverChanges(minecraft);
         if (!syncStillPending) {
-            Flight nextFlight = buildFlight();
+            Flight nextFlight = buildFlight(minecraft);
             if (nextFlight.hadExecutions() || runtimeMayHaveExecutions) {
                 if (nextFlight.hadExecutions()) {
                     runtimeMayHaveExecutions = true;
@@ -914,7 +914,7 @@ public final class ExecutionDriver {
                 Event.newBuilder().setWirelessObserverUnpaired(event).build());
     }
 
-    private Flight buildFlight() {
+    private Flight buildFlight(Minecraft minecraft) {
         Map<UUID, PlayerFlight> playersByOwner = new LinkedHashMap<>();
         Map<String, OfferedExecution> offered = new HashMap<>();
         List<OfferedExecution> orderedOffered = new ArrayList<>();
@@ -928,6 +928,10 @@ public final class ExecutionDriver {
             if (executionPoolManager.poolFor(ownerId).isEmpty()) {
                 continue;
             }
+            OptionalLong gameTime = minecraft.gameTime(blockEntity);
+            if (gameTime.isEmpty()) {
+                continue;
+            }
             byte[] executionState = blockEntity.executionState().orElseThrow();
             List<Event> events = new ArrayList<>();
             for (QueuedEvent queued : entry.getValue().events) {
@@ -936,7 +940,9 @@ public final class ExecutionDriver {
             long firstEventSequence = entry.getValue().events.isEmpty()
                     ? blockEntity.nextEventSequenceNum()
                     : entry.getValue().events.getFirst().sequenceNum;
-            PlayerFlight playerFlight = playersByOwner.computeIfAbsent(ownerId, ignored -> new PlayerFlight());
+            PlayerFlight playerFlight = playersByOwner.computeIfAbsent(
+                    ownerId,
+                    ignored -> new PlayerFlight(executionStateAccess.chatTokens(ownerId, gameTime.getAsLong())));
             playerFlight.executions.add(ExecutionState.newBuilder()
                     .setExecutionId(protoUuid(executionId))
                     .setInitialState(com.google.protobuf.ByteString.copyFrom(executionState))
@@ -957,6 +963,8 @@ public final class ExecutionDriver {
                     .addAllExecutions(playerFlight.executions)
                     .setOutstandingEffectLimit(maxPendingEffectsPerPlayer)
                     .setTotalExecutionStateLimit(maxTotalExecutionStateBytesPerPlayer)
+                    .setBurstChatTokens(playerFlight.chatTokens.burst())
+                    .setSlowChatTokens(playerFlight.chatTokens.slow())
                     .build());
             orderedOffered.addAll(playerFlight.offered);
         }
@@ -1062,34 +1070,33 @@ public final class ExecutionDriver {
     }
 
     private void applyEffect(Minecraft minecraft, CobbleputerBlockEntity blockEntity, Effect effect) {
-        String message =
-                switch (effect.getEffectCase()) {
-                    case SET_REDSTONE_POWER -> {
-                        applyRedstonePower(minecraft, blockEntity, effect.getSetRedstonePower());
-                        yield null;
-                    }
-                    case EMIT_BEEP -> {
-                        if (Integer.compareUnsigned(effect.getEmitBeep().getMillis(), 65535) > 0) {
-                            logger.warn(
-                                    "Ignoring EmitBeep with an invalid millis value at {}",
-                                    blockEntity.getBlockPos().toShortString());
-                            yield null;
-                        }
-                        yield "beep";
-                    }
-                    case SEND_CHAT -> effect.getSendChat().getMsg();
-                    case EFFECT_NOT_SET -> null;
-                };
-        if (effect.getEffectCase() == Effect.EffectCase.SET_REDSTONE_POWER) {
-            return;
+        switch (effect.getEffectCase()) {
+            case SET_REDSTONE_POWER -> applyRedstonePower(minecraft, blockEntity, effect.getSetRedstonePower());
+            case EMIT_BEEP -> {
+                if (Integer.compareUnsigned(effect.getEmitBeep().getMillis(), 65535) > 0) {
+                    logger.warn(
+                            "Ignoring EmitBeep with an invalid millis value at {}",
+                            blockEntity.getBlockPos().toShortString());
+                    return;
+                }
+                minecraft.sendNearbySystemMessage(blockEntity, Component.literal("beep"));
+            }
+            case SEND_CHAT -> {
+                UUID owner = blockEntity.ownerPlayerId().orElse(null);
+                OptionalLong gameTime = minecraft.gameTime(blockEntity);
+                if (owner == null
+                        || gameTime.isEmpty()
+                        || !executionStateAccess.tryConsumeBurstChatToken(owner, gameTime.getAsLong())) {
+                    return;
+                }
+                minecraft.sendNearbySystemMessage(
+                        blockEntity, Component.literal(effect.getSendChat().getMsg()));
+            }
+            case EFFECT_NOT_SET ->
+                logger.warn(
+                        "Ignoring unsupported or unset Cobbleputer effect at {}",
+                        blockEntity.getBlockPos().toShortString());
         }
-        if (message == null) {
-            logger.warn(
-                    "Ignoring unsupported or unset Cobbleputer effect at {}",
-                    blockEntity.getBlockPos().toShortString());
-            return;
-        }
-        minecraft.sendNearbySystemMessage(blockEntity, Component.literal(message));
     }
 
     private static void applyRedstonePower(
@@ -1400,8 +1407,13 @@ public final class ExecutionDriver {
             CobbleputerBlockEntity blockEntity, long firstEventSequence, int offeredEventCount) {}
 
     private static final class PlayerFlight {
+        private final ExecutionStateAccess.ChatTokens chatTokens;
         private final List<ExecutionState> executions = new ArrayList<>();
         private final List<OfferedExecution> offered = new ArrayList<>();
+
+        private PlayerFlight(ExecutionStateAccess.ChatTokens chatTokens) {
+            this.chatTokens = chatTokens;
+        }
     }
 
     private record Flight(

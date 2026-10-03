@@ -28,6 +28,10 @@ export interface StepContext {
   effectLimit: number;
   /** The maximum byte length the Runtime will accept for the next execution state. */
   stateSizeLimit: bigint;
+  /** The Mod's current number of available per-player burst chat tokens. */
+  burstChatTokens: number;
+  /** The Mod's current number of available per-player slow chat tokens. */
+  slowChatTokens: number;
 }
 
 /**
@@ -100,6 +104,8 @@ async function handleNextState(request: Request, program: Program): Promise<Resp
         program(stepRequest.state, stepRequest.event, {
           effectLimit: stepRequest.effectLimit,
           stateSizeLimit: stepRequest.stateSizeLimit,
+          burstChatTokens: stepRequest.burstChatTokens,
+          slowChatTokens: stepRequest.slowChatTokens,
         }),
       ),
       200,

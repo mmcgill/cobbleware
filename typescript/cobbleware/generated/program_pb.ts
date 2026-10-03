@@ -16,7 +16,7 @@ import type { Message } from "@bufbuild/protobuf";
  * Describes the file program.proto.
  */
 export const file_program: GenFile = /*@__PURE__*/
-  fileDesc("Cg1wcm9ncmFtLnByb3RvEhJjb2JibGV3YXJlLnByb2dyYW0iLwoKU3RhcnRTdGF0ZRISCgpzdGF0ZV9uYW1lGAEgASgJEg0KBXN0YXRlGAIgASgMIksKE1N0YXJ0U3RhdGVzUmVzcG9uc2USNAoMc3RhcnRfc3RhdGVzGAEgAygLMh4uY29iYmxld2FyZS5wcm9ncmFtLlN0YXJ0U3RhdGUipAEKC1N0ZXBSZXF1ZXN0Ei0KDGV4ZWN1dGlvbl9pZBgBIAEoCzIXLmNvYmJsZXdhcmUuY29tbW9uLlV1aWQSDQoFc3RhdGUYAiABKAwSJwoFZXZlbnQYAyABKAsyGC5jb2JibGV3YXJlLmV2ZW50cy5FdmVudBIUCgxlZmZlY3RfbGltaXQYBCABKA0SGAoQc3RhdGVfc2l6ZV9saW1pdBgFIAEoBCJKCgxTdGVwUmVzcG9uc2USDQoFc3RhdGUYASABKAwSKwoHZWZmZWN0cxgCIAMoCzIaLmNvYmJsZXdhcmUuZWZmZWN0cy5FZmZlY3QiHgoNRXJyb3JSZXNwb25zZRINCgVlcnJvchgBIAEoCWIIZWRpdGlvbnNw6Qc", [file_common, file_effects, file_events]);
+  fileDesc("Cg1wcm9ncmFtLnByb3RvEhJjb2JibGV3YXJlLnByb2dyYW0iLwoKU3RhcnRTdGF0ZRISCgpzdGF0ZV9uYW1lGAEgASgJEg0KBXN0YXRlGAIgASgMIksKE1N0YXJ0U3RhdGVzUmVzcG9uc2USNAoMc3RhcnRfc3RhdGVzGAEgAygLMh4uY29iYmxld2FyZS5wcm9ncmFtLlN0YXJ0U3RhdGUi2QEKC1N0ZXBSZXF1ZXN0Ei0KDGV4ZWN1dGlvbl9pZBgBIAEoCzIXLmNvYmJsZXdhcmUuY29tbW9uLlV1aWQSDQoFc3RhdGUYAiABKAwSJwoFZXZlbnQYAyABKAsyGC5jb2JibGV3YXJlLmV2ZW50cy5FdmVudBIUCgxlZmZlY3RfbGltaXQYBCABKA0SGAoQc3RhdGVfc2l6ZV9saW1pdBgFIAEoBBIZChFidXJzdF9jaGF0X3Rva2VucxgGIAEoDRIYChBzbG93X2NoYXRfdG9rZW5zGAcgASgNIkoKDFN0ZXBSZXNwb25zZRINCgVzdGF0ZRgBIAEoDBIrCgdlZmZlY3RzGAIgAygLMhouY29iYmxld2FyZS5lZmZlY3RzLkVmZmVjdCIeCg1FcnJvclJlc3BvbnNlEg0KBWVycm9yGAEgASgJYghlZGl0aW9uc3DpBw", [file_common, file_effects, file_events]);
 
 /**
  * @generated from message cobbleware.program.StartState
@@ -99,6 +99,20 @@ export type StepRequest = Message<"cobbleware.program.StepRequest"> & {
    * @generated from field: uint64 state_size_limit = 5;
    */
   stateSizeLimit: bigint;
+
+  /**
+   * The Mod's current number of available per-player burst chat tokens.
+   *
+   * @generated from field: uint32 burst_chat_tokens = 6;
+   */
+  burstChatTokens: number;
+
+  /**
+   * The Mod's current number of available per-player slow chat tokens.
+   *
+   * @generated from field: uint32 slow_chat_tokens = 7;
+   */
+  slowChatTokens: number;
 };
 
 /**

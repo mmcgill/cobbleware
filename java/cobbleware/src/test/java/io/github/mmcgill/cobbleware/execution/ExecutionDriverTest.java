@@ -739,6 +739,84 @@ class ExecutionDriverTest {
     }
 
     @Test
+    void limitsChatEffectsAcrossAllOfOnePlayersCobbleputers() {
+        Fixture fixture = new Fixture(32);
+        UUID owner = UUID.randomUUID();
+        fixture.startNewExecution(owner, new byte[] {1});
+        fixture.startNewExecution(owner, new byte[] {2});
+        CompletableFuture<MainWorker.ExecutionSyncResult> first = fixture.worker.enqueueSyncResult();
+        fixture.worker.enqueueSyncResult();
+
+        fixture.serverTick();
+        ExecutionsRequest request = fixture.worker.syncRequests.getFirst();
+        List<Effect> burst = new ArrayList<>();
+        for (int index = 0; index < 10; index += 1) {
+            burst.add(Effect.newBuilder()
+                    .setSendChat(SendChat.newBuilder().setMsg("burst " + index))
+                    .build());
+        }
+        first.complete(MainWorker.ExecutionSyncResult.success(ExecutionsResponse.newBuilder()
+                .addResults(resultFor(execution(request, 0), 1, new byte[] {3}).toBuilder()
+                        .addAllEffects(burst)
+                        .build())
+                .addResults(resultFor(execution(request, 1), 1, new byte[] {4}).toBuilder()
+                        .addEffects(Effect.newBuilder()
+                                .setSendChat(SendChat.newBuilder().setMsg("dropped"))
+                                .build())
+                        .build())
+                .build()));
+
+        fixture.serverTick();
+
+        assertEquals(10, fixture.minecraft.nearbyMessages.size());
+        assertFalse(fixture.minecraft.nearbyMessages.contains("dropped"));
+        assertEquals(0, fixture.worker.syncRequests.get(1).getPlayers(0).getBurstChatTokens());
+        assertEquals(100, fixture.worker.syncRequests.get(1).getPlayers(0).getSlowChatTokens());
+    }
+
+    @Test
+    void refillsOneBurstChatTokenAfterFiveSecondsOfGameTime() {
+        Fixture fixture = new Fixture(32);
+        CobbleputerBlockEntity cobbleputer = fixture.startNewExecution(new byte[] {1});
+        CompletableFuture<MainWorker.ExecutionSyncResult> first = fixture.worker.enqueueSyncResult();
+        CompletableFuture<MainWorker.ExecutionSyncResult> second = fixture.worker.enqueueSyncResult();
+        fixture.worker.enqueueSyncResult();
+
+        fixture.serverTick();
+        ExecutionsRequest firstRequest = fixture.worker.syncRequests.getFirst();
+        List<Effect> burst = new ArrayList<>();
+        for (int index = 0; index < 10; index += 1) {
+            burst.add(Effect.newBuilder()
+                    .setSendChat(SendChat.newBuilder().setMsg("burst " + index))
+                    .build());
+        }
+        first.complete(MainWorker.ExecutionSyncResult.success(ExecutionsResponse.newBuilder()
+                .addResults(resultFor(execution(firstRequest, 0), 1, new byte[] {2}).toBuilder()
+                        .addAllEffects(burst)
+                        .build())
+                .build()));
+        fixture.serverTick();
+
+        for (int tick = 0; tick < 99; tick += 1) {
+            fixture.serverTick();
+        }
+        ExecutionsRequest secondRequest = fixture.worker.syncRequests.get(1);
+        second.complete(MainWorker.ExecutionSyncResult.success(ExecutionsResponse.newBuilder()
+                .addResults(resultFor(execution(secondRequest, 0), 1, new byte[] {3}).toBuilder()
+                        .addEffects(Effect.newBuilder()
+                                .setSendChat(SendChat.newBuilder().setMsg("refilled"))
+                                .build())
+                        .build())
+                .build()));
+        fixture.serverTick();
+
+        assertTrue(fixture.minecraft.nearbyMessages.contains("refilled"));
+        assertEquals(99, fixture.worker.syncRequests.get(2).getPlayers(0).getSlowChatTokens());
+        assertEquals(0, fixture.worker.syncRequests.get(2).getPlayers(0).getBurstChatTokens());
+        assertEquals(2, cobbleputer.nextEventSequenceNum());
+    }
+
+    @Test
     void dispatchesAnObserverEventProducedByAnEffectInTheSubsequentSync() {
         Fixture fixture = new Fixture(32);
         CobbleputerBlockEntity cobbleputer = fixture.startNewExecution(new byte[] {1});
@@ -917,6 +995,7 @@ class ExecutionDriverTest {
         }
 
         private void serverTick() {
+            minecraft.advanceGameTime();
             instrumentation.advanceTick();
             driver.driveExecutions(minecraft);
         }
@@ -925,6 +1004,7 @@ class ExecutionDriverTest {
     private static final class FakeExecutionStateAccess implements ExecutionStateAccess {
         private final long stateLimit;
         private final Map<UUID, ExecutionStateStore.ExecutionRecord> records = new HashMap<>();
+        private final Map<UUID, TestChatTokenBucket> chatTokens = new HashMap<>();
 
         private FakeExecutionStateAccess(long stateLimit) {
             this.stateLimit = stateLimit;
@@ -956,8 +1036,63 @@ class ExecutionDriverTest {
         }
 
         @Override
+        public ChatTokens chatTokens(UUID owner, long gameTime) {
+            return chatTokens
+                    .computeIfAbsent(owner, ignored -> new TestChatTokenBucket(gameTime))
+                    .snapshot(gameTime);
+        }
+
+        @Override
+        public boolean tryConsumeBurstChatToken(UUID owner, long gameTime) {
+            return chatTokens
+                    .computeIfAbsent(owner, ignored -> new TestChatTokenBucket(gameTime))
+                    .tryConsume(gameTime);
+        }
+
+        @Override
         public Map<UUID, Map<UUID, Long>> stateSizeCensus() {
             return Map.of();
+        }
+
+        private static final class TestChatTokenBucket {
+            private int burst = 10;
+            private int slow = 100;
+            private long nextSlowRefill;
+            private long nextBurstTransfer;
+
+            private TestChatTokenBucket(long gameTime) {
+                nextSlowRefill = gameTime + 1200;
+                nextBurstTransfer = gameTime + 100;
+            }
+
+            private ChatTokens snapshot(long gameTime) {
+                advance(gameTime);
+                return new ChatTokens(burst, slow);
+            }
+
+            private boolean tryConsume(long gameTime) {
+                advance(gameTime);
+                if (burst == 0) {
+                    return false;
+                }
+                burst -= 1;
+                return true;
+            }
+
+            private void advance(long gameTime) {
+                while (nextSlowRefill <= gameTime || nextBurstTransfer <= gameTime) {
+                    if (nextSlowRefill <= nextBurstTransfer) {
+                        slow = Math.min(100, slow + 1);
+                        nextSlowRefill += 1200;
+                    } else {
+                        if (burst < 10 && slow > 0) {
+                            burst += 1;
+                            slow -= 1;
+                        }
+                        nextBurstTransfer += 100;
+                    }
+                }
+            }
         }
     }
 
@@ -1009,6 +1144,7 @@ class ExecutionDriverTest {
     }
 
     private static final class FakeMinecraft implements ExecutionDriver.Minecraft {
+        private long gameTime = 100;
         private final List<String> nearbyMessages = new ArrayList<>();
         private Optional<CobbleputerBlockEntity> observedCobbleputer = Optional.empty();
         private final List<WirelessObserverBlockEntity> initializedObservers = new ArrayList<>();
@@ -1029,7 +1165,11 @@ class ExecutionDriverTest {
 
         @Override
         public OptionalLong gameTime(CobbleputerBlockEntity blockEntity) {
-            return OptionalLong.of(100);
+            return OptionalLong.of(gameTime);
+        }
+
+        private void advanceGameTime() {
+            gameTime += 1;
         }
 
         @Override

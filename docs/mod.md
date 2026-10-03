@@ -173,6 +173,10 @@ owner and state before the failing event so it can restart.
 The Mod writes every Player file by forcing a complete same-directory temporary file and atomically replacing the
 previous file. It queues dirty files asynchronously before each world save and synchronously flushes all loaded Player
 files during server stopping. Pending events and received effects remain in-memory and best-effort.
+Each Player file also stores the owner's shared burst and slow chat-token buckets plus their next Minecraft game-time
+refill and transfer ticks. New owners and migrated format-version-one files begin with both buckets full. Since the
+schedule uses Minecraft game time, a Mod or server restart preserves the remaining allowance without granting tokens
+for time while the server was offline.
 
 Breaking the Cobbleputer block destroys the block entity; effectively terminating the execution.
 It also immediately unpairs every loaded Wireless Observer paired to that Cobbleputer. Unloaded
@@ -306,6 +310,10 @@ At most once per tick (via `ServerTickEvents.END_SERVER_TICK`), the `ExecutionDr
 
 The driver constructs an `ExecutionsRequest` that contains all the active executions
 of all the players in the guaranteed and best-effort pools.
+For each included player it advances that owner's durable chat buckets using the current game time and supplies the
+current burst and slow counts. The Main Worker only conveys these values to program steps. When processing a returned
+`SendChat` effect, the Mod atomically spends a burst token before delivery and drops the effect if none is available;
+all other effects are unaffected.
 
 ## Instrumentation
 
