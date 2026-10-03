@@ -2,7 +2,7 @@ import { Common, create, Effects, Events, fromBinary, Program, toBinary } from '
 import { isFieldSet } from '@bufbuild/protobuf';
 import * as Internal from '@cobbleware/core/internal';
 import type { ProgramStore } from '../programs/types.ts';
-import { invokeNextState } from '../programs/program-api.ts';
+import { invokeNextState, StepResponseSizeLimitError } from '../programs/program-api.ts';
 
 const RETIRE_SHUTDOWN_MS = 0;
 
@@ -28,6 +28,7 @@ type ExecutionWindow = {
   eventWindow: EventWindowSlot[];
   inFlightStep?: InFlightStep;
   stateSizeLimit: bigint;
+  responseSizeLimit: bigint;
   outboxLimit: number;
   failed: boolean;
   failedEventSeqNum?: bigint;
@@ -45,11 +46,13 @@ type ValidatedExecution = {
   playerId: string;
   execution: Internal.ExecutionState;
   initialStateSha: Uint8Array;
+  responseSizeLimit: bigint;
 };
 
 type ValidatedPlayer = {
   playerId: string;
   outstandingEffectLimit: number;
+  totalExecutionStateLimit: bigint;
   executions: ValidatedExecution[];
 };
 
@@ -160,6 +163,7 @@ export class ExecutionManager {
         effects: [],
       })),
       stateSizeLimit: state.stateSizeLimit,
+      responseSizeLimit: execution.responseSizeLimit,
       outboxLimit: state.outboxLimit,
       failed: false,
       failureReason: Internal.ExecutionFailureReason.UNSPECIFIED,
@@ -196,6 +200,7 @@ export class ExecutionManager {
     window.initialEventSeqNum = state.eventSeqNum;
     window.initialStateSha = execution.initialStateSha;
     window.stateSizeLimit = state.stateSizeLimit;
+    window.responseSizeLimit = execution.responseSizeLimit;
     window.outboxLimit = state.outboxLimit;
     for (let index = retainedSlots.length; index < state.events.length; index += 1) {
       window.eventWindow.push({
@@ -343,6 +348,7 @@ export class ExecutionManager {
           effectLimit: window.outboxLimit,
           stateSizeLimit: window.stateSizeLimit,
         }),
+        window.responseSizeLimit,
       );
       const stateSha = await sha1(step.state);
       await this.withLock(() => {
@@ -394,6 +400,8 @@ export class ExecutionManager {
         window.failedEventSeqNum = eventSeqNum;
         window.failureReason = error instanceof StateSizeLimitError
           ? Internal.ExecutionFailureReason.STATE_SIZE_LIMIT
+          : error instanceof StepResponseSizeLimitError
+          ? Internal.ExecutionFailureReason.STEP_RESPONSE_SIZE_LIMIT
           : Internal.ExecutionFailureReason.UNSPECIFIED;
         this.clearInvocation(window, worker, token);
       });
@@ -525,6 +533,14 @@ async function validateRequest(
       Internal.PlayerExecutionStateSchema.field.outstandingEffectLimit,
       'outstanding_effect_limit',
     );
+    requireRequestField(
+      player,
+      Internal.PlayerExecutionStateSchema.field.totalExecutionStateLimit,
+      'total_execution_state_limit',
+    );
+    if (player.totalExecutionStateLimit <= 0n) {
+      invalidRequest('total_execution_state_limit must be positive');
+    }
     const playerId = uuidString(player.playerId!);
     if (playerIds.has(playerId)) {
       invalidRequest('player_id is duplicated');
@@ -579,6 +595,7 @@ async function validateRequest(
     players.push({
       playerId,
       outstandingEffectLimit: player.outstandingEffectLimit,
+      totalExecutionStateLimit: player.totalExecutionStateLimit,
       executions,
     });
   }
@@ -587,10 +604,12 @@ async function validateRequest(
     players: await Promise.all(players.map(async (player) => ({
       playerId: player.playerId,
       outstandingEffectLimit: player.outstandingEffectLimit,
+      totalExecutionStateLimit: player.totalExecutionStateLimit,
       executions: await Promise.all(player.executions.map(async (execution) => ({
         playerId: player.playerId,
         execution,
         initialStateSha: await sha1(execution.initialState),
+        responseSizeLimit: player.totalExecutionStateLimit * 2n,
       }))),
     }))),
   };

@@ -1,4 +1,11 @@
-import { Common, create, Effects, Program, start } from '@cobbleware/core';
+import {
+  Common,
+  create,
+  createProgramApiHandler,
+  Effects,
+  fromBinary,
+  Program,
+} from '@cobbleware/core';
 import { CONWAY, conwayHandler, conwayStartState } from './conway.ts';
 import { BIGSTATE, bigstateHandler, bigstateStartState } from './bigstate.ts';
 
@@ -7,6 +14,8 @@ const { DyeColor } = Common;
 const HELLO = 1;
 const ECHO = 2;
 const HANG = 3;
+const BIGRESPONSE = 6;
+const BIGRESPONSE_CHUNK_BYTES = 64 * 1024;
 
 export const helloHandler: Program = function handle(state, event) {
   let effects: Effects.Effect[] = [];
@@ -138,8 +147,39 @@ export const startStates = {
   hang: new Uint8Array([HANG]),
   conway: conwayStartState,
   bigstate: bigstateStartState,
+  bigresponse: new Uint8Array([BIGRESPONSE]),
 };
 
+export function createExampleProgramApiHandler(): (request: Request) => Promise<Response> {
+  const handler = createProgramApiHandler({ program: handle, startStates });
+  return async (request) => {
+    if (request.method === 'POST' && new URL(request.url).pathname === '/nextState') {
+      try {
+        const step = fromBinary(
+          Program.StepRequestSchema,
+          new Uint8Array(await request.clone().arrayBuffer()),
+        );
+        if (step.state[0] === BIGRESPONSE && step.event?.event.case === 'chatMessage') {
+          return new Response(unboundedResponseBytes(), {
+            headers: { 'content-type': 'application/octet-stream' },
+          });
+        }
+      } catch {
+        // Let the standard Program API handler report malformed requests.
+      }
+    }
+    return await handler(request);
+  };
+}
+
+function unboundedResponseBytes(): ReadableStream<Uint8Array> {
+  return new ReadableStream({
+    pull(controller) {
+      controller.enqueue(new Uint8Array(BIGRESPONSE_CHUNK_BYTES));
+    },
+  });
+}
+
 if (import.meta.main) {
-  start({ program: handle, startStates });
+  Deno.serve(createExampleProgramApiHandler());
 }

@@ -18,6 +18,8 @@ enum ExecutionStatus {
 enum ExecutionFailureReason {
   EXECUTION_FAILURE_REASON_UNSPECIFIED = 0;
   EXECUTION_FAILURE_REASON_STATE_SIZE_LIMIT = 1;
+  // The raw program response body exceeded the configured execution-sync limit.
+  EXECUTION_FAILURE_REASON_STEP_RESPONSE_SIZE_LIMIT = 2;
 }
 
 message ExecutionState {
@@ -45,6 +47,8 @@ message PlayerExecutionState {
   repeated ExecutionState executions = 2;
   // Soft limit on total outstanding effects for this player. Required by the application contract.
   uint32 outstanding_effect_limit = 3;
+  // Configured cap on all of this player's durable execution-state byte arrays. Required by the application contract.
+  uint64 total_execution_state_limit = 4;
 }
 
 message ExecutionsRequest {

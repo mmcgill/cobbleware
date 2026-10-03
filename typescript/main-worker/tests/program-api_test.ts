@@ -3,6 +3,7 @@ import {
   invokeNextState,
   invokeStartStates,
   PROGRAM_BINARY_CONTENT_TYPE,
+  StepResponseSizeLimitError,
 } from '../src/programs/program-api.ts';
 
 function worker(fetch: CobblewareUserWorker['fetch']): CobblewareUserWorker {
@@ -88,8 +89,86 @@ Deno.test('Program API nextState serializes its request and deserializes its res
   }
 });
 
+Deno.test('Program API nextState accepts a streamed response at its size limit', async () => {
+  const expected = create(Program.StepResponseSchema, { state: new Uint8Array([9, 8, 7]) });
+  const body = toBinary(Program.StepResponseSchema, expected);
+  const response = await invokeNextState(
+    worker(() => Promise.resolve(streamingResponse([body.slice(0, 2), body.slice(2)]))),
+    stepRequest(),
+    BigInt(body.byteLength),
+  );
+
+  if (JSON.stringify([...response.state]) !== JSON.stringify([...expected.state])) {
+    throw new Error('response at the size limit was not decoded');
+  }
+});
+
+Deno.test('Program API nextState cancels an oversized streamed response', async () => {
+  let cancelled = false;
+  let error: unknown;
+  try {
+    await invokeNextState(
+      worker(() => Promise.resolve(streamingResponse(
+        [new Uint8Array([1, 2]), new Uint8Array([3])],
+        () => {
+          cancelled = true;
+        },
+        500,
+        false,
+        'text/plain',
+      ))),
+      stepRequest(),
+      2n,
+    );
+  } catch (caught) {
+    error = caught;
+  }
+
+  if (!(error instanceof StepResponseSizeLimitError)) {
+    throw new Error(
+      `oversized response did not report its size-limit error: ${
+        error instanceof Error ? error.stack ?? error.message : String(error)
+      }`,
+    );
+  }
+  if (!cancelled) throw new Error('oversized response stream was not cancelled');
+});
+
+function stepRequest(): Program.StepRequest {
+  return create(Program.StepRequestSchema, {
+    executionId: create(Common.UuidSchema, { high: 1n, low: 2n }),
+    state: new Uint8Array([1]),
+    event: create(Events.EventSchema, {
+      event: { case: 'started', value: create(Events.StartedSchema, { tick: 1n }) },
+    }),
+    effectLimit: 1,
+    stateSizeLimit: 1n,
+  });
+}
+
 function binaryResponse(body: Uint8Array): Response {
   return new Response(new Blob([body.slice().buffer as ArrayBuffer]), {
     headers: { 'content-type': PROGRAM_BINARY_CONTENT_TYPE },
   });
+}
+
+function streamingResponse(
+  chunks: Uint8Array[],
+  onCancel?: () => void,
+  status = 200,
+  close = true,
+  contentType = PROGRAM_BINARY_CONTENT_TYPE,
+): Response {
+  let index = 0;
+  return new Response(new ReadableStream({
+    pull(controller) {
+      const chunk = chunks[index++];
+      if (chunk === undefined) {
+        if (close) controller.close();
+      } else {
+        controller.enqueue(chunk);
+      }
+    },
+    cancel: onCancel,
+  }), { status, headers: { 'content-type': contentType } });
 }

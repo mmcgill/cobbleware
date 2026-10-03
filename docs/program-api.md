@@ -56,3 +56,7 @@ function receives the state, event, and this limit as its context and returns a 
 subsequent state and effects. Effects beyond the supplied limit are dropped.
 On success, the response should have 200 status with a `StepResponse` body. On failure (e.g. due to an exception)
 the response should have a 500 response with an `ErrorResponse` body.
+It is an error for the response body to be larger than twice the configured `maxTotalExecutionStateBytesPerPlayer`.
+The main-worker streams the response incrementally and will cancel the response reader if
+the limit is exceeded, failing the associated execution (which will in turn crash the Cobbleputer).
+A LimitExceededLogEntry is also written in this case.

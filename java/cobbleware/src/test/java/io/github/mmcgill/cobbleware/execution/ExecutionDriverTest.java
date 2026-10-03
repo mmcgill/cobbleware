@@ -685,6 +685,29 @@ class ExecutionDriverTest {
     }
 
     @Test
+    void crashesWhenTheRuntimeReportsAnOversizedStepResponse() {
+        Fixture fixture = new Fixture(32);
+        CobbleputerBlockEntity cobbleputer = fixture.startNewExecution(new byte[] {1});
+        CompletableFuture<MainWorker.ExecutionSyncResult> first = fixture.worker.enqueueSyncResult();
+        fixture.worker.enqueueSyncResult();
+
+        fixture.serverTick();
+        ExecutionState offered = execution(fixture.worker.syncRequests.getFirst(), 0);
+        assertEquals(32, fixture.worker.syncRequests.getFirst().getPlayers(0).getTotalExecutionStateLimit());
+        first.complete(MainWorker.ExecutionSyncResult.success(ExecutionsResponse.newBuilder()
+                .addResults(resultFor(offered, 1, new byte[] {1}).toBuilder()
+                        .setExecutionFailed(true)
+                        .setFailureReason(ExecutionFailureReason.EXECUTION_FAILURE_REASON_STEP_RESPONSE_SIZE_LIMIT)
+                        .build())
+                .build()));
+        fixture.serverTick();
+
+        assertEquals(CobbleputerState.CRASHED, cobbleputer.getBlockState().getValue(CobbleputerBlock.STATE));
+        assertArrayEquals(new byte[] {1}, cobbleputer.executionState().orElseThrow());
+        assertEquals(List.of("ProgramStepResponseSize"), fixture.worker.limitReasons);
+    }
+
+    @Test
     void appliesAndAcknowledgesEveryEffectInOrder() {
         Fixture fixture = new Fixture(32);
         CobbleputerBlockEntity cobbleputer = fixture.startNewExecution(new byte[] {1});

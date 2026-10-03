@@ -4,6 +4,10 @@ import { isFieldSet } from '@bufbuild/protobuf';
 
 export const PROGRAM_BINARY_CONTENT_TYPE = 'application/octet-stream';
 
+export class StepResponseSizeLimitError extends Error {
+  override name = 'StepResponseSizeLimitError';
+}
+
 const START_STATES_PATH = 'http://cobbleware.local/startStates';
 const NEXT_STATE_PATH = 'http://cobbleware.local/nextState';
 
@@ -42,6 +46,7 @@ export async function invokeStartStates(worker: CobblewareUserWorker): Promise<S
 export async function invokeNextState(
   worker: CobblewareUserWorker,
   stepRequest: Program.StepRequest,
+  responseSizeLimit?: bigint,
 ): Promise<Program.StepResponse> {
   const body = toBinary(Program.StepRequestSchema, stepRequest);
   const response = await worker.fetch(
@@ -51,6 +56,9 @@ export async function invokeNextState(
       body: new Blob([body.slice().buffer as ArrayBuffer]),
     }),
   );
+  const boundedResponseBody = responseSizeLimit === undefined
+    ? undefined
+    : await readResponseBytes(response, responseSizeLimit);
 
   if (response.status !== 200) {
     const contentType = mediaType(response.headers.get('content-type'));
@@ -59,12 +67,13 @@ export async function invokeNextState(
       try {
         const error = fromBinary(
           Program.ErrorResponseSchema,
-          new Uint8Array(await response.arrayBuffer()),
+          boundedResponseBody ?? await readResponseBytes(response),
         );
         if (error.error !== '') {
           detail = `: ${error.error}`;
         }
-      } catch {
+      } catch (error) {
+        if (error instanceof StepResponseSizeLimitError) throw error;
         detail = ' (response body was not a valid ErrorResponse)';
       }
     }
@@ -77,7 +86,10 @@ export async function invokeNextState(
   if (mediaType(response.headers.get('content-type')) !== PROGRAM_BINARY_CONTENT_TYPE) {
     throw new Error('program returned an unexpected /nextState content type');
   }
-  const step = fromBinary(Program.StepResponseSchema, new Uint8Array(await response.arrayBuffer()));
+  const step = fromBinary(
+    Program.StepResponseSchema,
+    boundedResponseBody ?? await readResponseBytes(response),
+  );
   requireField(step, Program.StepResponseSchema.field.state, 'program response state');
   for (const effect of step.effects) {
     if (effect.effect.case === undefined) {
@@ -85,6 +97,38 @@ export async function invokeNextState(
     }
   }
   return step;
+}
+
+async function readResponseBytes(response: Response, limit?: bigint): Promise<Uint8Array> {
+  if (response.body === null) return new Uint8Array();
+
+  const reader = response.body.getReader();
+  const chunks: Uint8Array[] = [];
+  let byteLength = 0;
+  let countedBytes = 0n;
+  try {
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      countedBytes += BigInt(value.byteLength);
+      if (limit !== undefined && countedBytes > limit) {
+        await reader.cancel().catch(() => {});
+        throw new StepResponseSizeLimitError('program response body exceeds the configured size limit');
+      }
+      chunks.push(value);
+      byteLength += value.byteLength;
+    }
+  } finally {
+    reader.releaseLock();
+  }
+
+  const bytes = new Uint8Array(byteLength);
+  let offset = 0;
+  for (const chunk of chunks) {
+    bytes.set(chunk, offset);
+    offset += chunk.byteLength;
+  }
+  return bytes;
 }
 
 function requireField(

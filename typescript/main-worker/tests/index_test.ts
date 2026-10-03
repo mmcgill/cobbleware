@@ -70,6 +70,7 @@ Deno.test('/index.html contains the generated programs UI', async () => {
       'execution-stats-stream-already-open',
       '/playerapi/v1/execution-stats',
       '/playerapi/v1/limits',
+      'ProgramStepResponseSize',
     ]
   ) {
     if (!scriptBody.includes(behavior)) {

@@ -956,6 +956,7 @@ public final class ExecutionDriver {
                     .setPlayerId(protoUuid(entry.getKey()))
                     .addAllExecutions(playerFlight.executions)
                     .setOutstandingEffectLimit(maxPendingEffectsPerPlayer)
+                    .setTotalExecutionStateLimit(maxTotalExecutionStateBytesPerPlayer)
                     .build());
             orderedOffered.addAll(playerFlight.offered);
         }
@@ -1019,6 +1020,9 @@ public final class ExecutionDriver {
             discardPendingEvents(offered.blockEntity, active);
             if (result.getFailureReason() == ExecutionFailureReason.EXECUTION_FAILURE_REASON_STATE_SIZE_LIMIT) {
                 mainWorker.reportLimitExceeded(owner, executionId, "TotalExecutionStateSize");
+            } else if (result.getFailureReason()
+                    == ExecutionFailureReason.EXECUTION_FAILURE_REASON_STEP_RESPONSE_SIZE_LIMIT) {
+                mainWorker.reportLimitExceeded(owner, executionId, "ProgramStepResponseSize");
             }
             offered.blockEntity.crashExecution();
             updateVisibleState(minecraft, offered.blockEntity, CobbleputerState.CRASHED);

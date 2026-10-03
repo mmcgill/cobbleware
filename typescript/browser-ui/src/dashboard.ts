@@ -844,9 +844,6 @@ markBundledUi(document.documentElement);
         };
       case 'limited': {
         const { reason, cpuTimeUsed, totalMemUsed } = entry.inner.value;
-        if (reason !== 'CPUTime' && reason !== 'Memory' && reason !== 'TotalExecutionStateSize') {
-          throw new Error('invalid limit reason');
-        }
         const details = [];
         if (cpuTimeUsed !== 0n) details.push(`CPU time used: ${formatNanos(cpuTimeUsed)}`);
         if (totalMemUsed !== 0n) details.push(`Memory used: ${formatStatBytes(totalMemUsed)}`);
@@ -855,7 +852,9 @@ markBundledUi(document.documentElement);
           typeLabel: 'Limit exceeded',
           message: reason === 'TotalExecutionStateSize'
             ? 'Total execution-state size limit exceeded.'
-            : `${reason} limit exceeded.`,
+            : reason === 'ProgramStepResponseSize'
+            ? 'Program step response size limit exceeded.'
+            : reason,
           metadata: details.join('; '),
         };
       }

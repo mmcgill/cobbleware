@@ -138,11 +138,13 @@ function player(
   playerId: Common.Uuid,
   executions: Internal.ExecutionState[],
   outstandingEffectLimit = 20,
+  totalExecutionStateLimit = 1024n,
 ): Internal.PlayerExecutionState {
   return create(Internal.PlayerExecutionStateSchema, {
     playerId,
     executions,
     outstandingEffectLimit,
+    totalExecutionStateLimit,
   });
 }
 
@@ -279,6 +281,26 @@ Deno.test('Execution sync validates snapshots before changing cached work', asyn
   );
 });
 
+Deno.test('Execution sync requires a positive total execution-state limit for each player', async () => {
+  const manager = new ExecutionManager(new TestProgramStore(), 1024);
+  const missing = create(Internal.PlayerExecutionStateSchema, {
+    playerId: PLAYER_A,
+    executions: [execution()],
+    outstandingEffectLimit: 20,
+  });
+  const zero = player(PLAYER_A, [execution()], 20, 0n);
+
+  for (const invalid of [missing, zero]) {
+    let rejected = false;
+    try {
+      await manager.sync(request([invalid]));
+    } catch (error) {
+      rejected = error instanceof ExecutionRequestError;
+    }
+    assertEquals(rejected, true, 'invalid total execution-state limit is rejected');
+  }
+});
+
 Deno.test('Execution sync drops a window when an in-window state SHA-1 differs', async () => {
   const store = new TestProgramStore();
   const manager = new ExecutionManager(store, 1024);
@@ -398,6 +420,27 @@ Deno.test('Execution sync rejects an oversized program state before returning it
     'oversized state identifies its failure reason',
   );
   assertBytes(result.finalState, [1], 'oversized state does not replace the current state');
+});
+
+Deno.test('Execution sync reports a program response larger than the total-state response limit', async () => {
+  const store = new TestProgramStore();
+  const manager = new ExecutionManager(store, 1024);
+  const snapshot = request([player(PLAYER_A, [execution()], 20, 1n)]);
+  await manager.sync(snapshot);
+  const worker = store.created[0]!.worker;
+  await waitForRequests(worker, 1);
+  worker.complete(0, stepResponse(new Uint8Array([2])));
+  await settle();
+
+  const result = (await manager.sync(snapshot)).results[0]!;
+  assertEquals(result.executionFailed, true, 'oversized response fails the execution');
+  assertEquals(
+    result.failureReason,
+    Internal.ExecutionFailureReason.STEP_RESPONSE_SIZE_LIMIT,
+    'oversized response identifies its failure reason',
+  );
+  assertBytes(result.finalState, [1], 'oversized response does not replace the current state');
+  assertEquals(result.effects.length, 0, 'oversized response does not retain effects');
 });
 
 Deno.test('Execution sync observes the per-execution soft outbox threshold', async () => {

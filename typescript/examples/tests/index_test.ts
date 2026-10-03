@@ -1,5 +1,5 @@
-import { create, Events } from '@cobbleware/core';
-import { handle, startStates } from '../src/index.ts';
+import { create, Events, Program, toBinary } from '@cobbleware/core';
+import { createExampleProgramApiHandler, handle, startStates } from '../src/index.ts';
 
 Deno.test('hello start state greets on start and beeps on resume', () => {
   assertStep(
@@ -33,6 +33,30 @@ Deno.test('echo start state counts and echoes chat messages', () => {
     'Echo (2): Again',
   );
   assertEquals([...state], [2, 2], 'echo counter must persist in state');
+});
+
+Deno.test('bigresponse start state streams without completing for chat events', async () => {
+  const handler = createExampleProgramApiHandler();
+  const request = create(Program.StepRequestSchema, {
+    state: startStates.bigresponse,
+    event: event('chatMessage', create(Events.ChatMessageSchema, { message: 'Testing' })),
+    effectLimit: 1,
+    stateSizeLimit: 1n,
+  });
+  const response = await handler(
+    new Request('http://cobbleware.local/nextState', {
+      method: 'POST',
+      body: toBinary(Program.StepRequestSchema, request),
+    }),
+  );
+  const reader = response.body?.getReader();
+  if (reader === undefined) throw new Error('bigresponse did not return a response stream');
+
+  const first = await reader.read();
+  if (first.done || first.value.byteLength === 0) {
+    throw new Error('bigresponse stream did not produce response bytes');
+  }
+  await reader.cancel();
 });
 
 function event(
