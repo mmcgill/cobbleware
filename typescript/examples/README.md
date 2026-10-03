@@ -36,13 +36,16 @@ The program uses three colors of wireless observer:
 - Blue observers are used as a clock signal to advance the simulation.
 
 The chat commands `sim`, `init`, and `step` respectively enter simulation mode,
-return to init mode, and advance the simulation. The program reports each mode
-change in chat. Pairing a black observer also reports the paired-observer count
-and the current screen size.
+return to init mode, and advance the simulation. The commands `clear`, `randomize`,
+and `template` work in either mode: they set every board cell dead, assign each cell
+a 25% chance of life, or copy the blocks seen by black observers (air is dead and any
+other block is alive). The program reports each mode change in chat. Pairing a black
+observer also reports the paired-observer count and the current screen size.
 
-In 'simulate' mode, the program's execution state stores the board size,
-the set of live cells on the board, and a queue of cell changes that need to be
-applied to be sent to the "display" before the next simulation step can be taken.
+The execution state stores the board size, the set of live cells on the board,
+the last block type seen by each paired black observer, and a queue of cell changes
+that need to be applied to the "display" before the next simulation step can be taken.
+Init mode keeps a configured board until simulation begins.
 
 The program's intended use is as follows:
 
@@ -51,14 +54,16 @@ The program's intended use is as follows:
   and current screen size in chat.
 - When the program in 'init' mode and receives a block state change from a green observer indicating
   that its observed block is powered, the program transitions to 'simulate' mode. At this transition,
-  the program initializes the board by:
+  it uses a board previously configured by `clear`, `randomize`, or `template`; otherwise it initializes
+  the board with all cells dead. Board layout is determined by:
   - identifying the plane (xy, xz, yz) that contains the most black observers
   - using the min/max coordinates of black observers in that plane to pick board extents,
     capped to 64x64
   - assigning board i,j locations to observer ids
-  - clearing power to all paired black observers
-  - randomly assigning initial board state (with each cell having an 0.25 chance of being alive)
-  - storing in program state the board size, state, and a queue of pixels to activate
+- Commands run while in init mode construct that same layout and retain it for the later transition.
+- `template` uses the most recently delivered block-state change for every paired black observer.
+  Wireless Observers do not deliver their current block when paired and do not replay missed changes,
+  so a newly paired observer is considered dead until its observed block changes at least once.
 - When the program is in 'simulate' mode:
   - receiving a block state change from a green observer indicating that its observed block is unpowered
     sends it back to 'init' mode while retaining the recorded paired black observers and turning all

@@ -23,12 +23,15 @@ Here's a rough sketch of the current plan to getting something working end-to-en
 * [x] Per-Player stats in the Browser UI
   * [x] Memory utilization
   * [x] Aggregate event/effect rates
-* [ ] Limits
+* [x] Limits
   * [x] Per-player active executions
   * [x] Per-player buffered effects limit
   * [x] Per-player memory utilization (via runtime)
   * [x] Per-player total execution state size
   * [x] Per-player queued events
+  * [x] Per-player chat rate limit
+  * [x] Per-player log rate limit
+  * [x] Per-step response size limit
 * [ ] Cobbleputer art assets
 * [ ] Wireless Observer art assets
 * [ ] Bundling the runtime in the Mod

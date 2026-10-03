@@ -1,5 +1,6 @@
 import { Common, create, Effects, Events } from '@cobbleware/core';
 import {
+  type ConwayBoard,
   conwayHandler,
   type ConwayObserver,
   type ConwaySimulationState,
@@ -8,6 +9,7 @@ import {
   decodeConwayState,
   encodeConwayState,
   nextGeneration,
+  randomizedAlive,
 } from '../src/conway.ts';
 
 const { DyeColor } = Common;
@@ -29,19 +31,134 @@ Deno.test('Conway collects black observers during init and removes unpaired obse
   assertEquals(decoded.observers.length, 0, 'unpaired observer should be removed');
 });
 
-Deno.test('Conway seeds a board at 25 percent and initially queues a complete clear', () => {
+Deno.test('Conway enters simulation with an empty board and randomizes at 25 percent on demand', () => {
   const simulation = createSimulationState([
     observer(1, 0, 0, 0),
     observer(2, 1, 0, 0),
-  ], sequenceRandom([0.24, 0.25]));
+  ]);
 
   assertEquals(simulation.width, 2, 'selected board width');
   assertEquals(simulation.height, 1, 'selected board height');
-  assertEquals(simulation.alive, [0], 'only values below 0.25 should seed live cells');
-  assertEquals(simulation.pending, [
-    { type: 'clear' },
-    { type: 'cell', observerId: idKey(1), powered: true },
-  ], 'initial clear must precede activation');
+  assertEquals(simulation.alive, [], 'simulation must not randomly seed cells on entry');
+  assertEquals(simulation.pending, [{ type: 'clear' }], 'initial state must clear the display');
+
+  const board: ConwayBoard = { ...simulation, alive: [] };
+  assertEquals(
+    randomizedAlive(board, sequenceRandom([0.24, 0.25])),
+    [0],
+    'only random values below 0.25 should become live',
+  );
+});
+
+Deno.test('Conway configuration commands work in init and retain their board when sim starts', () => {
+  let state = step(conwayStartState, paired(DyeColor.BLACK, 1, 0, 0, 0), 0).state;
+  state = step(state, paired(DyeColor.BLACK, 2, 1, 0, 0), 0).state;
+
+  const originalRandom = Math.random;
+  Math.random = sequenceRandom([0.24, 0.25]);
+  try {
+    const randomized = step(state, chatMessage('randomize'), 0);
+    const randomizedInit = decodeConwayState(randomized.state);
+    if (randomizedInit.mode !== 'init' || randomizedInit.board === undefined) {
+      throw new Error('expected randomized init board');
+    }
+    assertEquals(randomizedInit.board.alive, [0], 'randomize should work in init mode');
+  } finally {
+    Math.random = originalRandom;
+  }
+
+  const cleared = step(state, chatMessage('clear'), 0);
+  let init = decodeConwayState(cleared.state);
+  if (init.mode !== 'init' || init.board === undefined) {
+    throw new Error('expected configured init board');
+  }
+  assertEquals(init.board.alive, [], 'clear should make every init cell dead');
+  assertEquals(init.pending, [{ type: 'clear' }], 'clear should replace stale display work');
+
+  const templated = step(
+    step(cleared.state, blackBlockChange(1, 'stone'), 0).state,
+    chatMessage('template'),
+    0,
+  );
+  init = decodeConwayState(templated.state);
+  if (init.mode !== 'init' || init.board === undefined) {
+    throw new Error('expected configured init board');
+  }
+  assertEquals(init.board.alive, [0], 'template should make a non-air observed cell live');
+  assertEquals(init.pending.length, 2, 'template should clear before activating its live cells');
+
+  const simulated = step(templated.state, chatMessage('sim'), 0);
+  const simulation = simulationFrom(simulated.state);
+  assertEquals(simulation.alive, [0], 'sim should preserve an init-mode configured board');
+
+  const clearedSimulation = step(simulated.state, chatMessage('clear'), 0);
+  assertEquals(
+    simulationFrom(clearedSimulation.state).alive,
+    [],
+    'clear should also work in sim mode',
+  );
+
+  Math.random = sequenceRandom([0.25, 0.24]);
+  try {
+    const randomizedSimulation = step(clearedSimulation.state, chatMessage('randomize'), 0);
+    assertEquals(
+      simulationFrom(randomizedSimulation.state).alive,
+      [1],
+      'randomize should work in sim mode',
+    );
+  } finally {
+    Math.random = originalRandom;
+  }
+});
+
+Deno.test('Conway template tracks black observer blocks in both modes', () => {
+  let state = step(conwayStartState, paired(DyeColor.BLACK, 1, 0, 0, 0), 0).state;
+  state = step(state, paired(DyeColor.BLACK, 2, 1, 0, 0), 0).state;
+  state = step(state, blackBlockChange(1, 'stone'), 0).state;
+  state = step(state, blackBlockChange(2, 'air'), 0).state;
+
+  const initTemplate = step(state, chatMessage('template'), 0);
+  let init = decodeConwayState(initTemplate.state);
+  if (init.mode !== 'init' || init.board === undefined) {
+    throw new Error('expected configured init board');
+  }
+  assertEquals(init.board.alive, [0], 'air and never-seen observers should be dead in template');
+
+  const simulated = step(initTemplate.state, chatMessage('sim'), 50);
+  const afterAir = step(simulated.state, blackBlockChange(1, 'air'), 50);
+  const simTemplate = step(afterAir.state, chatMessage('template'), 0);
+  assertEquals(
+    simulationFrom(simTemplate.state).alive,
+    [],
+    'sim-mode block changes should refresh template input',
+  );
+
+  const afterUnpair = step(state, unpaired(DyeColor.BLACK, 1), 0);
+  init = decodeConwayState(afterUnpair.state);
+  if (init.mode !== 'init') throw new Error('expected init state');
+  assertEquals(
+    init.lastSeenBlocks[idKey(1)],
+    undefined,
+    'unpairing should discard cached block input',
+  );
+});
+
+Deno.test('Conway normalizes pre-template persisted state', () => {
+  const legacy = {
+    version: 1,
+    mode: 'init',
+    observers: [observer(1, 0, 0, 0)],
+    pending: [],
+  };
+  const payload = new TextEncoder().encode(JSON.stringify(legacy));
+  const bytes = new Uint8Array(payload.length + 1);
+  bytes[0] = 4;
+  bytes.set(payload, 1);
+
+  const decoded = decodeConwayState(bytes);
+  if (decoded.mode !== 'init') throw new Error('expected normalized init state');
+  assertEquals(decoded.observers, legacy.observers, 'legacy observers should be retained');
+  assertEquals(decoded.lastSeenBlocks, {}, 'legacy state should receive empty template input');
 });
 
 Deno.test('Conway selects an xy display plane and caps each board axis at 64 cells', () => {
@@ -182,6 +299,21 @@ function blockChange(color: Common.DyeColor, powered: boolean): Events.Event {
   });
 }
 
+function blackBlockChange(id: number, blockPath: string): Events.Event {
+  return create(Events.EventSchema, {
+    event: {
+      case: 'blockStateChange',
+      value: create(Events.BlockStateChangeSchema, {
+        observerColor: DyeColor.BLACK,
+        observerId: uuid(id),
+        newState: create(Events.BlockInfoSchema, {
+          blockType: create(Common.IdentifierSchema, { ns: 'minecraft', path: blockPath }),
+        }),
+      }),
+    },
+  });
+}
+
 function chatMessage(message: string): Events.Event {
   return create(Events.EventSchema, {
     event: {
@@ -209,6 +341,7 @@ function simulationState(
     version: 1,
     mode: 'simulate',
     observers: [],
+    lastSeenBlocks: {},
     width,
     height,
     cells: Array.from(

@@ -12,16 +12,27 @@ const { DyeColor } = Common;
 export const CONWAY = 4;
 const STATE_VERSION = 1;
 const MAX_BOARD_DIMENSION = 64;
+const LIVE_PROBABILITY = 0.25;
 const encoder = new TextEncoder();
 const decoder = new TextDecoder();
 
 type Plane = 'xy' | 'xz' | 'yz';
+type ConfigurationCommand = 'clear' | 'randomize' | 'template';
 
 export type ConwayObserver = {
   id: string;
   dimension: [string, string];
   position: [number, number, number];
 };
+
+export type ConwayBoard = {
+  width: number;
+  height: number;
+  cells: Array<[number, string]>;
+  alive: number[];
+};
+
+type BlockType = { ns: string; path: string };
 
 type PendingOperation =
   | { type: 'clear' }
@@ -32,17 +43,16 @@ export type ConwayInitState = {
   version: typeof STATE_VERSION;
   mode: 'init';
   observers: ConwayObserver[];
+  lastSeenBlocks: Record<string, BlockType>;
+  board?: ConwayBoard;
   pending: PendingOperation[];
 };
 
-export type ConwaySimulationState = {
+export type ConwaySimulationState = ConwayBoard & {
   version: typeof STATE_VERSION;
   mode: 'simulate';
   observers: ConwayObserver[];
-  width: number;
-  height: number;
-  cells: Array<[number, string]>;
-  alive: number[];
+  lastSeenBlocks: Record<string, BlockType>;
   pending: PendingOperation[];
 };
 
@@ -51,22 +61,19 @@ export type ConwayState = ConwayInitState | ConwaySimulationState;
 export const conwayStartState = encodeConwayState(emptyInitState());
 
 export const conwayHandler: EventProgram = (state, event, context) => {
-  const current = decodeConwayState(state);
-  if (current.mode === 'init') {
-    return handleInit(current, event, context.effectLimit);
-  }
-  return handleSimulation(current, event, context.effectLimit);
+  const current = rememberBlackBlockState(decodeConwayState(state), event);
+  const command = configurationCommand(event);
+  if (command !== undefined) return configureBoard(current, command, context.effectLimit);
+  return current.mode === 'init'
+    ? handleInit(current, event, context.effectLimit)
+    : handleSimulation(current, event, context.effectLimit);
 };
 
 /** Exported to keep Conway's persisted-state behavior directly testable. */
 export function decodeConwayState(bytes: Uint8Array): ConwayState {
-  if (bytes[0] !== CONWAY) {
-    return emptyInitState();
-  }
-
+  if (bytes[0] !== CONWAY) return emptyInitState();
   try {
-    const value: unknown = JSON.parse(decoder.decode(bytes.slice(1)));
-    return isConwayState(value) ? value : emptyInitState();
+    return normalizeConwayState(JSON.parse(decoder.decode(bytes.slice(1)))) ?? emptyInitState();
   } catch {
     return emptyInitState();
   }
@@ -82,15 +89,8 @@ export function encodeConwayState(state: ConwayState): Uint8Array {
 }
 
 /** Exported to make the toroidal Life rules independently testable. */
-export function nextGeneration(
-  width: number,
-  height: number,
-  alive: readonly number[],
-): number[] {
-  if (width === 0 || height === 0) {
-    return [];
-  }
-
+export function nextGeneration(width: number, height: number, alive: readonly number[]): number[] {
+  if (width === 0 || height === 0) return [];
   const current = new Set(alive);
   const next: number[] = [];
   for (let row = 0; row < height; row += 1) {
@@ -102,17 +102,28 @@ export function nextGeneration(
           if (rowOffset === 0 && columnOffset === 0) continue;
           const neighborColumn = (column + columnOffset + width) % width;
           const neighborRow = (row + rowOffset + height) % height;
-          if (current.has(neighborRow * width + neighborColumn)) {
-            neighbors += 1;
-          }
+          if (current.has(neighborRow * width + neighborColumn)) neighbors += 1;
         }
       }
-      if (neighbors === 3 || (current.has(cell) && neighbors === 2)) {
-        next.push(cell);
-      }
+      if (neighbors === 3 || (current.has(cell) && neighbors === 2)) next.push(cell);
     }
   }
   return next;
+}
+
+/** Exported to make deterministic randomization directly testable. */
+export function randomizedAlive(board: ConwayBoard, random: () => number): number[] {
+  return Array.from({ length: board.width * board.height }, (_, cell) => cell).filter(() =>
+    random() < LIVE_PROBABILITY
+  );
+}
+
+/** Exported to make default simulation initialization directly testable. */
+export function createSimulationState(
+  observers: readonly ConwayObserver[],
+  lastSeenBlocks: Record<string, BlockType> = {},
+): ConwaySimulationState {
+  return simulationState(observers, lastSeenBlocks, createBoard(observers), [{ type: 'clear' }]);
 }
 
 function handleInit(
@@ -132,6 +143,7 @@ function handleInit(
       return drainAndRespond({
         ...state,
         observers,
+        board: undefined,
         pending: [...state.pending, {
           type: 'chat',
           message: `Conway: ${observers.length} black observers; screen ${width}x${height}`,
@@ -146,9 +158,13 @@ function handleInit(
   ) {
     const id = uuidKey(event.event.value.observerId);
     if (id !== undefined) {
+      const lastSeenBlocks = { ...state.lastSeenBlocks };
+      delete lastSeenBlocks[id];
       return drainAndRespond({
         ...state,
         observers: state.observers.filter((observer) => observer.id !== id),
+        lastSeenBlocks,
+        board: undefined,
       }, effectLimit);
     }
   }
@@ -158,8 +174,9 @@ function handleInit(
       event.event.value.observerColor === DyeColor.GREEN && isPowered(event.event.value, true)) ||
     (event.event.case === 'chatMessage' && event.event.value.message === 'sim')
   ) {
-    console.log('Entering sim state');
-    const simulation = createSimulationState(state.observers, Math.random);
+    const simulation = state.board === undefined
+      ? createSimulationState(state.observers, state.lastSeenBlocks)
+      : simulationState(state.observers, state.lastSeenBlocks, state.board, []);
     simulation.pending.unshift(...state.pending, {
       type: 'chat',
       message: 'Conway: simulate mode',
@@ -180,10 +197,10 @@ function handleSimulation(
       event.event.value.observerColor === DyeColor.GREEN && isPowered(event.event.value, false)) ||
     (event.event.case === 'chatMessage' && event.event.value.message === 'init')
   ) {
-    console.log('Entering init state');
     return drainAndRespond({
       ...emptyInitState(),
       observers: state.observers,
+      lastSeenBlocks: state.lastSeenBlocks,
       pending: [{ type: 'clear' }, { type: 'chat', message: 'Conway: init mode' }],
     }, effectLimit);
   }
@@ -191,50 +208,47 @@ function handleSimulation(
   const steps = (event.event.case === 'blockStateChange' &&
     event.event.value.observerColor === DyeColor.BLUE) ||
     (event.event.case === 'chatMessage' && event.event.value.message === 'step');
-  if (!steps) {
-    console.log('manual step');
-    return drainAndRespond(state, effectLimit);
-  }
+  if (!steps) return drainAndRespond(state, effectLimit);
 
   const drained = drainPending(state, effectLimit);
-  if (drained.state.pending.length !== 0) {
-    console.log(`drain pending: ${drained.state.pending.length}`);
-    return response(drained.state, drained.effects);
-  }
+  if (drained.state.pending.length !== 0) return response(drained.state, drained.effects);
 
-  console.log(`tick`);
+  const tickStartedAt = performance.now();
   const alive = nextGeneration(state.width, state.height, state.alive);
   const nextState: ConwaySimulationState = {
     ...drained.state,
     alive,
     pending: changedCellOperations(state.cells, state.alive, alive),
   };
+  console.debug(`Conway: simulation tick took ${(performance.now() - tickStartedAt).toFixed(2)}ms`);
   return response(nextState, drained.effects);
 }
 
-function emptyInitState(): ConwayInitState {
-  return { version: STATE_VERSION, mode: 'init', observers: [], pending: [] };
+function configureBoard(
+  state: ConwayState,
+  command: ConfigurationCommand,
+  effectLimit: number,
+): Program.StepResponse {
+  const board = state.mode === 'init' ? createBoard(state.observers) : boardFrom(state);
+  const alive = command === 'clear'
+    ? []
+    : command === 'randomize'
+    ? randomizedAlive(board, Math.random)
+    : templateAlive(board, state.lastSeenBlocks);
+  const configured = { ...board, alive };
+  const pending = displayOperations(configured);
+  return state.mode === 'init'
+    ? drainAndRespond({ ...state, board: configured, pending }, effectLimit)
+    : drainAndRespond({ ...state, ...configured, pending }, effectLimit);
 }
 
-/** Exported to make initialization and its random seeding directly testable. */
-export function createSimulationState(
-  observers: readonly ConwayObserver[],
-  random: () => number,
-): ConwaySimulationState {
-  const display = selectDisplay(observers);
-  if (display === undefined) {
-    return {
-      version: STATE_VERSION,
-      mode: 'simulate',
-      observers: [...observers],
-      width: 0,
-      height: 0,
-      cells: [],
-      alive: [],
-      pending: [{ type: 'clear' }],
-    };
-  }
+function emptyInitState(): ConwayInitState {
+  return { version: STATE_VERSION, mode: 'init', observers: [], lastSeenBlocks: {}, pending: [] };
+}
 
+function createBoard(observers: readonly ConwayObserver[]): ConwayBoard {
+  const display = selectDisplay(observers);
+  if (display === undefined) return { width: 0, height: 0, cells: [], alive: [] };
   const { plane, observers: selected } = display;
   const coordinates = selected.map((observer) => ({
     observer,
@@ -257,20 +271,73 @@ export function createSimulationState(
     .sort(([leftCell, leftId], [rightCell, rightId]) =>
       leftCell - rightCell || compareStrings(leftId, rightId)
     );
-  const alive = Array.from({ length: width * height }, (_, cell) => cell).filter(() =>
-    random() < 0.25
-  );
+  return { width, height, cells, alive: [] };
+}
 
+function simulationState(
+  observers: readonly ConwayObserver[],
+  lastSeenBlocks: Record<string, BlockType>,
+  board: ConwayBoard,
+  pending: PendingOperation[],
+): ConwaySimulationState {
   return {
     version: STATE_VERSION,
     mode: 'simulate',
     observers: [...observers],
-    width,
-    height,
-    cells,
-    alive,
-    pending: [{ type: 'clear' }, ...changedCellOperations(cells, [], alive)],
+    lastSeenBlocks: { ...lastSeenBlocks },
+    ...board,
+    pending,
   };
+}
+
+function boardFrom(state: ConwaySimulationState): ConwayBoard {
+  return { width: state.width, height: state.height, cells: state.cells, alive: state.alive };
+}
+
+function templateAlive(
+  board: ConwayBoard,
+  lastSeenBlocks: Readonly<Record<string, BlockType>>,
+): number[] {
+  return board.cells.filter(([, observerId]) => !isAir(lastSeenBlocks[observerId])).map(([cell]) =>
+    cell
+  );
+}
+
+function isAir(block: BlockType | undefined): boolean {
+  return block === undefined || (block.ns === 'minecraft' && block.path === 'air');
+}
+
+function displayOperations(board: ConwayBoard): PendingOperation[] {
+  return [{ type: 'clear' }, ...changedCellOperations(board.cells, [], board.alive)];
+}
+
+function rememberBlackBlockState<T extends ConwayState>(state: T, event: Events.Event): T {
+  if (
+    event.event.case !== 'blockStateChange' || event.event.value.observerColor !== DyeColor.BLACK
+  ) {
+    return state;
+  }
+  const id = uuidKey(event.event.value.observerId);
+  const blockType = blockTypeFromEvent(event.event.value);
+  if (
+    id === undefined || blockType === undefined ||
+    !state.observers.some((observer) => observer.id === id)
+  ) {
+    return state;
+  }
+  return { ...state, lastSeenBlocks: { ...state.lastSeenBlocks, [id]: blockType } };
+}
+
+function configurationCommand(event: Events.Event): ConfigurationCommand | undefined {
+  if (event.event.case !== 'chatMessage') return undefined;
+  switch (event.event.value.message) {
+    case 'clear':
+    case 'randomize':
+    case 'template':
+      return event.event.value.message;
+    default:
+      return undefined;
+  }
 }
 
 function selectDisplay(observers: readonly ConwayObserver[]):
@@ -299,7 +366,6 @@ function selectDisplay(observers: readonly ConwayObserver[]):
       }
     }
   }
-
   const ordered = [...candidates.values()].sort((left, right) =>
     right.observers.length - left.observers.length ||
     planeOrder(left.plane) - planeOrder(right.plane) ||
@@ -352,9 +418,10 @@ function drainPending<T extends { pending: PendingOperation[] }>(
   effectLimit: number,
 ): { state: T; effects: Effects.Effect[] } {
   const count = Math.min(state.pending.length, Math.max(0, Math.floor(effectLimit)));
-  const pending = state.pending.slice(count);
-  const effects = state.pending.slice(0, count).map(effectForOperation);
-  return { state: { ...state, pending }, effects };
+  return {
+    state: { ...state, pending: state.pending.slice(count) },
+    effects: state.pending.slice(0, count).map(effectForOperation),
+  };
 }
 
 function effectForOperation(operation: PendingOperation): Effects.Effect {
@@ -369,7 +436,6 @@ function effectForOperation(operation: PendingOperation): Effects.Effect {
       },
     });
   }
-
   if (operation.type === 'chat') {
     return create(Effects.EffectSchema, {
       effect: {
@@ -378,7 +444,6 @@ function effectForOperation(operation: PendingOperation): Effects.Effect {
       },
     });
   }
-
   return create(Effects.EffectSchema, {
     effect: {
       case: 'setRedstonePower',
@@ -398,14 +463,23 @@ function observerFromEvent(event: Events.WirelessObserverPaired): ConwayObserver
   const id = uuidKey(event.observerId);
   const position = event.observerPos?.position;
   const dimension = event.observerPos?.dimension;
-  if (id === undefined || position === undefined || dimension === undefined) {
-    return undefined;
-  }
+  if (id === undefined || position === undefined || dimension === undefined) return undefined;
   return {
     id,
     dimension: [dimension.ns, dimension.path],
     position: [position.x, position.y, position.z],
   };
+}
+
+function blockTypeFromEvent(event: Events.BlockStateChange): BlockType | undefined {
+  const blockType = event.newState?.blockType;
+  if (
+    blockType === undefined || typeof blockType.ns !== 'string' ||
+    typeof blockType.path !== 'string'
+  ) {
+    return undefined;
+  }
+  return { ns: blockType.ns, path: blockType.path };
 }
 
 function isPowered(event: Events.BlockStateChange, powered: boolean): boolean {
@@ -424,39 +498,79 @@ function uuidFromKey(key: string): Common.Uuid {
   });
 }
 
-function isConwayState(value: unknown): value is ConwayState {
+function normalizeConwayState(value: unknown): ConwayState | undefined {
   if (!isRecord(value) || value.version !== STATE_VERSION || typeof value.mode !== 'string') {
-    return false;
+    return undefined;
   }
+  const lastSeenBlocks = value.lastSeenBlocks === undefined
+    ? {}
+    : normalizeLastSeenBlocks(value.lastSeenBlocks);
+  if (
+    lastSeenBlocks === undefined || !Array.isArray(value.observers) ||
+    !value.observers.every(isObserver) ||
+    !Array.isArray(value.pending) || !value.pending.every(isPending)
+  ) return undefined;
   if (value.mode === 'init') {
-    return Array.isArray(value.observers) && value.observers.every(isObserver) &&
-      Array.isArray(value.pending) && value.pending.every((operation) => isPending(operation));
+    const board = value.board === undefined ? undefined : normalizeBoard(value.board);
+    if (value.board !== undefined && board === undefined) return undefined;
+    return {
+      version: STATE_VERSION,
+      mode: 'init',
+      observers: value.observers,
+      lastSeenBlocks,
+      ...(board === undefined ? {} : { board }),
+      pending: value.pending,
+    };
   }
-  if (value.mode !== 'simulate' || !isDimension(value.width) || !isDimension(value.height)) {
-    return false;
-  }
+  const board = normalizeBoard(value);
+  if (value.mode !== 'simulate' || board === undefined) return undefined;
+  return {
+    version: STATE_VERSION,
+    mode: 'simulate',
+    observers: value.observers,
+    lastSeenBlocks,
+    ...board,
+    pending: value.pending,
+  };
+}
+
+function normalizeBoard(value: unknown): ConwayBoard | undefined {
+  if (!isRecord(value) || !isDimension(value.width) || !isDimension(value.height)) return undefined;
   const cellCount = value.width * value.height;
-  return Array.isArray(value.observers) && value.observers.every(isObserver) &&
-    Array.isArray(value.cells) && value.cells.every((cell) => isCell(cell, cellCount)) &&
-    Array.isArray(value.alive) && value.alive.every((cell) => isCellIndex(cell, cellCount)) &&
-    Array.isArray(value.pending) && value.pending.every((operation) => isPending(operation));
+  if (
+    !Array.isArray(value.cells) || !value.cells.every((cell) => isCell(cell, cellCount)) ||
+    !Array.isArray(value.alive) || !value.alive.every((cell) => isCellIndex(cell, cellCount))
+  ) return undefined;
+  return { width: value.width, height: value.height, cells: value.cells, alive: value.alive };
+}
+
+function normalizeLastSeenBlocks(value: unknown): Record<string, BlockType> | undefined {
+  if (!isRecord(value)) return undefined;
+  const result: Record<string, BlockType> = {};
+  for (const [id, block] of Object.entries(value)) {
+    if (!isUuidKey(id) || !isBlockType(block)) return undefined;
+    result[id] = { ns: block.ns, path: block.path };
+  }
+  return result;
 }
 
 function isObserver(value: unknown): value is ConwayObserver {
-  return isRecord(value) && typeof value.id === 'string' && /^[0-9a-f]{32}$/.test(value.id) &&
-    isStringPair(value.dimension) && isPosition(value.position);
+  return isRecord(value) && isUuidKey(value.id) && isStringPair(value.dimension) &&
+    isPosition(value.position);
+}
+
+function isBlockType(value: unknown): value is BlockType {
+  return isRecord(value) && typeof value.ns === 'string' && typeof value.path === 'string';
 }
 
 function isCell(value: unknown, cellCount: number): value is [number, string] {
   return Array.isArray(value) && value.length === 2 && isCellIndex(value[0], cellCount) &&
-    typeof value[1] === 'string' && /^[0-9a-f]{32}$/.test(value[1]);
+    isUuidKey(value[1]);
 }
 
 function isPending(value: unknown): value is PendingOperation {
   return isRecord(value) && (value.type === 'clear' || (
-    value.type === 'cell' && typeof value.observerId === 'string' &&
-    /^[0-9a-f]{32}$/.test(value.observerId) &&
-    typeof value.powered === 'boolean'
+    value.type === 'cell' && isUuidKey(value.observerId) && typeof value.powered === 'boolean'
   ) || value.type === 'chat' && typeof value.message === 'string');
 }
 
@@ -476,6 +590,10 @@ function isPosition(value: unknown): value is [number, number, number] {
 function isStringPair(value: unknown): value is [string, string] {
   return Array.isArray(value) && value.length === 2 &&
     value.every((entry) => typeof entry === 'string');
+}
+
+function isUuidKey(value: unknown): value is string {
+  return typeof value === 'string' && /^[0-9a-f]{32}$/.test(value);
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
