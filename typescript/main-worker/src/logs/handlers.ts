@@ -3,6 +3,7 @@ import * as Internal from '@cobbleware/core/internal';
 import type { AppConfig } from '../config.ts';
 import { requireModAuth, requireSameOrigin } from '../auth/middleware.ts';
 import { constantTimeEqual } from '../auth/crypto.ts';
+import type { LogTokenBucketSnapshot } from '../stats/handlers.ts';
 
 const EVENT_WORKER_PROTOCOL_PREFIX = 'cobbleware.bearer.';
 
@@ -13,11 +14,18 @@ export type RunningExecutionsSnapshot = {
   updatedAt: string;
 };
 
+export type LogTokenBucketRecorder = (
+  playerId: string,
+  snapshot: LogTokenBucketSnapshot,
+) => void;
+
 /** Routes non-durable execution-log frames between authenticated producers and players. */
 export class ExecutionLogHub {
   private readonly playerStreams = new Map<string, WebSocket>();
   private readonly producerStreams = new Set<WebSocket>();
   private readonly runningExecutionLimits = new Map<string, RunningExecutionsSnapshot>();
+
+  constructor(private readonly recordLogTokens: LogTokenBucketRecorder = () => {}) {}
 
   runningExecutions(playerId: string): RunningExecutionsSnapshot | undefined {
     const snapshot = this.runningExecutionLimits.get(playerId);
@@ -116,6 +124,10 @@ export class ExecutionLogHub {
         this.recordExecutionTransition(playerId, entry.inner.value);
       } else if (entry.inner.case === 'poolTransition') {
         validateExecutionPoolTransition(entry.inner.value);
+      } else if (entry.inner.case === 'logTokens') {
+        validateLogTokenBucket(entry.inner.value);
+        this.recordLogTokens(playerId, entry.inner.value);
+        return;
       }
     } catch (error) {
       rejectSocket(
@@ -231,6 +243,15 @@ function validateExecutionPoolTransition(
 ): void {
   if (!isExecutionPoolTransition(transition.transition)) {
     throw new Error('execution-pool transition is invalid');
+  }
+}
+
+function validateLogTokenBucket(value: Internal.LogTokenBucket): void {
+  if (
+    !Number.isFinite(value.available) || value.available < 0 ||
+    !Number.isInteger(value.capacity) || value.capacity <= 0 || value.available > value.capacity
+  ) {
+    throw new Error('log token bucket is invalid');
   }
 }
 

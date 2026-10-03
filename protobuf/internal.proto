@@ -171,6 +171,9 @@ message ExecutionStatsTick {
     uint32 burst_chat_tokens = 8;
     // The Mod-authoritative current number of available slow chat tokens. This is instantaneous, not a window aggregate.
     uint32 slow_chat_tokens = 9;
+    // The Event Worker-authoritative current program-log token bucket. It is absent until the Event Worker has
+    // observed a Log event for this player, and is refreshed independently of the Mod's tick measurements.
+    LogTokenBucket log_tokens = 10;
     repeated EventMeasurement events = 2;
     repeated EventsPerSyncMeasurement events_per_sync = 3;
     repeated EffectMeasurement effects = 4;
@@ -243,6 +246,13 @@ message ProgramLogEntry {
   string msg = 2;
 }
 
+// The Event Worker's current program-log allowance for one player. The available value may be fractional because the
+// bucket refills continuously.
+message LogTokenBucket {
+  double available = 1;
+  uint32 capacity = 2;
+}
+
 enum ExecutionTransition {
   EXECUTION_TRANSITION_UNSPECIFIED = 0;
   EXECUTION_TRANSITION_STARTED = 1;
@@ -285,5 +295,7 @@ message ExecutionLogEntry {
     ProgramLogEntry log = 4;
     ExecutionTransitionLogEntry transition = 5;
     ExecutionPoolTransitionLogEntry pool_transition = 6;
+    // Internal telemetry used to enrich the Player's execution-statistics stream; never displayed as a log entry.
+    LogTokenBucket log_tokens = 7;
   }
 }

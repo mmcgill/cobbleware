@@ -1,6 +1,7 @@
 import { create } from '@cobbleware/core';
 import { Common } from '@cobbleware/core';
 import * as Internal from '@cobbleware/core/internal';
+import type { LogTokenBucketSnapshot } from './limiter.ts';
 
 export const MAX_LOG_MESSAGE_BYTES = 10 * 1024;
 
@@ -15,6 +16,22 @@ export type TranslatedLogEvent = {
   entry: Internal.ExecutionLogEntry;
   isProgramLog: boolean;
 };
+
+/** Creates internal Event Worker telemetry; the Main Worker does not display it as a log entry. */
+export function logTokenBucketEntry(
+  playerId: string,
+  snapshot: LogTokenBucketSnapshot,
+): Internal.ExecutionLogEntry | undefined {
+  const playerUuid = uuidFromString(playerId);
+  if (playerUuid === undefined) return undefined;
+  return create(Internal.ExecutionLogEntrySchema, {
+    playerId: playerUuid,
+    inner: {
+      case: 'logTokens',
+      value: create(Internal.LogTokenBucketSchema, snapshot),
+    },
+  });
+}
 
 export function translateEvent(data: EventManagerEvent): TranslatedLogEvent | undefined {
   const playerId = playerIdFromServicePath(data.metadata?.service_path);

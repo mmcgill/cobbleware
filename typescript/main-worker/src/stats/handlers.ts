@@ -19,10 +19,16 @@ export type ExecutionStateBytesSnapshot = {
   updatedAt: string;
 };
 
+export type LogTokenBucketSnapshot = {
+  available: number;
+  capacity: number;
+};
+
 /** Retains the latest non-durable raw tick per player and the one permitted player stream. */
 export class ExecutionStatsHub {
   private readonly reports = new Map<string, Internal.ExecutionStatsTick>();
   private readonly streams = new Map<string, WebSocket>();
+  private readonly logTokenBuckets = new Map<string, LogTokenBucketSnapshot>();
   private readonly memoryStats: MemoryStatsProvider;
   private modStream: WebSocket | undefined;
   private lastModTick = 0n;
@@ -109,6 +115,11 @@ export class ExecutionStatsHub {
     return { used, updatedAt: new Date().toISOString() };
   }
 
+  /** Records the Event Worker's latest non-durable program-log token-bucket snapshot. */
+  recordLogTokens(playerId: string, snapshot: LogTokenBucketSnapshot): void {
+    this.logTokenBuckets.set(playerId, { ...snapshot });
+  }
+
   private enqueueModReport(socket: WebSocket, generation: number, data: ArrayBuffer): void {
     this.modProcessing = this.modProcessing.then(async () => {
       if (this.modStream !== socket || this.modGeneration !== generation) return;
@@ -155,6 +166,7 @@ export class ExecutionStatsHub {
         player,
         memoryUsage.get(playerId) ?? 0n,
         BigInt(this.options.memoryQuotaBytes),
+        this.logTokenBuckets.get(playerId),
       );
       this.reports.set(playerId, snapshot);
       this.send(playerId, snapshot);
@@ -255,14 +267,19 @@ function playerSnapshot(
   player: Internal.ExecutionStatsTick_PlayerStats,
   usedBytes: bigint,
   maxBytes: bigint,
+  logTokens: LogTokenBucketSnapshot | undefined,
 ): Internal.ExecutionStatsTick {
+  const { logTokens: _modLogTokens, ...modPlayer } = player;
   return create(Internal.ExecutionStatsTickSchema, {
     sampledAtUnixMillis: report.sampledAtUnixMillis,
     tickSequence: report.tickSequence,
     players: [create(Internal.ExecutionStatsTick_PlayerStatsSchema, {
-      ...player,
+      ...modPlayer,
       usedBytes,
       maxBytes,
+      ...(logTokens === undefined
+        ? {}
+        : { logTokens: create(Internal.LogTokenBucketSchema, logTokens) }),
     })],
   });
 }
@@ -316,6 +333,9 @@ function validate(report: Internal.ExecutionStatsTick): void {
 function validatePlayer(player: Internal.ExecutionStatsTick_PlayerStats): void {
   if (player.burstChatTokens > 10 || player.slowChatTokens > 100) {
     throw new Error('chat token counts exceed their configured capacities');
+  }
+  if (player.logTokens !== undefined) {
+    throw new Error('log token bucket must be supplied by the Event Worker');
   }
   const events = new Set<string>();
   for (const metric of player.events) {

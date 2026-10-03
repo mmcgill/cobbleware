@@ -1,5 +1,6 @@
 import * as Internal from '@cobbleware/core/internal';
 import {
+  logTokenBucketEntry,
   MAX_LOG_MESSAGE_BYTES,
   playerIdFromServicePath,
   translateEvent,
@@ -86,6 +87,14 @@ Deno.test('Event Worker truncates Log messages at a UTF-8 boundary', () => {
     'wrong byte cap',
   );
   assertEquals(truncated.endsWith('�'), false, 'truncation split a UTF-8 code point');
+});
+
+Deno.test('Event Worker creates non-display log-token telemetry', () => {
+  const entry = logTokenBucketEntry(PLAYER_ID, { available: 99.5, capacity: 100 });
+  assertEquals(entry?.inner.case, 'logTokens', 'missing log-token telemetry');
+  if (entry?.inner.case !== 'logTokens') throw new Error('wrong telemetry entry type');
+  assertEquals(entry.inner.value.available, 99.5, 'log-token allowance changed');
+  assertEquals(entry.inner.value.capacity, 100, 'log-token capacity changed');
 });
 
 function assertEquals<T>(actual: T, expected: T, message: string): void {

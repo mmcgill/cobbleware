@@ -39,6 +39,7 @@ markBundledUi(document.documentElement);
     statsMemoryText: document.querySelector('#stats-memory-text'),
     statsBurstChatTokens: document.querySelector('#stats-burst-chat-tokens'),
     statsSlowChatTokens: document.querySelector('#stats-slow-chat-tokens'),
+    statsLogTokens: document.querySelector('#stats-log-tokens'),
     statsEventsPerSync: document.querySelector('#stats-events-per-sync'),
     statsEvents: document.querySelector('#stats-events'),
     statsEffects: document.querySelector('#stats-effects'),
@@ -59,12 +60,15 @@ markBundledUi(document.documentElement);
     limitsRetryButton: document.querySelector('#limits-retry-button'),
     limitsRunningExecutionsProgress: document.querySelector('#limits-running-executions-progress'),
     limitsRunningExecutionsText: document.querySelector('#limits-running-executions-text'),
-    limitsTotalExecutionStateProgress: document.querySelector('#limits-total-execution-state-progress'),
+    limitsTotalExecutionStateProgress: document.querySelector(
+      '#limits-total-execution-state-progress',
+    ),
     limitsTotalExecutionStateText: document.querySelector('#limits-total-execution-state-text'),
     limitsUpdatedAt: document.querySelector('#limits-updated-at'),
   };
 
   const byteFormatter = new Intl.NumberFormat(undefined, { maximumFractionDigits: 1 });
+  const tokenFormatter = new Intl.NumberFormat(undefined, { maximumFractionDigits: 1 });
   const dateFormatter = new Intl.DateTimeFormat(undefined, {
     dateStyle: 'medium',
     timeStyle: 'short',
@@ -358,8 +362,9 @@ markBundledUi(document.documentElement);
     const stateBytes = limits.totalExecutionStateBytes;
     elements.limitsTotalExecutionStateProgress.max = stateBytes.limit;
     elements.limitsTotalExecutionStateProgress.value = stateBytes.used;
-    elements.limitsTotalExecutionStateText.textContent =
-      `${formatBytes(stateBytes.used)} of ${formatBytes(stateBytes.limit)} execution state`;
+    elements.limitsTotalExecutionStateText.textContent = `${formatBytes(stateBytes.used)} of ${
+      formatBytes(stateBytes.limit)
+    } execution state`;
     elements.limitsUpdatedAt.textContent = formatDate(limits.updatedAt);
     elements.limitsUpdatedAt.title = limits.updatedAt;
   }
@@ -522,6 +527,7 @@ markBundledUi(document.documentElement);
       }`;
     renderStatsMemory(statsTicks.at(-1));
     renderStatsChatTokens(statsTicks.at(-1));
+    renderStatsLogTokens(statsTicks.at(-1));
     elements.statsEventsPerSync.textContent = `${
       formatBigInt(player.eventsPerSyncCount)
     } records; average ${
@@ -565,9 +571,24 @@ markBundledUi(document.documentElement);
     const burst = `${tick.burstChatTokens.toLocaleString()} of 10`;
     const slow = `${tick.slowChatTokens.toLocaleString()} of 100`;
     elements.statsBurstChatTokens.textContent = burst;
-    elements.statsBurstChatTokens.setAttribute('aria-label', `Available burst chat tokens: ${burst}`);
+    elements.statsBurstChatTokens.setAttribute(
+      'aria-label',
+      `Available burst chat tokens: ${burst}`,
+    );
     elements.statsSlowChatTokens.textContent = slow;
     elements.statsSlowChatTokens.setAttribute('aria-label', `Available slow chat tokens: ${slow}`);
+  }
+
+  function renderStatsLogTokens(tick) {
+    if (tick.logTokens === undefined) {
+      elements.statsLogTokens.textContent = 'Unavailable';
+      elements.statsLogTokens.setAttribute('aria-label', 'Program log tokens are unavailable');
+      return;
+    }
+    const available = tokenFormatter.format(Math.floor(tick.logTokens.available));
+    const value = `${available} of ${tick.logTokens.capacity.toLocaleString()}`;
+    elements.statsLogTokens.textContent = value;
+    elements.statsLogTokens.setAttribute('aria-label', `Available program log tokens: ${value}`);
   }
 
   function renderStatsGraphs() {
@@ -1006,6 +1027,7 @@ markBundledUi(document.documentElement);
     if (burstChatTokens > 10 || slowChatTokens > 100) {
       throw new Error('invalid chat token counts');
     }
+    const logTokens = decodeLogTokenBucket(playerFields);
     return {
       sampledAt,
       sequence,
@@ -1016,6 +1038,7 @@ markBundledUi(document.documentElement);
       maxBytes,
       burstChatTokens,
       slowChatTokens,
+      logTokens,
       stateBytes,
       graph: summarizeStatsTickGraph(events, effects),
     };
@@ -1025,6 +1048,23 @@ markBundledUi(document.documentElement);
     const fields = readProtoFields(bytes);
     requiredMessage(fields, 1);
     return protoVarint(fields, 3);
+  }
+
+  function decodeLogTokenBucket(playerFields) {
+    const values = playerFields.get(10) || [];
+    if (values.length === 0) return undefined;
+    if (values.length !== 1 || !(values[0] instanceof Uint8Array)) {
+      throw new Error('invalid log token bucket');
+    }
+    const bucket = fromBinary(Internal.LogTokenBucketSchema, values[0]);
+    if (
+      !Number.isFinite(bucket.available) || bucket.available < 0 ||
+      !Number.isInteger(bucket.capacity) || bucket.capacity <= 0 ||
+      bucket.available > bucket.capacity
+    ) {
+      throw new Error('invalid log token bucket');
+    }
+    return bucket;
   }
 
   function decodeEventMeasurement(bytes) {

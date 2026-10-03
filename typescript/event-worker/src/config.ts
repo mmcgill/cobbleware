@@ -1,5 +1,5 @@
 export const DEFAULT_MAIN_WORKER_URL = 'http://127.0.0.1:9000';
-export const DEFAULT_LOG_RATE_PER_SECOND = 2;
+export const DEFAULT_LOG_RATE_PER_SECOND = 10;
 
 export type EventWorkerConfig = {
   apiKey: string;

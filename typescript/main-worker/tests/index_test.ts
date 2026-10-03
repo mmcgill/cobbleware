@@ -43,6 +43,7 @@ Deno.test('/index.html contains the generated programs UI', async () => {
       'stats-activity-graph',
       'stats-graph-tooltip',
       'stats-memory-progress',
+      'Program log tokens',
       'Limits',
       'limits-running-executions-progress',
     ]

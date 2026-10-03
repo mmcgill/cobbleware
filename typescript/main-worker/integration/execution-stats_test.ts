@@ -16,6 +16,7 @@ Deno.test('Execution statistics flow from the Mod API to a Player WebSocket', as
   let stream: WebSocketConnection | undefined;
   let duplicateStream: WebSocketConnection | undefined;
   let modStream: WebSocketConnection | undefined;
+  let logStream: WebSocketConnection | undefined;
 
   try {
     runtime = await startRuntime(port, gameDir);
@@ -58,6 +59,14 @@ Deno.test('Execution statistics flow from the Mod API to a Player WebSocket', as
       'duplicate stream was not rejected with a policy-violation close',
     );
 
+    logStream = await WebSocketConnection.open(
+      `127.0.0.1:${port}`,
+      '/modapi/v1/logs',
+      { authorization: `Bearer ${API_KEY}` },
+    );
+    await logStream.sendBinary(toBinary(Internal.ExecutionLogEntrySchema, logTokenEntry()));
+    await delay(50);
+
     const report = executionStatsReport();
     modStream = await WebSocketConnection.open(
       `127.0.0.1:${port}`,
@@ -80,6 +89,8 @@ Deno.test('Execution statistics flow from the Mod API to a Player WebSocket', as
     assertEquals(player.maxBytes, 128n * 1024n * 1024n, 'memory quota changed');
     assertEquals(player.burstChatTokens, 4, 'burst chat tokens changed');
     assertEquals(player.slowChatTokens, 96, 'slow chat tokens changed');
+    assertEquals(player.logTokens?.available, 99.5, 'program log tokens changed');
+    assertEquals(player.logTokens?.capacity, 100, 'program log capacity changed');
     assertEquals(player.events[0].accepted, 4n, 'accepted-event count changed');
     assertEquals(player.events[0].dropped, 5n, 'dropped-event count changed');
     assertEquals(player.eventsPerSync[0].count, 2n, 'events-per-sync count changed');
@@ -93,6 +104,7 @@ Deno.test('Execution statistics flow from the Mod API to a Player WebSocket', as
   } finally {
     duplicateStream?.close();
     modStream?.close();
+    logStream?.close();
     stream?.close();
     if (runtime !== undefined) {
       try {
@@ -245,6 +257,16 @@ function executionStatsReport(): Internal.ExecutionStatsTick {
         })],
       }),
     ],
+  });
+}
+
+function logTokenEntry(): Internal.ExecutionLogEntry {
+  return create(Internal.ExecutionLogEntrySchema, {
+    playerId: PLAYER_ID,
+    inner: {
+      case: 'logTokens',
+      value: create(Internal.LogTokenBucketSchema, { available: 99.5, capacity: 100 }),
+    },
   });
 }
 

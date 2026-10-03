@@ -62,7 +62,9 @@ export async function createHandler(
   const executionStatsHub = options.executionStatsHub ?? new ExecutionStatsHub({
     memoryQuotaBytes: config.playerMemoryQuotaBytes,
   });
-  const executionLogHub = options.executionLogHub ?? new ExecutionLogHub();
+  const executionLogHub = options.executionLogHub ?? new ExecutionLogHub(
+    (playerId, snapshot) => executionStatsHub.recordLogTokens(playerId, snapshot),
+  );
 
   return async (request) => {
     try {
