@@ -23,7 +23,7 @@ They are invoked by the 'puter as a result of Events that happen in the Minecraf
 Effects to be processed by the Mainframe as output.
 
 When a 'puter block is placed, it is _uninitialized_: it has no state and is not executing a program.
-A player can run their active program on a placed 'puter block via the `/cobbleware exec <start-state>`
+A player can run their active program on a placed 'puter block via the `/cobbleware start <start-state>`
 command. An executing 'puter block stores its own runtime state, which persists across
 chunk reloads and server restarts.
 
@@ -35,7 +35,7 @@ of 'puter blocks. Once a 'puter is placed, any player can interact with it.
 The 'puter _state_, however, remains associated with the player that loaded the
 associated program. Only that player can pause or resume the execution with
 `/cobbleware pause` or `/cobbleware resume`. Those commands select the closest
-'puter within 3m, as `/cobbleware exec` does. Loading a new program creates a
+'puter within 3m, as `/cobbleware start` does. Loading a new program creates a
 new execution state that is associated with the player doing the loading, even
 if the previous execution state was bound to a different player. Resetting a
 'puter _preserves_ execution ownership.

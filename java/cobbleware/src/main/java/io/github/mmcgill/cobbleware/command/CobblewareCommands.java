@@ -61,7 +61,7 @@ public final class CobblewareCommands {
                                 .then(Commands.argument("code", StringArgumentType.word())
                                         .executes(context -> authenticate(context, mainWorkerClient))))
                         .then(Commands.literal("program").executes(context -> program(context, mainWorkerClient)))
-                        .then(Commands.literal("exec")
+                        .then(Commands.literal("start")
                                 .then(Commands.argument("start-state", StringArgumentType.word())
                                         .suggests((context, builder) ->
                                                 suggestStartStates(context, builder, mainWorkerClient))

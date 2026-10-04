@@ -120,7 +120,7 @@ there is one.
 ### Starting Execution
 
 ```
-/cobbleware exec <start-state>
+/cobbleware start <start-state>
 ```
 
 Starts executing the current program with the given start state on the closest Cobbleputer.
@@ -143,7 +143,7 @@ Prints an appropriate error message if no program can be started because:
 the closest Stopped or Crashed Cobbleputer within 3m. Resuming a Stopped
 Cobbleputer continues its existing execution; resuming a Crashed Cobbleputer starts a
 fresh execution with its stored state. Selection is identical to
-`/cobbleware exec`. Only the Player associated with that execution may use
+`/cobbleware start`. Only the Player associated with that execution may use
 either command. Each command prints confirmation on success and an appropriate
 error message when there is no Cobbleputer within 3m, the nearest Cobbleputer is
 not in the required lifecycle state, or its execution belongs to another Player.
@@ -194,7 +194,7 @@ the Cobbleputer. That restart creates a fresh execution ID and resets its sequen
 Events and Effects, on the other hand, are ephemeral and best-effort. There is no guarantee that every
 event will be processed, and there is no guarantee that every effect will be applied.
 
-The currently emitted lifecycle events are `Started` after `/cobbleware exec` or after a crashed Cobbleputer
+The currently emitted lifecycle events are `Started` after `/cobbleware start` or after a crashed Cobbleputer
 is restarted with `/cobbleware resume`, and `Resumed` after its owner resumes a stopped Cobbleputer or a
 Cobbleputer in a newly block-ticking chunk is successfully admitted back to running. The driver retains at most the configured
 number of pending events across a player's active Cobbleputers and offers each active Cobbleputer's full pending queue to the Runtime in each
