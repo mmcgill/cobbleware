@@ -2,7 +2,7 @@
 
 The Browser UI is an HTML/JS app served by the Main Worker that allows Players to view and replace their active
 Program on a server.
-The Browser UI relies on the Player API.
+The Browser UI relies on the [Player API](./main-worker-api.md#player-api).
 
 Requests to the root are redirected to `/index.html`.
 
@@ -11,11 +11,19 @@ to `/auth.html`.
 
 ## Index page
 
-The `/index.html` page presents the logged-in player's Minecraft profile name and a logout control, along with one
-active-program section. It loads the profile name from `/playerapi/v1/whoami`, program metadata from
+The `/index.html` page presents the logged-in player's Minecraft profile name
+(loaded from `/playerapi/v1/whoami`) and a logout control in
+the top-right corner, and organizes functionality into several sections.
+Activating the logout control sends `POST /playerapi/v1/logout`. After a successful logout, the page redirects to
+`/auth.html`. A failed logout leaves the page and its current program list visible and shows the server or network
+error so the player can try again. An expired session redirects the player to `/auth.html`.
+
+
+### Active Program
+The Active Program section loads program metadata from
 `/playerapi/v1/programs`, and the active program's start-state names from
 `/playerapi/v1/programs/{id}/startStates`. The section shows the program id, name, upload date, size, and start
-states. It has no delete action.
+states.
 
 The active-program section is also the drag-and-drop target for ESZip bundles and provides a file-picker fallback.
 Dropping or choosing one file immediately starts a `POST /playerapi/v1/programs` upload using `multipart/form-data`;
@@ -26,8 +34,13 @@ Upload errors are shown and the currently displayed active program is preserved.
 The UI does not provide a way to delete the active program; uploading a replacement is the only program-management
 operation.
 
-The page also has an execution-stats section. It opens one WebSocket to
-`/playerapi/v1/execution-stats` and receives player-scoped `ExecutionStatsTick` protobuf messages. It retains and
+### Execution Statistics
+
+The Execution statistics section provides a visualization of per-tick metric data describing the
+Player's executing Cobbleputers.
+
+It opens one WebSocket to `/playerapi/v1/execution-stats` and receives
+player-scoped `ExecutionStatsTick` protobuf messages. It retains and
 aggregates up to 600 received ticks locally to render coverage, offered events per execution sync, accepted/dropped
 events, and effect attempts, failures and timing. It also displays the
 newest tick's current User Worker memory usage as a progress bar, using `used_bytes` out of `max_bytes`; memory is
@@ -50,12 +63,9 @@ at the pointer, selecting events above the divider and effects below it.
 When the server reports that an execution-stats stream is already open in another browser window, the UI shows that
 specific error and does not retry the connection. The UI never displays another Player's statistics.
 
-Activating the logout control sends `POST /playerapi/v1/logout`. After a successful logout, the page redirects to
-`/auth.html`. A failed logout leaves the page and its current program list visible and shows the server or network
-error so the player can try again. An expired session redirects the player to `/auth.html`.
+### Logs
 
-For ease of troubleshooting, Execution statistics and Logs are alternative tabs in one execution-observability
-section. Logs displays a streaming, non-durable feed of events for the Player's program executions while retaining
+The Logs section displays a streaming, non-durable feed of events for the Player's program executions while retaining
 up to 10k received events locally, including while the Execution statistics tab is selected. The scrollable feed
 auto-scrolls by default, but the Player can toggle that behavior. It is filterable by program-log level
 (Debug, Info, Warn, Error) and event type (program log, exception, CPU/memory limit exceeded, execution lifecycle
@@ -64,7 +74,10 @@ best-effort pool, is waiting for a best-effort slot, or is no longer eligible fo
 has independent connection status and retry handling; the documented already-open-in-another-window error is shown
 without retrying automatically. Each feed row records the client-side time at which the Browser received that event.
 
-Limits is a third tab in that section. On page load it reads `/playerapi/v1/limits`, then shows the current loaded,
+### Limits
+
+The Limits section displays usage versus the various per-player limits that prevent abuse.
+On page load it reads `/playerapi/v1/limits`, then shows the current loaded,
 running execution count and total durable execution-state bytes against their enforced per-player caps and the snapshot
 update time. It also shows the newest execution-statistics tick's burst and slow chat-token buckets and program-log
 token bucket. While the page is open, each visible execution-transition log entry carries the running-execution and

@@ -5,6 +5,7 @@ The mod comprises:
 * a Fabric-based Minecraft mod (hereafter "the Mod") responsible for all new blocks, items, in-game mechanics, etc.
 * a customized [Edge Runtime](https://github.com/supabase/edge-runtime/) (hearafter "the Runtime") for running
   all user-supplied typescript code in isolated sandboxes.
+* a Browser UI served by the Runtime and used by Players to upload programs and monitor executions.
 
 The Mod bundles native binaries for the Runtime, and is responsible for unpacking the correct
 platform-specific version and maintaining the Runtime process.
@@ -19,33 +20,23 @@ programs.
 The Runtime also runs an Event Worker that receives various observability-related events from User Workers
 and forwards them to the Main Worker for dispatch.
 
-Throughout the documentation and code, references to "the Runtime" should understood
+Throughout the documentation and code, references to "the Runtime" should be understood
 as references to the Main Worker running in the Runtime, unless specifically noted otherwise.
 
 All communication between the Mod and the Runtime is initiated by the Mod, which makes requests
-to a API served by the Runtime. The Runtime never initiates connections in the opposite direction.
-Execution instrumentation follows that direction too: the Mod opens one authenticated WebSocket to the
-Main Worker and pushes the raw player-attributable instrumentation bucket from every server tick. The
-Main Worker retains only each player's latest tick in memory and fans player-scoped ticks out over a
-Player-initiated Browser UI WebSocket; it never polls or connects to the Mod. Before it fans out a
-tick, the Main Worker enriches that player-only copy with the current User Worker memory usage. The
-Browser UI performs its own aggregation and retention, independently of the Mod's in-memory
-instrumentation window.
-
-The Mod publishes execution lifecycle transitions and execution-pool assignment changes through the existing
-execution-log publication path. Each lifecycle transition includes the Player's current running-execution count and
-configured limits, including the total execution-state byte cap. Pool entries report the resulting guaranteed,
-best-effort, waiting, or ineligible state. The Mod supplies the live state-byte census through the execution-statistics
-stream. The Main Worker caches lifecycle values for the Browser Limits read API and forwards both displayable entry
-types on the existing player Logs WebSocket. The Browser reads the cache on page load and updates its visible Limits
-view directly from later lifecycle transitions, without allowing the Runtime to poll or connect back to the Mod.
+to an API served by the Runtime. The Runtime never initiates connections in the opposite direction.
+Likewise, all Browser-Runtime connections are Browser-initiated.
 
 The Main Worker is written in Typescript; its code is located in [typescript/main-worker](../typescript/main-worker/).
 
 The Event Worker is likewise written in Typescript; its code is located in [typescript/event-worker](../typescript/event-worker).
 
-The [cobbleware](../typescript/cobbleware/) Typescript library contains type definitions and code
+The Browser UI is HTML/CSS/Typescript; its code is located in [typescript/browser-ui](../typescript/browser-ui).
+
+The [cobbleware library](../typescript/cobbleware/) is a Typescript library containing type definitions and code
 useful for implementing Cobbleputer Programs.
+
+The [Cobbleware Mod](../java/cobbleware) is a Fabric mod written in Java.
 
 ## Protocol Buffer Schemas
 
@@ -74,7 +65,12 @@ To ensure player-level fairness, the Mod starts the Runtime with:
 
 * a `--policy` of `per_worker`
 * a `--max-parallelism` of `1`
-* an `EDGE_RUNTIME_WORKER_POOL_SIZE` equal to the maximum number of online players supported by the Server
+* an `EDGE_RUNTIME_WORKER_POOL_SIZE` equal to the combined size of the
+  [guaranteed and best-effort execution pools](./mod.md#execution-pools)
+   plus a small fixed number for validating programs at upload time and retrieving program start states
 
-Each online player with executing Cobbleputers gets one V8 isolate at at a time, and that isolate
-processes events for all Cobbleputers executing that player's programs.
+Each player with executing Cobbleputers gets one V8 isolate at at a time, which has its own
+OS-level thread, and that isolate processes events for all Cobbleputers executing that player's programs.
+Scheduling across players is therefore pre-emptive and managed by the OS scheduler, whereas
+scheduling across one player's executions is cooperative and controlled by the player's V8 isolate.
+
