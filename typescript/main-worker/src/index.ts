@@ -25,6 +25,7 @@ import { ExecutionManager } from './executions/manager.ts';
 import {
   ExecutionStatsHub,
   handleModExecutionStats,
+  handleModLogStats,
   handlePlayerExecutionStats,
 } from './stats/handlers.ts';
 import {
@@ -62,9 +63,7 @@ export async function createHandler(
   const executionStatsHub = options.executionStatsHub ?? new ExecutionStatsHub({
     memoryQuotaBytes: config.playerMemoryQuotaBytes,
   });
-  const executionLogHub = options.executionLogHub ?? new ExecutionLogHub(
-    (playerId, snapshot) => executionStatsHub.recordLogTokens(playerId, snapshot),
-  );
+  const executionLogHub = options.executionLogHub ?? new ExecutionLogHub();
 
   return async (request) => {
     try {
@@ -166,7 +165,7 @@ async function routeRequest(
     const context: RequestContext = {};
     const authError = await requirePlayerAuth(request, config, store, context, 'api');
     return authError ??
-      handlePlayerLimits(request, context.player!.playerUUID, executionLogHub, executionStatsHub);
+      handlePlayerLimits(request, context.player!.playerUUID, executionStatsHub);
   }
 
   if (pathname === '/playerapi/v1/programs') {
@@ -244,6 +243,9 @@ async function routeRequest(
     }
     if (pathname === '/modapi/v1/execution-stats') {
       return handleModExecutionStats(request, config, executionStatsHub);
+    }
+    if (pathname === '/modapi/v1/log-stats') {
+      return handleModLogStats(request, config, executionStatsHub);
     }
     if (pathname === '/modapi/v1/logs') {
       return handleModExecutionLogs(request, config, executionLogHub);

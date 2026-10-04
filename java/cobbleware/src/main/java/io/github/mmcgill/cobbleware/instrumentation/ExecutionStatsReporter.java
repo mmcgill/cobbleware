@@ -11,6 +11,7 @@ import cobbleware.internal.InstrumentationEffectType;
 import cobbleware.internal.InstrumentationEventType;
 import cobbleware.internal.InstrumentationLifecycleState;
 import io.github.mmcgill.cobbleware.execution.ExecutionStateAccess;
+import io.github.mmcgill.cobbleware.execution.ExecutionStateStore;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.HashMap;
@@ -23,16 +24,29 @@ public final class ExecutionStatsReporter {
     private ExecutionStatsReporter() {}
 
     /** Builds one complete, non-durable raw tick report. */
-    public static ExecutionStatsTick report(Instrumentation.TickSnapshot snapshot, long sampledAtUnixMillis) {
-        return report(snapshot, sampledAtUnixMillis, Map.of(), Map.of());
+    public static ExecutionStatsTick report(
+            Instrumentation.TickSnapshot snapshot,
+            long sampledAtUnixMillis,
+            int maxRunningExecutions,
+            long maxTotalExecutionStateBytes) {
+        return report(
+                snapshot, sampledAtUnixMillis, Map.of(), Map.of(), maxRunningExecutions, maxTotalExecutionStateBytes);
     }
 
     /** Builds one complete report, including durable state records that are not currently block-ticking. */
     public static ExecutionStatsTick report(
             Instrumentation.TickSnapshot snapshot,
             long sampledAtUnixMillis,
-            Map<UUID, Map<UUID, Long>> stateSizeCensus) {
-        return report(snapshot, sampledAtUnixMillis, stateSizeCensus, Map.of());
+            Map<UUID, Map<UUID, Long>> stateSizeCensus,
+            int maxRunningExecutions,
+            long maxTotalExecutionStateBytes) {
+        return report(
+                snapshot,
+                sampledAtUnixMillis,
+                stateSizeCensus,
+                Map.of(),
+                maxRunningExecutions,
+                maxTotalExecutionStateBytes);
     }
 
     /** Builds one complete report, including durable state records and current chat-token snapshots. */
@@ -40,12 +54,17 @@ public final class ExecutionStatsReporter {
             Instrumentation.TickSnapshot snapshot,
             long sampledAtUnixMillis,
             Map<UUID, Map<UUID, Long>> stateSizeCensus,
-            Map<UUID, ExecutionStateAccess.ChatTokens> chatTokenCensus) {
+            Map<UUID, ExecutionStateAccess.ChatTokens> chatTokenCensus,
+            int maxRunningExecutions,
+            long maxTotalExecutionStateBytes) {
         if (snapshot == null || snapshot.tick() <= 0 || sampledAtUnixMillis <= 0) {
             throw new IllegalArgumentException("raw tick snapshot and positive sample time are required");
         }
         if (stateSizeCensus == null || chatTokenCensus == null) {
             throw new IllegalArgumentException("state-size and chat-token censuses must not be null");
+        }
+        if (maxRunningExecutions <= 0 || maxTotalExecutionStateBytes <= 0) {
+            throw new IllegalArgumentException("execution limits must be positive");
         }
         Map<UUID, PlayerMeasurements> players = new HashMap<>();
         snapshot.events()
@@ -105,10 +124,7 @@ public final class ExecutionStatsReporter {
             });
         });
         chatTokenCensus.forEach((playerId, tokens) -> {
-            PlayerMeasurements measurements = players.get(playerId);
-            if (measurements != null) {
-                measurements.chatTokens = tokens;
-            }
+            players.computeIfAbsent(playerId, ignored -> new PlayerMeasurements()).chatTokens = tokens;
         });
 
         ExecutionStatsTick.Builder report = ExecutionStatsTick.newBuilder()
@@ -116,11 +132,16 @@ public final class ExecutionStatsReporter {
                 .setTickSequence(snapshot.tick());
         players.entrySet().stream()
                 .sorted(Map.Entry.comparingByKey())
-                .forEach(entry -> report.addPlayers(entry.getValue().toProto(entry.getKey())));
+                .forEach(entry -> report.addPlayers(
+                        entry.getValue().toProto(entry.getKey(), maxRunningExecutions, maxTotalExecutionStateBytes)));
         return report.build();
     }
 
-    private static ExecutionStatsTick.PlayerStats toPlayer(UUID playerId, PlayerMeasurements measurements) {
+    private static ExecutionStatsTick.PlayerStats toPlayer(
+            UUID playerId,
+            PlayerMeasurements measurements,
+            int maxRunningExecutions,
+            long maxTotalExecutionStateBytes) {
         measurements.events.sort(Comparator.comparing(ExecutionStatsReporter::eventKey));
         measurements.eventsPerSync.sort(Comparator.comparing(ExecutionStatsReporter::eventsPerSyncKey));
         measurements.effects.sort(Comparator.comparing(ExecutionStatsReporter::effectKey));
@@ -130,7 +151,15 @@ public final class ExecutionStatsReporter {
                 .addAllEvents(measurements.events)
                 .addAllEventsPerSync(measurements.eventsPerSync)
                 .addAllEffects(measurements.effects)
-                .addAllCobbleputerStates(measurements.states);
+                .addAllCobbleputerStates(measurements.states)
+                .setRunningExecutions((int) measurements.states.stream()
+                        .filter(state -> state.getState()
+                                == InstrumentationLifecycleState.INSTRUMENTATION_LIFECYCLE_STATE_RUNNING)
+                        .count())
+                .setMaxRunningExecutions(maxRunningExecutions)
+                .setMaxTotalExecutionStateBytes(maxTotalExecutionStateBytes)
+                .setMaxBurstChatTokens(ExecutionStateStore.BURST_CHAT_TOKEN_CAPACITY)
+                .setMaxSlowChatTokens(ExecutionStateStore.SLOW_CHAT_TOKEN_CAPACITY);
         if (measurements.chatTokens != null) {
             player.setBurstChatTokens(measurements.chatTokens.burst())
                     .setSlowChatTokens(measurements.chatTokens.slow());
@@ -232,8 +261,9 @@ public final class ExecutionStatsReporter {
         private final List<ExecutionStatsTick.CobbleputerState> states = new ArrayList<>();
         private ExecutionStateAccess.ChatTokens chatTokens;
 
-        private ExecutionStatsTick.PlayerStats toProto(UUID playerId) {
-            return toPlayer(playerId, this);
+        private ExecutionStatsTick.PlayerStats toProto(
+                UUID playerId, int maxRunningExecutions, long maxTotalExecutionStateBytes) {
+            return toPlayer(playerId, this, maxRunningExecutions, maxTotalExecutionStateBytes);
         }
     }
 }

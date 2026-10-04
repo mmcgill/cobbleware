@@ -16,7 +16,7 @@ Deno.test('Execution statistics flow from the Mod API to a Player WebSocket', as
   let stream: WebSocketConnection | undefined;
   let duplicateStream: WebSocketConnection | undefined;
   let modStream: WebSocketConnection | undefined;
-  let logStream: WebSocketConnection | undefined;
+  let logStatsStream: WebSocketConnection | undefined;
 
   try {
     runtime = await startRuntime(port, gameDir);
@@ -59,12 +59,12 @@ Deno.test('Execution statistics flow from the Mod API to a Player WebSocket', as
       'duplicate stream was not rejected with a policy-violation close',
     );
 
-    logStream = await WebSocketConnection.open(
+    logStatsStream = await WebSocketConnection.open(
       `127.0.0.1:${port}`,
-      '/modapi/v1/logs',
+      '/modapi/v1/log-stats',
       { authorization: `Bearer ${API_KEY}` },
     );
-    await logStream.sendBinary(toBinary(Internal.ExecutionLogEntrySchema, logTokenEntry()));
+    await logStatsStream.sendBinary(toBinary(Internal.LogStatsSchema, logTokenEntry()));
     await delay(50);
 
     const report = executionStatsReport();
@@ -89,6 +89,12 @@ Deno.test('Execution statistics flow from the Mod API to a Player WebSocket', as
     assertEquals(player.maxBytes, 128n * 1024n * 1024n, 'memory quota changed');
     assertEquals(player.burstChatTokens, 4, 'burst chat tokens changed');
     assertEquals(player.slowChatTokens, 96, 'slow chat tokens changed');
+    assertEquals(player.maxBurstChatTokens, 10, 'burst chat capacity changed');
+    assertEquals(player.maxSlowChatTokens, 100, 'slow chat capacity changed');
+    assertEquals(player.runningExecutions, 1, 'running-execution count changed');
+    assertEquals(player.maxRunningExecutions, 10, 'running-execution capacity changed');
+    assertEquals(player.maxTotalExecutionStateBytes, 1024n, 'execution-state capacity changed');
+    assertEquals(player.logTokensAvailable, true, 'program log token availability changed');
     assertEquals(player.logTokens?.available, 99.5, 'program log tokens changed');
     assertEquals(player.logTokens?.capacity, 100, 'program log capacity changed');
     assertEquals(player.events[0].accepted, 4n, 'accepted-event count changed');
@@ -101,10 +107,19 @@ Deno.test('Execution statistics flow from the Mod API to a Player WebSocket', as
     assertEquals(player.effects[0].totalNanos, 7n, 'effect-duration total changed');
     assertEquals(player.effects[0].maxNanos, 4n, 'effect-duration maximum changed');
     assertEquals(player.cobbleputerStates.length, 1, 'Cobbleputer state changed');
+
+    const limitsResponse = await fetch(`${baseUrl}/playerapi/v1/limits`, {
+      headers: { cookie },
+    });
+    assertEquals(limitsResponse.status, 200, 'limits should not require an execution transition');
+    const limits = await limitsResponse.json();
+    assertEquals(limits.runningExecutions.value, 1, 'running-execution limit value changed');
+    assertEquals(limits.runningExecutions.limit, 10, 'running-execution limit maximum changed');
+    assertEquals(limits.totalExecutionStateBytes.limit, 1024, 'state-byte limit maximum changed');
   } finally {
     duplicateStream?.close();
     modStream?.close();
-    logStream?.close();
+    logStatsStream?.close();
     stream?.close();
     if (runtime !== undefined) {
       try {
@@ -223,6 +238,11 @@ function executionStatsReport(): Internal.ExecutionStatsTick {
         playerId: PLAYER_ID,
         burstChatTokens: 4,
         slowChatTokens: 96,
+        maxBurstChatTokens: 10,
+        maxSlowChatTokens: 100,
+        runningExecutions: 1,
+        maxRunningExecutions: 10,
+        maxTotalExecutionStateBytes: 1024n,
         events: [create(Internal.ExecutionStatsTick_EventMeasurementSchema, {
           cobbleputer,
           type: Internal.InstrumentationEventType.CHAT_MESSAGE,
@@ -250,6 +270,10 @@ function executionStatsReport(): Internal.ExecutionStatsTick {
       }),
       create(Internal.ExecutionStatsTick_PlayerStatsSchema, {
         playerId: OTHER_PLAYER_ID,
+        maxBurstChatTokens: 10,
+        maxSlowChatTokens: 100,
+        maxRunningExecutions: 10,
+        maxTotalExecutionStateBytes: 1024n,
         events: [create(Internal.ExecutionStatsTick_EventMeasurementSchema, {
           cobbleputer,
           type: Internal.InstrumentationEventType.CHAT_MESSAGE,
@@ -260,13 +284,10 @@ function executionStatsReport(): Internal.ExecutionStatsTick {
   });
 }
 
-function logTokenEntry(): Internal.ExecutionLogEntry {
-  return create(Internal.ExecutionLogEntrySchema, {
+function logTokenEntry(): Internal.LogStats {
+  return create(Internal.LogStatsSchema, {
     playerId: PLAYER_ID,
-    inner: {
-      case: 'logTokens',
-      value: create(Internal.LogTokenBucketSchema, { available: 99.5, capacity: 100 }),
-    },
+    logTokens: create(Internal.LogTokenBucketSchema, { available: 99.5, capacity: 100 }),
   });
 }
 

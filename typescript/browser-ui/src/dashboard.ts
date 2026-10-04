@@ -64,8 +64,14 @@ markBundledUi(document.documentElement);
     ),
     limitsTotalExecutionStateText: document.querySelector('#limits-total-execution-state-text'),
     limitsBurstChatTokens: document.querySelector('#limits-burst-chat-tokens'),
+    limitsBurstChatTokensProgress: document.querySelector('#limits-burst-chat-tokens-progress'),
+    limitsBurstChatTokensText: document.querySelector('#limits-burst-chat-tokens-text'),
     limitsSlowChatTokens: document.querySelector('#limits-slow-chat-tokens'),
+    limitsSlowChatTokensProgress: document.querySelector('#limits-slow-chat-tokens-progress'),
+    limitsSlowChatTokensText: document.querySelector('#limits-slow-chat-tokens-text'),
     limitsProgramLogTokens: document.querySelector('#limits-program-log-tokens'),
+    limitsProgramLogTokensProgress: document.querySelector('#limits-program-log-tokens-progress'),
+    limitsProgramLogTokensText: document.querySelector('#limits-program-log-tokens-text'),
     limitsUpdated: document.querySelector('#limits-updated'),
     limitsUpdatedAt: document.querySelector('#limits-updated-at'),
   };
@@ -355,49 +361,85 @@ markBundledUi(document.documentElement);
   }
 
   function renderLimits() {
-    const latestStatsTick = statsTicks.at(-1);
     const hasLimitSnapshot = limits !== null;
-    elements.limitsDetails.hidden = !hasLimitSnapshot && latestStatsTick === undefined;
+    elements.limitsDetails.hidden = !hasLimitSnapshot;
     elements.limitsRunningExecutions.hidden = !hasLimitSnapshot;
     elements.limitsTotalExecutionState.hidden = !hasLimitSnapshot;
     elements.limitsUpdated.hidden = !hasLimitSnapshot;
-    elements.limitsBurstChatTokens.hidden = latestStatsTick === undefined;
-    elements.limitsSlowChatTokens.hidden = latestStatsTick === undefined;
-    elements.limitsProgramLogTokens.hidden = latestStatsTick === undefined;
+    elements.limitsBurstChatTokens.hidden = !hasLimitSnapshot;
+    elements.limitsSlowChatTokens.hidden = !hasLimitSnapshot;
+    elements.limitsProgramLogTokens.hidden = !hasLimitSnapshot;
 
     if (hasLimitSnapshot) {
-      const { used, limit } = limits.runningExecutions;
+      const { value, limit } = limits.runningExecutions;
       elements.limitsRunningExecutionsProgress.max = limit;
-      elements.limitsRunningExecutionsProgress.value = used;
+      elements.limitsRunningExecutionsProgress.value = Math.min(value, limit);
       elements.limitsRunningExecutionsText.textContent =
-        `${used.toLocaleString()} of ${limit.toLocaleString()} running executions`;
+        `${value.toLocaleString()} of ${limit.toLocaleString()} running executions`;
       const stateBytes = limits.totalExecutionStateBytes;
       elements.limitsTotalExecutionStateProgress.max = stateBytes.limit;
-      elements.limitsTotalExecutionStateProgress.value = stateBytes.used;
-      elements.limitsTotalExecutionStateText.textContent = `${formatBytes(stateBytes.used)} of ${
+      elements.limitsTotalExecutionStateProgress.value = Math.min(
+        stateBytes.value,
+        stateBytes.limit,
+      );
+      elements.limitsTotalExecutionStateText.textContent = `${formatBytes(stateBytes.value)} of ${
         formatBytes(stateBytes.limit)
       } execution state`;
+      renderLimitTokens(
+        elements.limitsBurstChatTokensProgress,
+        elements.limitsBurstChatTokensText,
+        'Burst chat tokens',
+        limits.burstChatTokens,
+      );
+      renderLimitTokens(
+        elements.limitsSlowChatTokensProgress,
+        elements.limitsSlowChatTokensText,
+        'Slow chat tokens',
+        limits.slowChatTokens,
+      );
+      renderLimitTokens(
+        elements.limitsProgramLogTokensProgress,
+        elements.limitsProgramLogTokensText,
+        'Program log tokens',
+        limits.logTokens,
+      );
       elements.limitsUpdatedAt.textContent = formatDate(limits.updatedAt);
       elements.limitsUpdatedAt.title = limits.updatedAt;
     }
+  }
 
-    if (latestStatsTick !== undefined) {
-      renderLimitsChatTokens(latestStatsTick);
-      renderLimitsLogTokens(latestStatsTick);
+  function renderLimitTokens(progress, textElement, ariaLabel, tokens) {
+    if (tokens === undefined) {
+      progress.hidden = true;
+      progress.setAttribute('aria-label', `${ariaLabel} are unavailable`);
+      textElement.textContent = 'Unavailable';
+      return;
     }
+    progress.hidden = false;
+    progress.max = tokens.limit;
+    progress.value = Math.min(tokens.value, tokens.limit);
+    const text = `${tokenFormatter.format(tokens.value)} of ${tokenFormatter.format(tokens.limit)}`;
+    progress.setAttribute('aria-label', `${ariaLabel}: ${text}`);
+    textElement.textContent = text;
   }
 
   function parseLimits(body) {
-    const runningExecutions = body?.runningExecutions;
-    const totalExecutionStateBytes = body?.totalExecutionStateBytes;
+    const entries = [
+      body?.runningExecutions,
+      body?.totalExecutionStateBytes,
+      body?.burstChatTokens,
+      body?.slowChatTokens,
+    ];
     if (
-      !runningExecutions || !Number.isInteger(runningExecutions.used) ||
-      !Number.isInteger(runningExecutions.limit) || runningExecutions.used < 0 ||
-      runningExecutions.limit <= 0 || runningExecutions.used > runningExecutions.limit ||
-      !totalExecutionStateBytes || !Number.isSafeInteger(totalExecutionStateBytes.used) ||
-      !Number.isSafeInteger(totalExecutionStateBytes.limit) || totalExecutionStateBytes.used < 0 ||
-      totalExecutionStateBytes.limit <= 0 ||
-      typeof totalExecutionStateBytes.updatedAt !== 'string' ||
+      entries.some((entry) =>
+        !entry || !Number.isFinite(entry.value) || entry.value < 0 ||
+        !Number.isFinite(entry.limit) || entry.limit <= 0
+      ) ||
+      (body.logTokens !== undefined &&
+        (!Number.isFinite(body.logTokens.value) || body.logTokens.value < 0 ||
+          !Number.isFinite(body.logTokens.limit) || body.logTokens.limit <= 0)) ||
+      !Number.isSafeInteger(body.totalExecutionStateBytes.value) ||
+      !Number.isSafeInteger(body.totalExecutionStateBytes.limit) ||
       typeof body.updatedAt !== 'string'
     ) {
       throw makeError('The server returned invalid limit data.');
@@ -581,36 +623,6 @@ markBundledUi(document.documentElement);
     const text = `${formatStatBytes(usedBytes)} of ${formatStatBytes(maxBytes)}`;
     elements.statsMemoryProgress.setAttribute('aria-label', `Player memory usage: ${text}`);
     elements.statsMemoryText.textContent = text;
-  }
-
-  function renderLimitsChatTokens(tick) {
-    const burst = `${tick.burstChatTokens.toLocaleString()} of 10`;
-    const slow = `${tick.slowChatTokens.toLocaleString()} of 100`;
-    elements.limitsBurstChatTokens.querySelector('dd').textContent = burst;
-    elements.limitsBurstChatTokens.setAttribute(
-      'aria-label',
-      `Available burst chat tokens: ${burst}`,
-    );
-    elements.limitsSlowChatTokens.querySelector('dd').textContent = slow;
-    elements.limitsSlowChatTokens.setAttribute('aria-label', `Available slow chat tokens: ${slow}`);
-  }
-
-  function renderLimitsLogTokens(tick) {
-    if (tick.logTokens === undefined) {
-      elements.limitsProgramLogTokens.querySelector('dd').textContent = 'Unavailable';
-      elements.limitsProgramLogTokens.setAttribute(
-        'aria-label',
-        'Program log tokens are unavailable',
-      );
-      return;
-    }
-    const available = tokenFormatter.format(Math.floor(tick.logTokens.available));
-    const value = `${available} of ${tick.logTokens.capacity.toLocaleString()}`;
-    elements.limitsProgramLogTokens.querySelector('dd').textContent = value;
-    elements.limitsProgramLogTokens.setAttribute(
-      'aria-label',
-      `Available program log tokens: ${value}`,
-    );
   }
 
   function renderStatsGraphs() {
@@ -1008,16 +1020,10 @@ markBundledUi(document.documentElement);
   }
 
   function updateLimitsFromTransition(entry) {
+    if (limits === null) return;
     limitsGeneration += 1;
-    limits = {
-      runningExecutions: { used: entry.executionCount, limit: entry.executionLimit },
-      totalExecutionStateBytes: {
-        used: limits?.totalExecutionStateBytes.used ?? 0,
-        limit: entry.totalExecutionStateLimit,
-        updatedAt: limits?.totalExecutionStateBytes.updatedAt ?? new Date().toISOString(),
-      },
-      updatedAt: new Date().toISOString(),
-    };
+    limits.runningExecutions.value = entry.executionCount;
+    limits.updatedAt = new Date().toISOString();
     elements.limitsRetryButton.hidden = true;
     setLimitsStatus('Current enforced limits.');
     renderLimits();
@@ -1046,10 +1052,24 @@ markBundledUi(document.documentElement);
     const maxBytes = protoVarint(playerFields, 7);
     const burstChatTokens = protoNumber(playerFields, 8);
     const slowChatTokens = protoNumber(playerFields, 9);
-    if (burstChatTokens > 10 || slowChatTokens > 100) {
+    const maxBurstChatTokens = protoNumber(playerFields, 11);
+    const maxSlowChatTokens = protoNumber(playerFields, 12);
+    const runningExecutions = protoNumber(playerFields, 14);
+    const maxRunningExecutions = protoNumber(playerFields, 15);
+    const maxTotalExecutionStateBytes = protoVarint(playerFields, 16);
+    if (
+      maxRunningExecutions <= 0 || runningExecutions > maxRunningExecutions ||
+      maxTotalExecutionStateBytes <= 0n || maxTotalExecutionStateBytes > BigInt(Number.MAX_SAFE_INTEGER) ||
+      maxBurstChatTokens <= 0 || maxSlowChatTokens <= 0 ||
+      burstChatTokens > maxBurstChatTokens || slowChatTokens > maxSlowChatTokens
+    ) {
       throw new Error('invalid chat token counts');
     }
     const logTokens = decodeLogTokenBucket(playerFields);
+    const logTokensAvailable = protoBoolean(playerFields, 13);
+    if (logTokensAvailable !== (logTokens !== undefined)) {
+      throw new Error('inconsistent log token availability');
+    }
     return {
       sampledAt,
       sequence,
@@ -1060,7 +1080,13 @@ markBundledUi(document.documentElement);
       maxBytes,
       burstChatTokens,
       slowChatTokens,
+      maxBurstChatTokens,
+      maxSlowChatTokens,
+      runningExecutions,
+      maxRunningExecutions,
+      maxTotalExecutionStateBytes,
       logTokens,
+      logTokensAvailable,
       stateBytes,
       graph: summarizeStatsTickGraph(events, effects),
     };
@@ -1150,10 +1176,23 @@ markBundledUi(document.documentElement);
   }
 
   function updateLimitsFromStats(tick) {
-    if (limits !== null && tick.stateBytes <= BigInt(Number.MAX_SAFE_INTEGER)) {
-      limits.totalExecutionStateBytes.used = Number(tick.stateBytes);
-      limits.totalExecutionStateBytes.updatedAt = new Date(Number(tick.sampledAt)).toISOString();
+    if (limits === null) return;
+    if (tick.stateBytes <= BigInt(Number.MAX_SAFE_INTEGER)) {
+      limits.totalExecutionStateBytes.value = Number(tick.stateBytes);
     }
+    limits.runningExecutions = {
+      value: tick.runningExecutions,
+      limit: tick.maxRunningExecutions,
+    };
+    limits.totalExecutionStateBytes.limit = Number(tick.maxTotalExecutionStateBytes);
+    limits.burstChatTokens = { value: tick.burstChatTokens, limit: tick.maxBurstChatTokens };
+    limits.slowChatTokens = { value: tick.slowChatTokens, limit: tick.maxSlowChatTokens };
+    if (tick.logTokensAvailable) {
+      limits.logTokens = { value: tick.logTokens.available, limit: tick.logTokens.capacity };
+    } else {
+      limits.logTokens = undefined;
+    }
+    limits.updatedAt = new Date(Number(tick.sampledAt)).toISOString();
     renderLimits();
   }
 
@@ -1275,6 +1314,12 @@ markBundledUi(document.documentElement);
     const value = protoVarint(fields, field);
     if (value > BigInt(Number.MAX_SAFE_INTEGER)) throw new Error('invalid protobuf number');
     return Number(value);
+  }
+
+  function protoBoolean(fields, field) {
+    const value = protoVarint(fields, field);
+    if (value !== 0n && value !== 1n) throw new Error('invalid protobuf boolean');
+    return value === 1n;
   }
 
   function displayError(error) {

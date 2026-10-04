@@ -3,40 +3,16 @@ import * as Internal from '@cobbleware/core/internal';
 import type { AppConfig } from '../config.ts';
 import { requireModAuth, requireSameOrigin } from '../auth/middleware.ts';
 import { constantTimeEqual } from '../auth/crypto.ts';
-import type { LogTokenBucketSnapshot } from '../stats/handlers.ts';
 
 const EVENT_WORKER_PROTOCOL_PREFIX = 'cobbleware.bearer.';
-
-export type RunningExecutionsSnapshot = {
-  used: number;
-  limit: number;
-  totalExecutionStateLimit: bigint;
-  updatedAt: string;
-};
-
-export type LogTokenBucketRecorder = (
-  playerId: string,
-  snapshot: LogTokenBucketSnapshot,
-) => void;
 
 /** Routes non-durable execution-log frames between authenticated producers and players. */
 export class ExecutionLogHub {
   private readonly playerStreams = new Map<string, WebSocket>();
   private readonly producerStreams = new Set<WebSocket>();
-  private readonly runningExecutionLimits = new Map<string, RunningExecutionsSnapshot>();
 
-  constructor(private readonly recordLogTokens: LogTokenBucketRecorder = () => {}) {}
-
-  runningExecutions(playerId: string): RunningExecutionsSnapshot | undefined {
-    const snapshot = this.runningExecutionLimits.get(playerId);
-    return snapshot === undefined ? undefined : { ...snapshot };
-  }
-
-  /** Records a transition's current running-execution limits before forwarding the display log. */
-  recordExecutionTransition(
-    playerId: string,
-    transition: Internal.ExecutionTransitionLogEntry,
-  ): void {
+  /** Validates a displayable execution lifecycle transition before forwarding it to the Player. */
+  recordExecutionTransition(transition: Internal.ExecutionTransitionLogEntry): void {
     if (
       !isFieldSet(transition, Internal.ExecutionTransitionLogEntrySchema.field.executionId) ||
       transition.executionId === undefined ||
@@ -50,12 +26,6 @@ export class ExecutionLogHub {
     ) {
       throw new Error('execution transition is invalid');
     }
-    this.runningExecutionLimits.set(playerId, {
-      used: transition.executionCount,
-      limit: transition.executionLimit,
-      totalExecutionStateLimit: transition.totalExecutionStateLimit,
-      updatedAt: new Date().toISOString(),
-    });
   }
 
   openPlayer(playerId: string, socket: WebSocket): void {
@@ -121,13 +91,9 @@ export class ExecutionLogHub {
       }
       playerId = uuidString(entry.playerId);
       if (entry.inner.case === 'transition') {
-        this.recordExecutionTransition(playerId, entry.inner.value);
+        this.recordExecutionTransition(entry.inner.value);
       } else if (entry.inner.case === 'poolTransition') {
         validateExecutionPoolTransition(entry.inner.value);
-      } else if (entry.inner.case === 'logTokens') {
-        validateLogTokenBucket(entry.inner.value);
-        this.recordLogTokens(playerId, entry.inner.value);
-        return;
       }
     } catch (error) {
       rejectSocket(
@@ -243,15 +209,6 @@ function validateExecutionPoolTransition(
 ): void {
   if (!isExecutionPoolTransition(transition.transition)) {
     throw new Error('execution-pool transition is invalid');
-  }
-}
-
-function validateLogTokenBucket(value: Internal.LogTokenBucket): void {
-  if (
-    !Number.isFinite(value.available) || value.available < 0 ||
-    !Number.isInteger(value.capacity) || value.capacity <= 0 || value.available > value.capacity
-  ) {
-    throw new Error('log token bucket is invalid');
   }
 }
 

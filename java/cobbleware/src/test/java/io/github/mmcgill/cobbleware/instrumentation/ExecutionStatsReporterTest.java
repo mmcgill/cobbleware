@@ -32,7 +32,9 @@ class ExecutionStatsReporterTest {
                 instrumentation.currentTickSnapshot(),
                 1234,
                 Map.of(),
-                Map.of(PLAYER, new io.github.mmcgill.cobbleware.execution.ExecutionStateAccess.ChatTokens(4, 96)));
+                Map.of(PLAYER, new io.github.mmcgill.cobbleware.execution.ExecutionStateAccess.ChatTokens(4, 96)),
+                12,
+                8192);
 
         assertEquals(1234, report.getSampledAtUnixMillis());
         assertEquals(1, report.getTickSequence());
@@ -52,5 +54,10 @@ class ExecutionStatsReporterTest {
         assertEquals(12, player.getCobbleputerStates(0).getStateSizeBytes());
         assertEquals(4, player.getBurstChatTokens());
         assertEquals(96, player.getSlowChatTokens());
+        assertEquals(10, player.getMaxBurstChatTokens());
+        assertEquals(100, player.getMaxSlowChatTokens());
+        assertEquals(1, player.getRunningExecutions());
+        assertEquals(12, player.getMaxRunningExecutions());
+        assertEquals(8192, player.getMaxTotalExecutionStateBytes());
     }
 }

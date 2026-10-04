@@ -27,7 +27,7 @@ are truncated.
 
 ## Configuration and Delivery
 
-The Event Worker connects to the Main Worker's `/modapi/v1/logs` endpoint with the
+The Event Worker connects to the Main Worker's `/modapi/v1/logs` and `/modapi/v1/log-stats` endpoints with the
 `COBBLEWARE_API_KEY` credential. The bundled Runtime WebSocket client cannot attach
 an `Authorization` header, so the Event Worker presents that key in the Main Worker's
 reserved `cobbleware.bearer.<base64url-key>` WebSocket subprotocol instead. `COBBLEWARE_MAIN_WORKER_URL` identifies the
@@ -35,6 +35,9 @@ Main Worker's HTTP or HTTPS base URL and defaults to `http://127.0.0.1:9000`; it
 be set explicitly when the Runtime uses a different port or a reverse-proxy path
 prefix. `COBBLEWARE_LOG_RATE_PER_SECOND` configures the logging token refill rate and
 defaults to 2; it must be a non-negative finite number.
+
+`/modapi/v1/logs` carries only displayable execution log entries. `/modapi/v1/log-stats` carries the current
+per-player program-log token buckets; the Main Worker merges them into PlayerStats for the Browser statistics stream.
 
 The Event Worker reconnects after a Main Worker WebSocket disconnection. It does not
 buffer events while disconnected or while a prior send cannot be accepted, so those

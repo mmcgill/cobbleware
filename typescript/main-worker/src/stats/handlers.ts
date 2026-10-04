@@ -2,6 +2,7 @@ import { create, fromBinary, toBinary } from '@cobbleware/core';
 import * as Internal from '@cobbleware/core/internal';
 import type { AppConfig } from '../config.ts';
 import { requireModAuth, requireSameOrigin } from '../auth/middleware.ts';
+import { constantTimeEqual } from '../auth/crypto.ts';
 import { playerWorkerServicePathPrefix } from '../programs/store.ts';
 
 type MemoryStats =
@@ -14,14 +15,19 @@ export type ExecutionStatsHubOptions = {
   memoryStats?: MemoryStatsProvider;
 };
 
-export type ExecutionStateBytesSnapshot = {
-  used: bigint;
-  updatedAt: string;
-};
-
 export type LogTokenBucketSnapshot = {
   available: number;
   capacity: number;
+};
+
+export type PlayerLimitsSnapshot = {
+  runningExecutions: { value: number; limit: number };
+  executionStateBytes: bigint;
+  executionStateLimit: bigint;
+  burstChatTokens: { value: number; limit: number };
+  slowChatTokens: { value: number; limit: number };
+  logTokens?: { value: number; limit: number };
+  updatedAt: string;
 };
 
 /** Retains the latest non-durable raw tick per player and the one permitted player stream. */
@@ -103,21 +109,64 @@ export class ExecutionStatsHub {
     }
   }
 
-  /** Returns the latest player-scoped durable execution-state total from the Mod census. */
-  executionStateBytes(playerId: string): ExecutionStateBytesSnapshot | undefined {
-    const report = this.reports.get(playerId);
-    const player = report?.players[0];
-    if (player === undefined) return undefined;
-    let used = 0n;
-    for (const state of player.cobbleputerStates) {
-      used += state.stateSizeBytes;
-    }
-    return { used, updatedAt: new Date().toISOString() };
-  }
-
   /** Records the Event Worker's latest non-durable program-log token-bucket snapshot. */
   recordLogTokens(playerId: string, snapshot: LogTokenBucketSnapshot): void {
     this.logTokenBuckets.set(playerId, { ...snapshot });
+  }
+
+  /** Returns the latest enriched player-scoped values used by the Limits endpoint. */
+  playerLimits(playerId: string): PlayerLimitsSnapshot | undefined {
+    const report = this.reports.get(playerId);
+    const player = report?.players[0];
+    if (
+      player === undefined || player.maxRunningExecutions <= 0 ||
+      player.runningExecutions > player.maxRunningExecutions ||
+      player.maxTotalExecutionStateBytes <= 0n ||
+      player.maxBurstChatTokens <= 0 || player.maxSlowChatTokens <= 0 ||
+      player.burstChatTokens > player.maxBurstChatTokens ||
+      player.slowChatTokens > player.maxSlowChatTokens ||
+      player.logTokensAvailable !== (player.logTokens !== undefined)
+    ) {
+      return undefined;
+    }
+    const logTokens = player.logTokens;
+    if (logTokens !== undefined && !validLogTokenBucket(logTokens)) return undefined;
+    let executionStateBytes = 0n;
+    for (const state of player.cobbleputerStates) executionStateBytes += state.stateSizeBytes;
+    return {
+      runningExecutions: { value: player.runningExecutions, limit: player.maxRunningExecutions },
+      executionStateBytes,
+      executionStateLimit: player.maxTotalExecutionStateBytes,
+      burstChatTokens: { value: player.burstChatTokens, limit: player.maxBurstChatTokens },
+      slowChatTokens: { value: player.slowChatTokens, limit: player.maxSlowChatTokens },
+      ...(logTokens === undefined
+        ? {}
+        : { logTokens: { value: logTokens.available, limit: logTokens.capacity } }),
+      updatedAt: new Date(Number(report!.sampledAtUnixMillis)).toISOString(),
+    };
+  }
+
+  openLogStats(socket: WebSocket): void {
+    socket.binaryType = 'arraybuffer';
+    socket.onmessage = (event) => {
+      if (!(event.data instanceof ArrayBuffer)) {
+        rejectSocket(socket, 'invalid-log-stats-frame', 'Log statistics must use binary frames.');
+        return;
+      }
+      try {
+        const stats = fromBinary(Internal.LogStatsSchema, new Uint8Array(event.data));
+        if (stats.playerId === undefined || !validLogTokenBucket(stats.logTokens)) {
+          throw new Error('log statistics must contain a player and valid token bucket');
+        }
+        this.recordLogTokens(uuidString(stats.playerId), stats.logTokens);
+      } catch (error) {
+        rejectSocket(
+          socket,
+          'invalid-log-stats-frame',
+          describeError(error, 'Invalid log statistics.'),
+        );
+      }
+    };
   }
 
   private enqueueModReport(socket: WebSocket, generation: number, data: ArrayBuffer): void {
@@ -222,6 +271,33 @@ export function handleModExecutionStats(
   return response;
 }
 
+/** Accepts Event Worker token-bucket telemetry separately from displayable execution logs. */
+export function handleModLogStats(
+  request: Request,
+  config: AppConfig,
+  hub: ExecutionStatsHub,
+): Response {
+  if (request.method !== 'GET') {
+    return new Response(null, { status: 405, headers: { allow: 'GET' } });
+  }
+  if (!isWebSocketUpgrade(request)) {
+    return new Response(null, { status: 426, headers: { upgrade: 'websocket' } });
+  }
+  const authError = requireEventWorkerAuth(request, config);
+  if (authError !== null) {
+    return rejectedUpgrade(
+      request,
+      authError.status === 401 ? 'unauthorized' : 'server-authentication-unavailable',
+      authError.status === 401
+        ? 'Event Worker authentication failed.'
+        : 'Server authentication is not configured.',
+    );
+  }
+  const { response, socket } = Deno.upgradeWebSocket(request);
+  hub.openLogStats(socket);
+  return response;
+}
+
 export function handlePlayerExecutionStats(
   request: Request,
   playerId: string | undefined,
@@ -269,7 +345,8 @@ function playerSnapshot(
   maxBytes: bigint,
   logTokens: LogTokenBucketSnapshot | undefined,
 ): Internal.ExecutionStatsTick {
-  const { logTokens: _modLogTokens, ...modPlayer } = player;
+  const { logTokens: _modLogTokens, logTokensAvailable: _modLogTokensAvailable, ...modPlayer } =
+    player;
   return create(Internal.ExecutionStatsTickSchema, {
     sampledAtUnixMillis: report.sampledAtUnixMillis,
     tickSequence: report.tickSequence,
@@ -277,6 +354,7 @@ function playerSnapshot(
       ...modPlayer,
       usedBytes,
       maxBytes,
+      logTokensAvailable: logTokens !== undefined,
       ...(logTokens === undefined
         ? {}
         : { logTokens: create(Internal.LogTokenBucketSchema, logTokens) }),
@@ -316,6 +394,13 @@ function validByteCount(value: number | undefined): bigint | undefined {
     : BigInt(value);
 }
 
+function validLogTokenBucket(
+  value: LogTokenBucketSnapshot | undefined,
+): value is LogTokenBucketSnapshot {
+  return value !== undefined && Number.isFinite(value.available) && value.available >= 0 &&
+    Number.isInteger(value.capacity) && value.capacity > 0 && value.available <= value.capacity;
+}
+
 function validate(report: Internal.ExecutionStatsTick): void {
   if (report.sampledAtUnixMillis === 0n || report.tickSequence === 0n) {
     throw new Error('sample time and tick sequence must be nonzero');
@@ -331,11 +416,17 @@ function validate(report: Internal.ExecutionStatsTick): void {
 }
 
 function validatePlayer(player: Internal.ExecutionStatsTick_PlayerStats): void {
-  if (player.burstChatTokens > 10 || player.slowChatTokens > 100) {
+  if (
+    player.maxRunningExecutions <= 0 || player.runningExecutions > player.maxRunningExecutions ||
+    player.maxTotalExecutionStateBytes <= 0n || player.maxBurstChatTokens <= 0 ||
+    player.maxSlowChatTokens <= 0 ||
+    player.burstChatTokens > player.maxBurstChatTokens ||
+    player.slowChatTokens > player.maxSlowChatTokens
+  ) {
     throw new Error('chat token counts exceed their configured capacities');
   }
-  if (player.logTokens !== undefined) {
-    throw new Error('log token bucket must be supplied by the Event Worker');
+  if (player.logTokens !== undefined || player.logTokensAvailable) {
+    throw new Error('log token bucket availability must be supplied by the Event Worker');
   }
   const events = new Set<string>();
   for (const metric of player.events) {
@@ -378,6 +469,25 @@ function validatePlayer(player: Internal.ExecutionStatsTick_PlayerStats): void {
     }
     states.add(key);
   }
+}
+
+function requireEventWorkerAuth(request: Request, config: AppConfig): Response | null {
+  const bearerError = requireModAuth(request, config);
+  if (bearerError === null || config.apiKey === undefined || config.apiKey === '') {
+    return bearerError;
+  }
+  const protocols = request.headers.get('sec-websocket-protocol');
+  const expected = `cobbleware.bearer.${base64Url(config.apiKey)}`;
+  return protocols?.split(',').some((protocol) => constantTimeEqual(protocol.trim(), expected))
+    ? null
+    : bearerError;
+}
+
+function base64Url(value: string): string {
+  const bytes = new TextEncoder().encode(value);
+  let binary = '';
+  for (const byte of bytes) binary += String.fromCharCode(byte);
+  return btoa(binary).replaceAll('+', '-').replaceAll('/', '_').replaceAll('=', '');
 }
 
 function cobbleputerStateKey(

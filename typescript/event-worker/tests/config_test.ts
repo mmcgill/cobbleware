@@ -2,6 +2,7 @@ import {
   configFromEnv,
   DEFAULT_LOG_RATE_PER_SECOND,
   DEFAULT_MAIN_WORKER_URL,
+  logStatsUrlFromBase,
   logsUrlFromBase,
 } from '../src/config.ts';
 
@@ -10,6 +11,11 @@ Deno.test('Event Worker derives its WebSocket endpoint from the Main Worker base
     logsUrlFromBase('https://example.test/cobbleware'),
     'wss://example.test/cobbleware/modapi/v1/logs',
     'path-prefixed HTTPS URL was not preserved',
+  );
+  assertEquals(
+    logStatsUrlFromBase('https://example.test/cobbleware'),
+    'wss://example.test/cobbleware/modapi/v1/log-stats',
+    'log-stats path-prefixed HTTPS URL was not preserved',
   );
   assertEquals(
     logsUrlFromBase(DEFAULT_MAIN_WORKER_URL),

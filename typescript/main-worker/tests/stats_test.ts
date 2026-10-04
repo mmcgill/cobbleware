@@ -55,6 +55,22 @@ Deno.test('Execution-stats player endpoint requires authentication and an upgrad
   }
 });
 
+Deno.test('Log-stats endpoint requires a WebSocket GET', async () => {
+  const app = await createTestHandler();
+  try {
+    const post = await app.handler(
+      new Request('http://localhost/modapi/v1/log-stats', { method: 'POST' }),
+    );
+    assertEquals(post.status, 405, 'log stats POST must be rejected');
+    assertEquals(post.headers.get('allow'), 'GET', 'log stats must advertise GET');
+
+    const get = await app.handler(new Request('http://localhost/modapi/v1/log-stats'));
+    assertEquals(get.status, 426, 'normal GET must require a WebSocket upgrade');
+  } finally {
+    await app.cleanup();
+  }
+});
+
 function assertEquals<T>(actual: T, expected: T, message: string): void {
   if (actual !== expected) {
     throw new Error(`${message}: expected ${String(expected)}, got ${String(actual)}`);

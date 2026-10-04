@@ -1323,7 +1323,9 @@ public final class ExecutionDriver {
                 instrumentation.currentTickSnapshot(),
                 System.currentTimeMillis(),
                 executionStateAccess.stateSizeCensus(),
-                executionStateAccess.chatTokenCensus(minecraft.serverGameTime())));
+                executionStateAccess.chatTokenCensus(minecraft.serverGameTime()),
+                maxRunningExecutionsPerPlayer,
+                maxTotalExecutionStateBytesPerPlayer));
     }
 
     private void reportExecutionTransition(CobbleputerBlockEntity blockEntity, ExecutionTransition transition) {

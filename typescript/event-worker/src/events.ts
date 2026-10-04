@@ -18,18 +18,15 @@ export type TranslatedLogEvent = {
 };
 
 /** Creates internal Event Worker telemetry; the Main Worker does not display it as a log entry. */
-export function logTokenBucketEntry(
+export function logStats(
   playerId: string,
   snapshot: LogTokenBucketSnapshot,
-): Internal.ExecutionLogEntry | undefined {
+): Internal.LogStats | undefined {
   const playerUuid = uuidFromString(playerId);
   if (playerUuid === undefined) return undefined;
-  return create(Internal.ExecutionLogEntrySchema, {
+  return create(Internal.LogStatsSchema, {
     playerId: playerUuid,
-    inner: {
-      case: 'logTokens',
-      value: create(Internal.LogTokenBucketSchema, snapshot),
-    },
+    logTokens: create(Internal.LogTokenBucketSchema, snapshot),
   });
 }
 

@@ -1,81 +1,86 @@
 import { handlePlayerLimits } from '../src/limits/handlers.ts';
-import { ExecutionLogHub } from '../src/logs/handlers.ts';
-import { Common, create } from '@cobbleware/core';
-import * as Internal from '@cobbleware/core/internal';
 
-Deno.test('Player limits endpoint returns the cached running-execution snapshot', async () => {
-  const logs = new ExecutionLogHub();
-  logs.recordExecutionTransition('player-a', transition(2, 10));
+Deno.test('Player limits endpoint returns the cached player-statistics snapshot', async () => {
   const response = handlePlayerLimits(
     new Request('http://localhost/playerapi/v1/limits'),
     'player-a',
-    logs,
     stats(42n),
   );
 
   assertEquals(response.status, 200, 'cached limits should be available');
   const body = await response.json();
   assertEquals(body, {
-    runningExecutions: { used: 2, limit: 10 },
+    runningExecutions: { value: 2, limit: 10 },
     totalExecutionStateBytes: {
-      used: 42,
+      value: 42,
       limit: 1024,
-      updatedAt: body.totalExecutionStateBytes.updatedAt,
     },
+    burstChatTokens: { value: 8, limit: 10 },
+    slowChatTokens: { value: 72, limit: 100 },
+    logTokens: { value: 7.5, limit: 100 },
     updatedAt: body.updatedAt,
   }, 'limits response should preserve the authoritative snapshot');
 });
 
-Deno.test('Player limits endpoint reports unavailable until a snapshot arrives', async () => {
+Deno.test('Player limits endpoint reports unavailable until player statistics arrive', async () => {
   const unavailable = handlePlayerLimits(
     new Request('http://localhost/playerapi/v1/limits'),
     'player-a',
-    new ExecutionLogHub(),
-    stats(0n),
+    unavailableStats(),
   );
   assertEquals(unavailable.status, 503, 'missing snapshot should not be represented as zero usage');
 
   const method = handlePlayerLimits(
     new Request('http://localhost/playerapi/v1/limits', { method: 'POST' }),
     'player-a',
-    new ExecutionLogHub(),
-    stats(0n),
+    unavailableStats(),
   );
   assertEquals(method.status, 405, 'limits only supports GET');
   assertEquals(method.headers.get('allow'), 'GET', 'limits advertises GET');
 });
 
-Deno.test('Execution transitions replace the cached running-execution limits', () => {
-  const logs = new ExecutionLogHub();
-  logs.recordExecutionTransition('player-a', transition(2, 10));
-  logs.recordExecutionTransition('player-a', transition(1, 12));
+Deno.test('Player limits endpoint omits unavailable program-log token information', async () => {
+  const response = handlePlayerLimits(
+    new Request('http://localhost/playerapi/v1/limits'),
+    'player-a',
+    stats(42n, false),
+  );
+
   assertEquals(
-    logs.runningExecutions('player-a')?.used,
-    1,
-    'the later transition should replace current usage',
+    response.status,
+    200,
+    'other available limits should not depend on log-token telemetry',
+  );
+  const body = await response.json() as Record<string, unknown>;
+  assertEquals('logTokens' in body, false, 'unavailable log-token information should be omitted');
+  assertEquals(
+    body.runningExecutions,
+    { value: 2, limit: 10 },
+    'running-execution limit should remain available',
   );
   assertEquals(
-    logs.runningExecutions('player-a')?.limit,
-    12,
-    'the later transition should replace the configured limit',
+    body.totalExecutionStateBytes,
+    { value: 42, limit: 1024 },
+    'execution-state limit should remain available',
   );
 });
 
-function transition(
-  executionCount: number,
-  executionLimit: number,
-): Internal.ExecutionTransitionLogEntry {
-  return create(Internal.ExecutionTransitionLogEntrySchema, {
-    executionId: create(Common.UuidSchema, { high: 1n, low: 2n }),
-    transition: Internal.ExecutionTransition.STARTED,
-    executionCount,
-    executionLimit,
-    totalExecutionStateLimit: 1024n,
-  });
+function stats(used: bigint, includeLogTokens = true) {
+  return {
+    playerLimits: () => ({
+      runningExecutions: { value: 2, limit: 10 },
+      executionStateBytes: used,
+      executionStateLimit: 1024n,
+      burstChatTokens: { value: 8, limit: 10 },
+      slowChatTokens: { value: 72, limit: 100 },
+      ...(includeLogTokens ? { logTokens: { value: 7.5, limit: 100 } } : {}),
+      updatedAt: '2026-10-04T12:00:00.000Z',
+    }),
+  } as never;
 }
 
-function stats(used: bigint) {
-  return { executionStateBytes: () => ({ used, updatedAt: new Date().toISOString() }) } as never;
+function unavailableStats() {
+  return { playerLimits: () => undefined } as never;
 }
 
 function assertEquals<T>(actual: T, expected: T, message: string): void {

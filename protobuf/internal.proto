@@ -171,9 +171,22 @@ message ExecutionStatsTick {
     uint32 burst_chat_tokens = 8;
     // The Mod-authoritative current number of available slow chat tokens. This is instantaneous, not a window aggregate.
     uint32 slow_chat_tokens = 9;
-    // The Event Worker-authoritative current program-log token bucket. It is absent until the Event Worker has
-    // observed a Log event for this player, and is refreshed independently of the Mod's tick measurements.
+    // The Event Worker-authoritative current program-log token bucket. It is present exactly when
+    // log_tokens_available is true and is refreshed independently of the Mod's tick measurements.
     LogTokenBucket log_tokens = 10;
+    // Maximum burst chat tokens. Required by the application contract.
+    uint32 max_burst_chat_tokens = 11;
+    // Maximum slow chat tokens. Required by the application contract.
+    uint32 max_slow_chat_tokens = 12;
+    // True when log_tokens contains the Event Worker's current program-log bucket. False means it is unavailable.
+    // This field is set only by the Main Worker in player-scoped Browser copies of this message.
+    bool log_tokens_available = 13;
+    // The Mod-authoritative current number of loaded running executions. Required by the application contract.
+    uint32 running_executions = 14;
+    // Maximum concurrently running executions for this player. Required by the application contract.
+    uint32 max_running_executions = 15;
+    // Maximum total durable execution-state bytes for this player. Required by the application contract.
+    uint64 max_total_execution_state_bytes = 16;
     repeated EventMeasurement events = 2;
     repeated EventsPerSyncMeasurement events_per_sync = 3;
     repeated EffectMeasurement effects = 4;
@@ -253,6 +266,13 @@ message LogTokenBucket {
   uint32 capacity = 2;
 }
 
+// The Event Worker's current program-log allowance for one player. It is sent to the Main Worker as telemetry and
+// merged into that player's next ExecutionStatsTick.PlayerStats snapshot.
+message LogStats {
+  cobbleware.common.Uuid player_id = 1;
+  LogTokenBucket log_tokens = 2;
+}
+
 enum ExecutionTransition {
   EXECUTION_TRANSITION_UNSPECIFIED = 0;
   EXECUTION_TRANSITION_STARTED = 1;
@@ -295,7 +315,5 @@ message ExecutionLogEntry {
     ProgramLogEntry log = 4;
     ExecutionTransitionLogEntry transition = 5;
     ExecutionPoolTransitionLogEntry pool_transition = 6;
-    // Internal telemetry used to enrich the Player's execution-statistics stream; never displayed as a log entry.
-    LogTokenBucket log_tokens = 7;
   }
 }

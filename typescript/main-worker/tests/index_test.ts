@@ -45,6 +45,10 @@ Deno.test('/index.html contains the generated programs UI', async () => {
       'stats-memory-progress',
       'Limits',
       'limits-running-executions-progress',
+      'limits-total-execution-state-progress',
+      'limits-burst-chat-tokens-progress',
+      'limits-slow-chat-tokens-progress',
+      'limits-program-log-tokens-progress',
       'limits-program-log-tokens',
     ]
   ) {

@@ -7,15 +7,16 @@ const MAX_RECONNECT_MS = 5_000;
 export type WebSocketFactory = (url: string, protocols: string) => WebSocket;
 
 /** Best-effort WebSocket producer; callers never wait for connection or send completion. */
-export class ExecutionLogRelay {
+class ProtobufRelay<T> {
   private socket: WebSocket | undefined;
   private reconnectTimer: ReturnType<typeof setTimeout> | undefined;
   private reconnectDelayMs = INITIAL_RECONNECT_MS;
   private stopped = false;
 
   constructor(
-    private readonly logsUrl: string,
+    private readonly url: string,
     private readonly apiKey: string,
+    private readonly encode: (value: T) => Uint8Array,
     private readonly createSocket: WebSocketFactory = (url, protocols) =>
       new WebSocket(url, protocols),
   ) {}
@@ -24,7 +25,7 @@ export class ExecutionLogRelay {
     this.connect();
   }
 
-  send(entry: Internal.ExecutionLogEntry): void {
+  send(entry: T): void {
     const socket = this.socket;
     if (socket === undefined) {
       this.connect();
@@ -35,7 +36,7 @@ export class ExecutionLogRelay {
       return;
     }
     try {
-      socket.send(toBinary(Internal.ExecutionLogEntrySchema, entry));
+      socket.send(this.encode(entry));
     } catch {
       this.disconnected(socket);
     }
@@ -58,7 +59,7 @@ export class ExecutionLogRelay {
     if (this.stopped || this.socket !== undefined) return;
     let socket: WebSocket;
     try {
-      socket = this.createSocket(this.logsUrl, eventWorkerProtocol(this.apiKey));
+      socket = this.createSocket(this.url, eventWorkerProtocol(this.apiKey));
     } catch {
       this.scheduleReconnect();
       return;
@@ -103,6 +104,26 @@ export class ExecutionLogRelay {
       this.reconnectTimer = undefined;
       this.connect();
     }, delay);
+  }
+}
+
+export class ExecutionLogRelay extends ProtobufRelay<Internal.ExecutionLogEntry> {
+  constructor(
+    url: string,
+    apiKey: string,
+    createSocket?: WebSocketFactory,
+  ) {
+    super(url, apiKey, (entry) => toBinary(Internal.ExecutionLogEntrySchema, entry), createSocket);
+  }
+}
+
+export class LogStatsRelay extends ProtobufRelay<Internal.LogStats> {
+  constructor(
+    url: string,
+    apiKey: string,
+    createSocket?: WebSocketFactory,
+  ) {
+    super(url, apiKey, (entry) => toBinary(Internal.LogStatsSchema, entry), createSocket);
   }
 }
 

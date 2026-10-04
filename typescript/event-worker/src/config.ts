@@ -4,6 +4,7 @@ export const DEFAULT_LOG_RATE_PER_SECOND = 10;
 export type EventWorkerConfig = {
   apiKey: string;
   logsUrl: string;
+  logStatsUrl: string;
   logRatePerSecond: number;
 };
 
@@ -21,15 +22,27 @@ export function configFromEnv(overrides: EventWorkerConfigOverrides = {}): Event
     overrides.mainWorkerUrl ?? Deno.env.get('COBBLEWARE_MAIN_WORKER_URL') ??
       DEFAULT_MAIN_WORKER_URL,
   );
+  const logStatsUrl = overrides.logStatsUrl ?? logStatsUrlFromBase(
+    overrides.mainWorkerUrl ?? Deno.env.get('COBBLEWARE_MAIN_WORKER_URL') ??
+      DEFAULT_MAIN_WORKER_URL,
+  );
   const logRatePerSecond = overrides.logRatePerSecond ?? readLogRateFromEnv();
   if (!Number.isFinite(logRatePerSecond) || logRatePerSecond < 0) {
     throw new Error('COBBLEWARE_LOG_RATE_PER_SECOND must be a non-negative finite number');
   }
 
-  return { apiKey, logsUrl, logRatePerSecond };
+  return { apiKey, logsUrl, logStatsUrl, logRatePerSecond };
 }
 
 export function logsUrlFromBase(value: string): string {
+  return webSocketUrlFromBase(value, 'modapi/v1/logs');
+}
+
+export function logStatsUrlFromBase(value: string): string {
+  return webSocketUrlFromBase(value, 'modapi/v1/log-stats');
+}
+
+function webSocketUrlFromBase(value: string, path: string): string {
   let base: URL;
   try {
     base = new URL(value);
@@ -40,9 +53,9 @@ export function logsUrlFromBase(value: string): string {
     throw new Error('COBBLEWARE_MAIN_WORKER_URL must use HTTP or HTTPS');
   }
   if (!base.pathname.endsWith('/')) base.pathname += '/';
-  const logs = new URL('modapi/v1/logs', base);
-  logs.protocol = logs.protocol === 'https:' ? 'wss:' : 'ws:';
-  return logs.href;
+  const endpoint = new URL(path, base);
+  endpoint.protocol = endpoint.protocol === 'https:' ? 'wss:' : 'ws:';
+  return endpoint.href;
 }
 
 function readLogRateFromEnv(): number {

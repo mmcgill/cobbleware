@@ -102,26 +102,36 @@ enforced limits. Its initial response is JSON:
 ```json
 {
   "runningExecutions": {
-    "used": 2,
+    "value": 2,
     "limit": 10
   },
   "totalExecutionStateBytes": {
-    "used": 32768,
+    "value": 32768,
     "limit": 1048576,
-    "updatedAt": "2026-09-26T16:22:14.123Z"
+  },
+  "burstChatTokens": {
+    "value": 8,
+    "limit": 10
+  },
+  "slowChatTokens": {
+    "value": 72,
+    "limit": 100
+  },
+  "logTokens": {
+    "value": 7,
+    "limit": 100
   },
   "updatedAt": "2026-09-26T16:22:14.123Z"
 }
 ```
 
-`used` counts exactly the Player's loaded Cobbleputers whose executions are running; `limit` is the Mod's configured
-running-executions-per-player cap. `totalExecutionStateBytes.used` is the latest total of the Player's durable
-execution-state byte arrays from the Mod's execution-statistics census; its `limit` is the configured per-player
-state cap and its nested `updatedAt` identifies that census. `updatedAt` is when the Main Worker received the transition that supplied the
-snapshot. The operation returns `503` with a JSON `error` when no transition or state census has reached the Main
-Worker for that Player, for example shortly after a Main Worker restart. Clients must show that state as unavailable rather than
-assuming zero usage. It returns
-`401` for an invalid Player session and `405` with `Allow: GET` for another method.
+For each present limit, `value` is the current value and `limit` is its current maximum. `logTokens` is omitted until
+the Main Worker has received and merged an Event Worker token-bucket report for the Player; its absence means that
+program-log token information is unavailable, not that the bucket is empty.
+The operation returns `503` with a JSON `error` when no complete `PlayerStats` census has reached the Main
+Worker for that Player, for example shortly after a Main Worker restart.
+Clients must show that state as unavailable rather than assuming zero usage.
+It returns `401` for an invalid Player session and `405` with `Allow: GET` for another method.
 
 ### Execution stats stream
 
@@ -137,6 +147,11 @@ and preserves that server tick's raw per-Cobbleputer/type measurements. The Main
 `used_bytes` to its current sum of `usedHeapSize + externalMemory` across that Player's live User Workers, and sets
 `max_bytes` to the configured per-player memory limit. A Player without a live User Worker receives zero
 `used_bytes`; `max_bytes` remains the configured limit. The memory fields are instantaneous values, not aggregates.
+The Mod supplies each PlayerStats record's running-execution count/cap, total execution-state cap, current burst and
+slow chat-token values, and their maxima. The Main Worker derives total execution-state bytes from the same record,
+sets `log_tokens_available` and, when available, adds the Event Worker's latest `log_tokens` bucket before forwarding
+the player-scoped copy. A false `log_tokens_available` explicitly means that program-log token information has not
+arrived yet; it is distinct from an empty bucket. The Browser uses this complete snapshot to refresh its Limits view.
 The Main Worker sends its cached latest player-scoped tick immediately after connecting, when one exists, then sends
 subsequent ticks for that Player. The Mod normally supplies one tick per server tick; the Main Worker has no
 independent sampling timer. The connection is read-only: clients do not send application messages, and the endpoint
@@ -475,10 +490,10 @@ the same authorization scope and are intended only for the local Runtime-to-Main
 
 When a log entry is received, the Main Worker checks for an active Player API Execution Logs WebSocket for the
 relevant player. If there is one, the event is forwarded as-is. If there is not, the event is immediately dropped.
-The Main Worker does not buffer or persist log entries. A valid `transition` entry also replaces the relevant Player's
-in-memory Limits snapshot before the forwarding decision. A `pool_transition` entry must contain a specified known
-pool-state enum and is otherwise forwarded without caching. There are no publisher ids, sequence numbers, or
-stale-entry ordering rules for transitions.
+The Main Worker does not buffer or persist log entries. A valid `transition` entry is forwarded as a displayable log
+and may promptly update an already-visible Browser Limits value, but PlayerStats remains the authoritative limits
+snapshot. A `pool_transition` entry must contain a specified known pool-state enum and is otherwise forwarded without
+caching. There are no publisher ids, sequence numbers, or stale-entry ordering rules for transitions.
 
 Any number of authenticated producer sockets may be open concurrently. Producer frames must be binary,
 parse as an `ExecutionLogEntry`, and contain both `player_id` and an entry variant. The Main Worker uses
@@ -487,6 +502,17 @@ text frame closes only its producer socket with `1008` (`Policy Violation`). Aut
 failures on an attempted upgrade complete the upgrade, send one UTF-8 JSON error frame containing `code`
 and `error`, then close with `1008`; a non-upgrade `GET` receives `426` with `Upgrade: websocket`; other
 methods receive `405` with `Allow: GET`.
+
+### Log Stats
+
+The authenticated `GET /modapi/v1/log-stats` operation upgrades to the Event Worker's long-lived token-bucket
+telemetry WebSocket. The Event Worker authenticates with the same reserved
+`cobbleware.bearer.<base64url-key>` subprotocol used for `/modapi/v1/logs` and sends binary
+`cobbleware.internal.LogStats` frames. Each valid frame contains one player id and current program-log bucket;
+the Main Worker retains it to enrich that player's next player-scoped `ExecutionStatsTick`. These frames are never
+forwarded to the Player Logs stream. Text or malformed frames close only their producer with `1008`.
+
+A non-upgrade `GET` receives `426` with `Upgrade: websocket`; other methods receive `405` with `Allow: GET`.
 
 ### Program Query
 

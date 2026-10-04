@@ -1,21 +1,23 @@
 /// <reference path="./runtime.d.ts" />
 
 import { configFromEnv } from './config.ts';
-import { logTokenBucketEntry, translateEvent } from './events.ts';
+import { logStats, translateEvent } from './events.ts';
 import { LogRateLimiter } from './limiter.ts';
-import { ExecutionLogRelay } from './relay.ts';
+import { ExecutionLogRelay, LogStatsRelay } from './relay.ts';
 
 const LOG_TOKEN_TELEMETRY_INTERVAL_MS = 1_000;
 
 export async function run(): Promise<void> {
   const config = configFromEnv();
   const relay = new ExecutionLogRelay(config.logsUrl, config.apiKey);
+  const logStatsRelay = new LogStatsRelay(config.logStatsUrl, config.apiKey);
   const limiter = new LogRateLimiter(config.logRatePerSecond);
   relay.start();
+  logStatsRelay.start();
   const telemetryTimer = setInterval(() => {
     for (const [playerId, snapshot] of limiter.snapshots()) {
-      const entry = logTokenBucketEntry(playerId, snapshot);
-      if (entry !== undefined) relay.send(entry);
+      const entry = logStats(playerId, snapshot);
+      if (entry !== undefined) logStatsRelay.send(entry);
     }
   }, LOG_TOKEN_TELEMETRY_INTERVAL_MS);
 
@@ -26,8 +28,8 @@ export async function run(): Promise<void> {
       if (translated === undefined) continue;
       if (translated.isProgramLog) {
         const snapshot = limiter.tryConsume(translated.playerId);
-        const telemetry = logTokenBucketEntry(translated.playerId, snapshot);
-        if (telemetry !== undefined) relay.send(telemetry);
+        const telemetry = logStats(translated.playerId, snapshot);
+        if (telemetry !== undefined) logStatsRelay.send(telemetry);
         if (!snapshot.consumed) continue;
       }
       relay.send(translated.entry);
@@ -35,6 +37,7 @@ export async function run(): Promise<void> {
   } finally {
     clearInterval(telemetryTimer);
     relay.stop();
+    logStatsRelay.stop();
   }
 }
 

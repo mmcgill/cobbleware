@@ -27,8 +27,8 @@ import org.slf4j.Logger;
 /** Stores durable Cobbleputer execution records in one atomic-replacement file per owner. */
 public final class ExecutionStateStore implements AutoCloseable, ExecutionStateAccess {
     public static final int CURRENT_EXECUTION_STATE_FORMAT_VERSION = 2;
-    private static final int BURST_CHAT_TOKEN_CAPACITY = 10;
-    private static final int SLOW_CHAT_TOKEN_CAPACITY = 100;
+    public static final int BURST_CHAT_TOKEN_CAPACITY = 10;
+    public static final int SLOW_CHAT_TOKEN_CAPACITY = 100;
     private static final long BURST_CHAT_TRANSFER_TICKS = 20L * 5L;
     private static final long SLOW_CHAT_REFILL_TICKS = 20L * 20L;
 
