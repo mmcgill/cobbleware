@@ -23,6 +23,7 @@ import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 import java.util.stream.Collectors;
 import net.fabricmc.fabric.api.command.v2.CommandRegistrationCallback;
+import net.minecraft.ChatFormatting;
 import net.minecraft.commands.CommandSourceStack;
 import net.minecraft.commands.Commands;
 import net.minecraft.commands.SharedSuggestionProvider;
@@ -100,14 +101,9 @@ public final class CobblewareCommands {
                                         .requires(source ->
                                                 source.permissions().hasPermission(Permissions.COMMANDS_GAMEMASTER))
                                         .executes(context -> targetPool(context, executionPoolManager))))
-                        .then(Commands.literal("guaranteed")
+                        .then(Commands.literal("pools")
                                 .requires(source -> source.permissions().hasPermission(Permissions.COMMANDS_GAMEMASTER))
-                                .executes(context ->
-                                        members(context, executionPoolManager, ExecutionPoolManager.Pool.GUARANTEED)))
-                        .then(Commands.literal("besteffort")
-                                .requires(source -> source.permissions().hasPermission(Permissions.COMMANDS_GAMEMASTER))
-                                .executes(context ->
-                                        members(context, executionPoolManager, ExecutionPoolManager.Pool.BEST_EFFORT)))
+                                .executes(context -> pools(context, executionPoolManager)))
                         .then(Commands.literal("stats")
                                 .requires(source -> source.permissions().hasPermission(Permissions.COMMANDS_GAMEMASTER))
                                 .executes(context -> stats(context, instrumentation))
@@ -233,19 +229,60 @@ public final class CobblewareCommands {
         return 1;
     }
 
-    private static int members(
-            CommandContext<CommandSourceStack> context,
-            ExecutionPoolManager executionPoolManager,
-            ExecutionPoolManager.Pool pool) {
-        Collection<ExecutionPoolManager.Member> members = pool == ExecutionPoolManager.Pool.GUARANTEED
-                ? executionPoolManager.guaranteedMembers()
-                : executionPoolManager.bestEffortMembers();
-        String memberNames = members.isEmpty()
-                ? "(empty)"
-                : members.stream().map(ExecutionPoolManager.Member::playerName).collect(Collectors.joining(", "));
-        context.getSource()
-                .sendSuccess(() -> Component.literal(formatPool(pool) + " execution pool: " + memberNames), false);
+    private static int pools(CommandContext<CommandSourceStack> context, ExecutionPoolManager executionPoolManager) {
+        sendPoolMembers(
+                context.getSource(),
+                "Guaranteed",
+                executionPoolManager.guaranteedMembers(),
+                java.util.List.of(),
+                false,
+                executionPoolManager.guaranteedPoolSize());
+        sendPoolMembers(
+                context.getSource(),
+                "Best-effort",
+                executionPoolManager.bestEffortMembers(),
+                executionPoolManager.bestEffortQueue(),
+                true,
+                executionPoolManager.bestEffortPoolSize());
         return 1;
+    }
+
+    private static void sendPoolMembers(
+            CommandSourceStack source,
+            String poolName,
+            Collection<ExecutionPoolManager.Member> members,
+            Collection<ExecutionPoolManager.Member> queuedMembers,
+            boolean boldMembers,
+            int poolSize) {
+        String memberNames = memberNames(members);
+        String queuedMemberNames = memberNames(queuedMembers);
+        source.sendSuccess(
+                () -> {
+                    MutableComponent message =
+                            Component.literal(poolName + " (" + members.size() + "/" + poolSize + "): ");
+                    if (memberNames.isEmpty() && queuedMemberNames.isEmpty()) {
+                        return message.append("(empty)");
+                    }
+                    if (!memberNames.isEmpty()) {
+                        if (boldMembers) {
+                            message.append(Component.literal(memberNames).withStyle(ChatFormatting.BOLD));
+                        } else {
+                            message.append(memberNames);
+                        }
+                    }
+                    if (!queuedMemberNames.isEmpty()) {
+                        if (!memberNames.isEmpty()) {
+                            message.append(", ");
+                        }
+                        message.append(queuedMemberNames);
+                    }
+                    return message;
+                },
+                false);
+    }
+
+    private static String memberNames(Collection<ExecutionPoolManager.Member> members) {
+        return members.stream().map(ExecutionPoolManager.Member::playerName).collect(Collectors.joining(", "));
     }
 
     private static String formatPool(ExecutionPoolManager.Pool pool) {

@@ -197,6 +197,19 @@ public final class ExecutionPoolManager {
         return bestEffortMembers;
     }
 
+    /** Returns queued best-effort members in the order in which they will receive a pool slot. */
+    public List<Member> bestEffortQueue() {
+        requireInitialized();
+        List<Member> queue = new ArrayList<>();
+        for (UUID playerId : bestEffortQueue) {
+            EligiblePlayer player = eligiblePlayers.get(playerId);
+            if (player != null) {
+                queue.add(member(player));
+            }
+        }
+        return List.copyOf(queue);
+    }
+
     private boolean isBestEffortEligible(UUID playerId) {
         return eligiblePlayers.containsKey(playerId) && !guaranteedPlayerIds.contains(playerId);
     }

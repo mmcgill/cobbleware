@@ -94,13 +94,19 @@ Users with permission level 2 or higher can check the pool of any player.
 Users with lower-level permission can only check their own pool.
 
 ```
-/cobbleware guaranteed
-/cobbleware besteffort
+/cobbleware pools
 ```
 
-The `guaranteed` command (requires permission level 2 or higher) prints the full membership
-of the guaranteed execution pool. The `besteffort` command prints the full best-effort pool
-membership.
+The `pools` command (requires permission level 2 or higher) prints the full membership
+of the guaranteed and best-effort execution pools, with output shaped like:
+
+```
+Guaranteed (5/5): ...
+Best-effort (3/10): ...
+```
+
+The Best-effort pool will show all players in the best-effort pool in bold first, followed
+by all players in the best-effort _queue_, in order.
 
 ### Program
 

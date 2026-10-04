@@ -94,11 +94,13 @@ class ExecutionPoolManagerTest {
         manager.advanceBestEffortPool();
 
         assertEquals(List.of("first", "second"), names(manager.bestEffortMembers()));
+        assertEquals(List.of("third"), names(manager.bestEffortQueue()));
         for (int tick = 0; tick < ExecutionPoolManager.BEST_EFFORT_POOL_DURATION_TICKS; tick += 1) {
             manager.advanceBestEffortPool();
         }
 
         assertEquals(List.of("third", "first"), names(manager.bestEffortMembers()));
+        assertEquals(List.of("second"), names(manager.bestEffortQueue()));
     }
 
     @Test
