@@ -35,7 +35,10 @@ Here's a rough sketch of the current plan to getting something working end-to-en
 * [ ] Cobbleputer art assets
 * [ ] Wireless Observer art assets
 * [ ] Bundling the runtime in the Mod
-  * [ ] Bundling: getting the runtime into the Mod Jar
+  * [ ] Bundling: getting the runtime and workers into the Mod Jar
+    * [x] Windows
+    * [ ] Linux
+    * [ ] Mac
   * [ ] Lazy unpacking at mod execution time as necessary
   * [ ] Putting the Mod in charge of the Runtime process 
   * [ ] Preserving a good Development workflow

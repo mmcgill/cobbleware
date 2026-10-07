@@ -79,6 +79,171 @@ tasks.named('runServer') {
     dependsOn(tasks.named('configureDevelopmentServer'))
 }
 
+def repositoryRoot = project.projectDir.toPath().resolve('../..').normalize().toFile()
+def edgeRuntimeDirectory = new File(repositoryRoot, 'mc-edge-runtime')
+def typescriptDirectory = new File(repositoryRoot, 'typescript')
+def mainWorkerDirectory = new File(typescriptDirectory, 'main-worker')
+def eventWorkerDirectory = new File(typescriptDirectory, 'event-worker')
+def windowsRuntimeBinary = new File(edgeRuntimeDirectory, 'target/release/edge-runtime.exe')
+def windowsRuntimeFiles = [
+        [file: windowsRuntimeBinary, resourcePath: 'edge-runtime.exe'],
+]
+def releaseWorkersDirectory = layout.buildDirectory.dir('generated/cobbleware-release/workers')
+def releaseStaticDirectory = layout.buildDirectory.dir('generated/cobbleware-release/static')
+def mainWorkerEszip = releaseWorkersDirectory.map { it.file('main-worker.eszip') }
+def eventWorkerEszip = releaseWorkersDirectory.map { it.file('event-worker.eszip') }
+def runtimeManifest = layout.buildDirectory.file('generated/cobbleware-release/manifest/manifest.json')
+def releaseResourcesDirectory = layout.buildDirectory.dir('generated/cobbleware-release/resources')
+
+def edgeRuntimeSources = fileTree(edgeRuntimeDirectory) {
+    include 'Cargo.lock'
+    include 'Cargo.toml'
+    include 'cli/**'
+    include 'crates/**'
+    include 'deno/**'
+    include 'ext/**'
+    include 'rusty_v8/**'
+    include 'vendor/**'
+    include 'scripts/windows-env.cmd'
+    exclude 'target/**'
+    exclude '.git/**'
+}
+
+def typescriptSources = fileTree(typescriptDirectory) {
+    exclude '**/node_modules/**'
+    exclude '**/main-worker/static/**'
+    exclude '**/*.eszip'
+    exclude '**/.cobbleware-eszip-*/**'
+}
+
+def buildWindowsEdgeRuntime = tasks.register('buildWindowsEdgeRuntime', Exec) {
+    group = 'distribution'
+    description = 'Builds the Windows x86_64 Edge Runtime binary used by releaseBuild.'
+    workingDir(edgeRuntimeDirectory)
+    inputs.files(edgeRuntimeSources)
+    inputs.property('targetPlatform', 'windows-x86_64')
+    outputs.file(windowsRuntimeBinary)
+    commandLine(
+            'cmd.exe',
+            '/d',
+            '/s',
+            '/c',
+            'call scripts\\windows-env.cmd && cargo build --release --package cli --bin edge-runtime --no-default-features --features tracing')
+
+    doFirst {
+        if (!System.getProperty('os.name').toLowerCase(java.util.Locale.ROOT).contains('windows')) {
+            throw new GradleException('buildWindowsEdgeRuntime is supported only on Windows hosts.')
+        }
+    }
+}
+
+def bundleMainWorker = tasks.register('bundleMainWorkerEszip', Exec) {
+    group = 'distribution'
+    description = 'Bundles the Main Worker and Browser UI into an ESZip for releaseBuild.'
+    dependsOn(buildWindowsEdgeRuntime)
+    workingDir(mainWorkerDirectory)
+    inputs.files(typescriptSources, windowsRuntimeBinary)
+    outputs.file(mainWorkerEszip)
+    outputs.dir(releaseStaticDirectory)
+    environment('EDGE_RUNTIME_BIN', windowsRuntimeBinary.absolutePath)
+    commandLine(
+            'deno',
+            'run',
+            '--allow-env',
+            '--allow-read',
+            '--allow-run',
+            '--allow-write',
+            new File(mainWorkerDirectory, 'scripts/bundle.ts').absolutePath,
+            '--static-dir',
+            releaseStaticDirectory.get().asFile.absolutePath,
+            '--output',
+            mainWorkerEszip.get().asFile.absolutePath)
+
+    doFirst {
+        mainWorkerEszip.get().asFile.parentFile.mkdirs()
+        releaseStaticDirectory.get().asFile.parentFile.mkdirs()
+    }
+}
+
+def bundleEventWorker = tasks.register('bundleEventWorkerEszip', Exec) {
+    group = 'distribution'
+    description = 'Bundles the Event Worker into an ESZip for releaseBuild.'
+    dependsOn(buildWindowsEdgeRuntime)
+    workingDir(eventWorkerDirectory)
+    inputs.files(typescriptSources, windowsRuntimeBinary)
+    outputs.file(eventWorkerEszip)
+    environment('EDGE_RUNTIME_BIN', windowsRuntimeBinary.absolutePath)
+    commandLine(
+            'deno',
+            'run',
+            '--allow-env',
+            '--allow-read',
+            '--allow-run',
+            '--allow-write',
+            new File(eventWorkerDirectory, 'scripts/bundle.ts').absolutePath,
+            '--output',
+            eventWorkerEszip.get().asFile.absolutePath)
+
+    doFirst {
+        eventWorkerEszip.get().asFile.parentFile.mkdirs()
+    }
+}
+
+def generateRuntimeManifest = tasks.register('generateWindowsRuntimeManifest') {
+    group = 'distribution'
+    description = 'Generates metadata and a checksum for the embedded Windows runtime.'
+    dependsOn(buildWindowsEdgeRuntime)
+    inputs.file(windowsRuntimeBinary)
+    inputs.property('modVersion', project.version)
+    outputs.file(runtimeManifest)
+
+    doLast {
+        String files = windowsRuntimeFiles.collect { runtimeFile ->
+            byte[] digest = java.security.MessageDigest.getInstance('SHA-256').digest(runtimeFile.file.bytes)
+            String sha256 = digest.collect { byte value -> String.format('%02x', value & 0xff) }.join()
+            """        {
+          "path": "${runtimeFile.resourcePath}",
+          "sha256": "${sha256}"
+        }"""
+        }.join(',\n')
+        File manifest = runtimeManifest.get().asFile
+        manifest.parentFile.mkdirs()
+        manifest.setText("""{
+  "schemaVersion": 1,
+  "modVersion": "${project.version}",
+  "platforms": {
+    "windows-x86_64": {
+      "files": [
+${files}
+      ]
+    }
+  }
+}
+""", 'UTF-8')
+    }
+}
+
+def stageReleaseResources = tasks.register('stageReleaseResources', Sync) {
+    group = 'distribution'
+    description = 'Stages Runtime binaries and worker ESZips under their stable JAR resource paths.'
+    dependsOn(bundleMainWorker, bundleEventWorker, generateRuntimeManifest)
+    into(releaseResourcesDirectory)
+    windowsRuntimeFiles.each { runtimeFile ->
+        from(runtimeFile.file) {
+            into('cobbleware/runtime/windows-x86_64')
+        }
+    }
+    from(mainWorkerEszip) {
+        into('cobbleware/workers')
+    }
+    from(eventWorkerEszip) {
+        into('cobbleware/workers')
+    }
+    from(runtimeManifest) {
+        into('cobbleware/runtime')
+    }
+}
+
 sourceSets {
     main {
         proto {
@@ -162,4 +327,19 @@ tasks.named('test') {
 java {
     toolchain.languageVersion = JavaLanguageVersion.of(25)
     withSourcesJar()
+}
+
+def releaseJar = tasks.register('releaseJar', Jar) {
+    group = 'distribution'
+    description = 'Creates the self-contained Cobbleware release JAR.'
+    archiveClassifier.set('release')
+    dependsOn(tasks.named('classes'), stageReleaseResources)
+    from(sourceSets.main.output)
+    from(releaseResourcesDirectory)
+}
+
+tasks.register('releaseBuild') {
+    group = 'distribution'
+    description = 'Builds a Windows x86_64 self-contained Cobbleware release JAR.'
+    dependsOn(releaseJar)
 }

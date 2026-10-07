@@ -5,6 +5,8 @@ const defaultRuntimeBinary = Deno.build.os === 'windows'
 const runtimeBinary = Deno.env.get('EDGE_RUNTIME_BIN') ?? defaultRuntimeBinary;
 const programDirectory = await Deno.realPath(new URL('../', import.meta.url));
 const browserUiDirectory = await Deno.realPath(new URL('../../browser-ui/', import.meta.url));
+const staticDirectory = argumentValue('--static-dir') ?? `${programDirectory}/static`;
+const outputPath = argumentValue('--output') ?? 'main-worker.eszip';
 const temporaryDirectory = await Deno.makeTempDir({
   dir: programDirectory,
   prefix: '.cobbleware-eszip-',
@@ -13,7 +15,7 @@ const bundledProgramPath = `${temporaryDirectory}/program.js`;
 
 try {
   const browserUiBuild = new Deno.Command(Deno.execPath(), {
-    args: ['task', 'build'],
+    args: ['task', 'build', '--static-dir', staticDirectory],
     cwd: browserUiDirectory,
     stdout: 'inherit',
     stderr: 'inherit',
@@ -45,9 +47,9 @@ try {
       '--entrypoint',
       bundledProgramPath,
       '--static',
-      'static/**/*',
+      `${staticDirectory}/**/*`,
       '--output',
-      'main-worker.eszip',
+      outputPath,
     ],
     cwd: programDirectory,
     stdout: 'inherit',
@@ -61,4 +63,13 @@ try {
   }
 } finally {
   await Deno.remove(temporaryDirectory, { recursive: true });
+}
+
+function argumentValue(name: string): string | undefined {
+  const index = Deno.args.indexOf(name);
+  if (index === -1) return undefined;
+  if (index === Deno.args.length - 1) {
+    throw new Error(`${name} requires a path.`);
+  }
+  return Deno.args[index + 1];
 }

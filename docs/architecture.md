@@ -7,8 +7,9 @@ The mod comprises:
   all user-supplied typescript code in isolated sandboxes.
 * a Browser UI served by the Runtime and used by Players to upload programs and monitor executions.
 
-The Mod bundles native binaries for the Runtime, and is responsible for unpacking the correct
-platform-specific version and maintaining the Runtime process.
+The Mod bundles native binaries for the Runtime together with Main Worker and Event Worker ESZips,
+and is responsible for unpacking the correct platform-specific version and maintaining the Runtime
+process.
 
 The Mod is server-only, and uses Polymer to introduce new block types and items without
 requiring a client-side mod install.
@@ -73,4 +74,3 @@ Each player with executing Cobbleputers gets one V8 isolate at at a time, which 
 OS-level thread, and that isolate processes events for all Cobbleputers executing that player's programs.
 Scheduling across players is therefore pre-emptive and managed by the OS scheduler, whereas
 scheduling across one player's executions is cooperative and controlled by the player's V8 isolate.
-

@@ -4,6 +4,7 @@ const defaultRuntimeBinary = Deno.build.os === 'windows'
 
 const runtimeBinary = Deno.env.get('EDGE_RUNTIME_BIN') ?? defaultRuntimeBinary;
 const programDirectory = await Deno.realPath(new URL('../', import.meta.url));
+const outputPath = argumentValue('--output') ?? 'event-worker.eszip';
 const temporaryDirectory = await Deno.makeTempDir({
   dir: programDirectory,
   prefix: '.cobbleware-eszip-',
@@ -26,7 +27,7 @@ try {
       '--entrypoint',
       bundledProgramPath,
       '--output',
-      'event-worker.eszip',
+      outputPath,
     ],
     cwd: programDirectory,
     stdout: 'inherit',
@@ -36,4 +37,13 @@ try {
   if (!output.success) Deno.exit(output.code);
 } finally {
   await Deno.remove(temporaryDirectory, { recursive: true });
+}
+
+function argumentValue(name: string): string | undefined {
+  const index = Deno.args.indexOf(name);
+  if (index === -1) return undefined;
+  if (index === Deno.args.length - 1) {
+    throw new Error(`${name} requires a path.`);
+  }
+  return Deno.args[index + 1];
 }

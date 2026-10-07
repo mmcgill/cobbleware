@@ -9,8 +9,33 @@ introduced with Minecraft 26.1.
 .\gradlew.bat build
 ```
 
-The remapped mod JAR is written to `build/libs/`; use the JAR with the shortest filename outside the development
+The mod JAR is written to `build/libs/`; use the JAR with the shortest filename outside the development
 environment.
+
+### Windows release build
+
+On Windows, the self-contained release build compiles the Edge Runtime, bundles the Main Worker and Event Worker,
+then embeds them in a separate release JAR:
+
+```powershell
+.\gradlew.bat releaseBuild
+```
+
+This requires Deno, Rust, and the Visual Studio C++ workload. The Runtime build task
+initializes the repository's `mc-edge-runtime/scripts/windows-env.cmd` environment before running Cargo with local AI
+inference disabled. The resulting
+`build/libs/*-release.jar` contains these resources:
+
+```text
+cobbleware/runtime/windows-x86_64/edge-runtime.exe
+cobbleware/runtime/manifest.json
+cobbleware/workers/main-worker.eszip
+cobbleware/workers/event-worker.eszip
+```
+
+`releaseBuild` is intentionally separate from `build`; ordinary Fabric development builds and run configurations do
+not build Rust or Deno artifacts. Linux and macOS resource paths will follow the same `cobbleware/runtime/<platform>/`
+layout when their native build lanes are added.
 
 ## Formatting
 
@@ -51,7 +76,7 @@ starting the server again. The scaffold's `/cobbleware startstates` command curr
 
 ## Server-only deployment
 
-Cobbleware is installed on the server only. Deploy its remapped JAR together with Fabric API and the matching
+Cobbleware is installed on the server only. Deploy its JAR together with Fabric API and the matching
 `polymer-bundled-0.17.4+26.2` JAR; clients need neither mod. Polymer supplies vanilla client representations and a
 required resource pack for Cobbleputers.
 
