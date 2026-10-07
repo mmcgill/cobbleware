@@ -6,7 +6,15 @@ design details for how the Mod facilitates program execution.
 ## Configuration
 
 The Mod reads `config/cobbleware.json` when the server starts. In addition to its Main Worker
-connection settings, it accepts these integer settings:
+connection settings, it accepts these optional settings:
+
+* `runtimeMode`, an optional string that defaults to `auto`. On a release JAR with a compatible
+  bundled Runtime, `auto` unpacks and owns the Runtime process; on an ordinary development JAR
+  with no bundled Runtime, it leaves the configured external Runtime alone. `managed` requires
+  bundled artifacts and owns the process, `external` does neither, and `extract-only` unpacks
+  artifacts without starting a process.
+* `runtimePort`, which defaults to 9000 and selects the loopback port used by a Mod-managed Runtime.
+  It must be an integer from 1 through 65535.
 
 * `instrumentationWindowTicks`, which defaults to 600 and controls the number of server ticks
   retained for the in-memory instrumentation window.
@@ -26,6 +34,11 @@ connection settings, it accepts these integer settings:
   size of the guaranteed execution pool.
 * `bestEffortPoolSize`, a non-negative integer that defaults to zero and sets the size of the
   best-effort execution pool.
+
+When the Mod starts a Runtime itself, it creates a fresh in-memory API key for that server start
+and supplies it to both the Runtime and its own Main Worker client. The key is never stored in the
+configuration file. A non-empty `mainWorkerApiKey` is ignored in that case and produces a warning;
+it remains the credential for `external`, `extract-only`, and `auto` without bundled artifacts.
 
 Starting or resuming an execution is rejected when it would exceed the running-execution cap. When a
 chunk falls below Minecraft's `BLOCK_TICKING` status, the Mod immediately removes a running execution
@@ -381,3 +394,23 @@ qualifiers as tab completions. The unqualified view contains only total summary
 counts; qualified views contain their relevant breakdowns. Metric rows use
 Minecraft's built-in uniform font and ordinary-space padding for readable column
 alignment in the command output.
+
+## Managed Runtime Development Test
+
+The ordinary `./gradlew.bat runServer` development server deliberately has no bundled Runtime
+resources, so the default `runtimeMode: auto` leaves a manually started Runtime alone. On Windows,
+run the following to exercise the release-resource unpacking and managed-process paths against the
+usual `java/cobbleware/run` server directory:
+
+```powershell
+./gradlew.bat runServer -PbundledRuntime
+```
+
+The opt-in Gradle property builds the Windows Runtime and worker ESZips, stages the same resources
+that `releaseBuild` embeds, and adds only that generated resource directory to the `runServer`
+classpath. It does not alter the normal development JAR or configuration. With `runtimeMode` omitted
+or set to `auto`, the Mod detects those resources, unpacks them under
+`run/world/cobbleware-data/runtime`, and starts a loopback Runtime using `runtimePort` (default
+9000). A configured `mainWorkerApiKey` is intentionally ignored for this run because the managed
+Runtime receives a fresh in-memory key. Set `runtimeMode` to `extract-only` to test staging without
+launching a process.

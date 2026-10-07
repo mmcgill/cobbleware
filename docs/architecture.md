@@ -9,7 +9,11 @@ The mod comprises:
 
 The Mod bundles native binaries for the Runtime together with Main Worker and Event Worker ESZips,
 and is responsible for unpacking the correct platform-specific version and maintaining the Runtime
-process.
+process. A release JAR stages verified immutable artifacts below the world directory's
+`cobbleware-data/runtime` directory and starts its managed Runtime on loopback. The Mod creates a
+new in-memory Mod API key for every managed Runtime start; it never writes that key to disk. An
+ordinary development JAR has no bundled artifacts, so the default runtime-management mode leaves a
+manually run Runtime untouched across server restarts.
 
 The Mod is server-only, and uses Polymer to introduce new block types and items without
 requiring a client-side mod install.

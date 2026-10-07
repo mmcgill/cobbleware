@@ -28,6 +28,7 @@ public final class CobblewareConfigLoader {
     public static final int DEFAULT_GUARANTEED_POOL_SIZE = 0;
 
     public static final int DEFAULT_BEST_EFFORT_POOL_SIZE = 0;
+    public static final int DEFAULT_RUNTIME_PORT = 9000;
 
     private CobblewareConfigLoader() {}
 
@@ -87,6 +88,8 @@ public final class CobblewareConfigLoader {
                 object, "maxTotalExecutionStateBytesPerPlayer", DEFAULT_MAX_TOTAL_EXECUTION_STATE_BYTES_PER_PLAYER);
         int guaranteedPoolSize = optionalPositiveInt(object, "guaranteedPoolSize", DEFAULT_GUARANTEED_POOL_SIZE);
         int bestEffortPoolSize = optionalNonNegativeInt(object, "bestEffortPoolSize", DEFAULT_BEST_EFFORT_POOL_SIZE);
+        RuntimeMode runtimeMode = optionalRuntimeMode(object);
+        int runtimePort = optionalPort(object, "runtimePort", DEFAULT_RUNTIME_PORT);
         URI baseUri = normalizeBaseUri(mainWorkerUrl);
         return new CobblewareConfig(
                 baseUri,
@@ -98,6 +101,8 @@ public final class CobblewareConfigLoader {
                 maxTotalExecutionStateBytesPerPlayer,
                 guaranteedPoolSize,
                 bestEffortPoolSize,
+                runtimeMode,
+                runtimePort,
                 null);
     }
 
@@ -166,6 +171,36 @@ public final class CobblewareConfigLoader {
             return result;
         } catch (ArithmeticException exception) {
             throw new IllegalArgumentException(property + " must be a non-negative integer", exception);
+        }
+    }
+
+    private static RuntimeMode optionalRuntimeMode(JsonObject object) {
+        JsonElement value = object.get("runtimeMode");
+        if (value == null) {
+            return RuntimeMode.AUTO;
+        }
+        if (!value.isJsonPrimitive() || !value.getAsJsonPrimitive().isString()) {
+            throw new IllegalArgumentException("runtimeMode must be a JSON string");
+        }
+        return RuntimeMode.parse(value.getAsString());
+    }
+
+    private static int optionalPort(JsonObject object, String property, int defaultValue) {
+        JsonElement value = object.get(property);
+        if (value == null) {
+            return defaultValue;
+        }
+        if (!value.isJsonPrimitive() || !value.getAsJsonPrimitive().isNumber()) {
+            throw new IllegalArgumentException(property + " must be an integer between 1 and 65535");
+        }
+        try {
+            int result = value.getAsBigDecimal().intValueExact();
+            if (result <= 0 || result > 65_535) {
+                throw new IllegalArgumentException(property + " must be an integer between 1 and 65535");
+            }
+            return result;
+        } catch (ArithmeticException exception) {
+            throw new IllegalArgumentException(property + " must be an integer between 1 and 65535", exception);
         }
     }
 

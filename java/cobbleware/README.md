@@ -97,12 +97,24 @@ On first startup, the Mod creates `config/cobbleware.json` in Fabric's config di
 }
 ```
 
-Set `mainWorkerApiKey` to the same value used for the Main Worker's
+Set `mainWorkerApiKey` to the same value used for an external Main Worker's
 `COBBLEWARE_API_KEY`. The Mod logs an error and disables authentication requests while
-the value is empty. `mainWorkerUrl` may use either `http` or `https`; it points to an
-already-running Main Worker. `instrumentationWindowTicks` retains in-memory Mod
-instrumentation for that many server ticks; it defaults to 600 when omitted
+the value is empty only when it is not starting a managed Runtime. `mainWorkerUrl` may use either
+`http` or `https`; it points to an already-running external Main Worker. `instrumentationWindowTicks`
+retains in-memory Mod instrumentation for that many server ticks; it defaults to 600 when omitted
 from an existing configuration file.
+
+`runtimeMode` defaults to `auto` when omitted. A release JAR containing a supported bundled Runtime
+unpacks it into the world's `cobbleware-data/runtime` directory and manages it for the Minecraft
+server lifetime; the ordinary development JAR has no bundled Runtime, so `auto` continues to use a
+manually run process. Set `runtimeMode` to `external` to opt out, `managed` to require the bundled
+Runtime, or `extract-only` to unpack without launching. `runtimePort` is the optional loopback port
+for a managed Runtime and defaults to 9000.
+
+For a managed Runtime, Cobbleware creates a fresh in-memory `COBBLEWARE_API_KEY` on every server
+start and uses it for its own requests. It does not write that key to this file. If
+`mainWorkerApiKey` is configured in a managed mode, it is ignored and Cobbleware logs a warning;
+the setting is still used for external/manual Runtimes.
 
 Open the Main Worker's browser UI, then run its displayed
 `/cobbleware auth <code>` command in-game. On success, the next browser poll completes

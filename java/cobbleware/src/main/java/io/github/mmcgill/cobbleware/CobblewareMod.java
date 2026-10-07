@@ -16,6 +16,7 @@ import io.github.mmcgill.cobbleware.polymer.CobblewarePolymer;
 import io.github.mmcgill.cobbleware.registry.CobblewareBlockEntities;
 import io.github.mmcgill.cobbleware.registry.CobblewareBlocks;
 import io.github.mmcgill.cobbleware.registry.CobblewareItems;
+import io.github.mmcgill.cobbleware.runtime.RuntimeManager;
 import net.fabricmc.api.ModInitializer;
 import net.fabricmc.fabric.api.event.lifecycle.v1.ServerChunkEvents;
 import net.fabricmc.fabric.api.event.lifecycle.v1.ServerLifecycleEvents;
@@ -78,7 +79,9 @@ public final class CobblewareMod implements ModInitializer {
         CobblewareBlockEntities.initialize();
         CobblewareItems.initialize();
 
-        CobblewareConfig config = CobblewareConfigLoader.load(LOGGER);
+        CobblewareConfig configured = CobblewareConfigLoader.load(LOGGER);
+        RuntimeManager runtimeManager = RuntimeManager.prepare(configured, LOGGER);
+        CobblewareConfig config = runtimeManager.effectiveConfig();
         if (config.configurationError() == null && config.mainWorkerApiKey().isEmpty()) {
             LOGGER.error("Cobbleware mainWorkerApiKey is empty; authentication commands are disabled until it is"
                     + " configured");
@@ -102,8 +105,11 @@ public final class CobblewareMod implements ModInitializer {
         wirelessObserverNetwork = new WirelessObserverNetwork();
         ServerLifecycleEvents.SERVER_STARTING.register(executionStateStore::initialize);
         ServerLifecycleEvents.SERVER_STARTING.register(playerPriorityStore::initialize);
-        ServerLifecycleEvents.SERVER_STARTED.register(
-                server -> executionPoolManager.initialize(server.getPlayerList().getMaxPlayers()));
+        ServerLifecycleEvents.SERVER_STARTED.register(server -> {
+            executionPoolManager.initialize(server.getPlayerList().getMaxPlayers());
+            runtimeManager.start(
+                    server, executionPoolManager.guaranteedPoolSize() + executionPoolManager.bestEffortPoolSize());
+        });
         ServerLifecycleEvents.BEFORE_SAVE.register((server, flush, force) -> {
             executionStateStore.beforeSave();
             playerPriorityStore.beforeSave();
@@ -112,6 +118,7 @@ public final class CobblewareMod implements ModInitializer {
             executionStateStore.close();
             playerPriorityStore.close();
             mainWorkerClient.close();
+            runtimeManager.close();
         });
         ServerChunkEvents.FULL_CHUNK_STATUS_CHANGE.register((level, chunk, previousStatus, nextStatus) -> {
             boolean wasBlockTicking = previousStatus.isOrAfter(FullChunkStatus.BLOCK_TICKING);

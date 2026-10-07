@@ -13,6 +13,8 @@ public record CobblewareConfig(
         long maxTotalExecutionStateBytesPerPlayer,
         int guaranteedPoolSize,
         int bestEffortPoolSize,
+        RuntimeMode runtimeMode,
+        int runtimePort,
         String configurationError) {
     public CobblewareConfig {
         if (mainWorkerApiKey == null) {
@@ -39,6 +41,39 @@ public record CobblewareConfig(
         if (bestEffortPoolSize < 0) {
             throw new IllegalArgumentException("bestEffortPoolSize must not be negative");
         }
+        if (runtimeMode == null) {
+            throw new IllegalArgumentException("runtimeMode must not be null");
+        }
+        if (runtimePort <= 0 || runtimePort > 65_535) {
+            throw new IllegalArgumentException("runtimePort must be between 1 and 65535");
+        }
+    }
+
+    /** Compatibility constructor for callers that do not need Runtime lifecycle settings. */
+    public CobblewareConfig(
+            URI mainWorkerBaseUri,
+            String mainWorkerApiKey,
+            int instrumentationWindowTicks,
+            int maxRunningExecutionsPerPlayer,
+            int maxQueuedEventsPerPlayer,
+            int maxPendingEffectsPerPlayer,
+            long maxTotalExecutionStateBytesPerPlayer,
+            int guaranteedPoolSize,
+            int bestEffortPoolSize,
+            String configurationError) {
+        this(
+                mainWorkerBaseUri,
+                mainWorkerApiKey,
+                instrumentationWindowTicks,
+                maxRunningExecutionsPerPlayer,
+                maxQueuedEventsPerPlayer,
+                maxPendingEffectsPerPlayer,
+                maxTotalExecutionStateBytesPerPlayer,
+                guaranteedPoolSize,
+                bestEffortPoolSize,
+                RuntimeMode.AUTO,
+                CobblewareConfigLoader.DEFAULT_RUNTIME_PORT,
+                configurationError);
     }
 
     /** Returns whether the configuration has a usable URL and non-empty API key. */
@@ -68,6 +103,25 @@ public record CobblewareConfig(
                 CobblewareConfigLoader.DEFAULT_MAX_TOTAL_EXECUTION_STATE_BYTES_PER_PLAYER,
                 CobblewareConfigLoader.DEFAULT_GUARANTEED_POOL_SIZE,
                 CobblewareConfigLoader.DEFAULT_BEST_EFFORT_POOL_SIZE,
+                RuntimeMode.AUTO,
+                CobblewareConfigLoader.DEFAULT_RUNTIME_PORT,
                 reason);
+    }
+
+    /** Returns a copy with the Main Worker connection selected for this server lifetime. */
+    public CobblewareConfig withMainWorkerConnection(URI baseUri, String apiKey) {
+        return new CobblewareConfig(
+                baseUri,
+                apiKey,
+                instrumentationWindowTicks,
+                maxRunningExecutionsPerPlayer,
+                maxQueuedEventsPerPlayer,
+                maxPendingEffectsPerPlayer,
+                maxTotalExecutionStateBytesPerPlayer,
+                guaranteedPoolSize,
+                bestEffortPoolSize,
+                runtimeMode,
+                runtimePort,
+                configurationError);
     }
 }

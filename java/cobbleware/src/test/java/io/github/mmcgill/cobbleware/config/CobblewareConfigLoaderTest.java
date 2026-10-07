@@ -33,6 +33,8 @@ class CobblewareConfigLoaderTest {
         assertEquals(1_048_576, config.maxTotalExecutionStateBytesPerPlayer());
         assertEquals(0, config.guaranteedPoolSize());
         assertEquals(0, config.bestEffortPoolSize());
+        assertEquals(RuntimeMode.AUTO, config.runtimeMode());
+        assertEquals(9000, config.runtimePort());
         assertNull(config.configurationError());
         assertFalse(config.isEnabled());
         assertEquals("mainWorkerApiKey is empty", config.disabledReason());
@@ -76,6 +78,8 @@ class CobblewareConfigLoaderTest {
         assertEquals(1_048_576, configured.maxTotalExecutionStateBytesPerPlayer());
         assertEquals(5, configured.guaranteedPoolSize());
         assertEquals(2, configured.bestEffortPoolSize());
+        assertEquals(RuntimeMode.AUTO, configured.runtimeMode());
+        assertEquals(9000, configured.runtimePort());
         assertTrue(configured.isEnabled());
 
         Files.writeString(configPath, """
@@ -139,7 +143,51 @@ class CobblewareConfigLoaderTest {
         assertEquals(1_048_576, config.maxTotalExecutionStateBytesPerPlayer());
         assertEquals(0, config.guaranteedPoolSize());
         assertEquals(0, config.bestEffortPoolSize());
+        assertEquals(RuntimeMode.AUTO, config.runtimeMode());
+        assertEquals(9000, config.runtimePort());
         assertTrue(config.isEnabled());
+    }
+
+    @Test
+    void parsesRuntimeModeAndPort() throws Exception {
+        Path configPath = tempDir.resolve(CobblewareConfigLoader.FILE_NAME);
+        Files.writeString(configPath, """
+            {
+              "mainWorkerUrl": "http://localhost:9000",
+              "mainWorkerApiKey": "secret",
+              "runtimeMode": "extract-only",
+              "runtimePort": 9123
+            }
+            """);
+
+        CobblewareConfig config = CobblewareConfigLoader.load(configPath, LOGGER);
+
+        assertEquals(RuntimeMode.EXTRACT_ONLY, config.runtimeMode());
+        assertEquals(9123, config.runtimePort());
+    }
+
+    @Test
+    void rejectsInvalidRuntimeModeAndPort() throws Exception {
+        Path configPath = tempDir.resolve(CobblewareConfigLoader.FILE_NAME);
+        Files.writeString(configPath, """
+            {
+              "mainWorkerUrl": "http://localhost:9000",
+              "mainWorkerApiKey": "secret",
+              "runtimeMode": "unknown"
+            }
+            """);
+
+        assertFalse(CobblewareConfigLoader.load(configPath, LOGGER).isEnabled());
+
+        Files.writeString(configPath, """
+            {
+              "mainWorkerUrl": "http://localhost:9000",
+              "mainWorkerApiKey": "secret",
+              "runtimePort": 65536
+            }
+            """);
+
+        assertFalse(CobblewareConfigLoader.load(configPath, LOGGER).isEnabled());
     }
 
     @Test

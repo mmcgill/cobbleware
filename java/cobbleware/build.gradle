@@ -191,33 +191,57 @@ def bundleEventWorker = tasks.register('bundleEventWorkerEszip', Exec) {
 
 def generateRuntimeManifest = tasks.register('generateWindowsRuntimeManifest') {
     group = 'distribution'
-    description = 'Generates metadata and a checksum for the embedded Windows runtime.'
-    dependsOn(buildWindowsEdgeRuntime)
-    inputs.file(windowsRuntimeBinary)
+    description = 'Generates metadata and checksums for the embedded Windows Runtime distribution.'
+    dependsOn(buildWindowsEdgeRuntime, bundleMainWorker, bundleEventWorker)
+    inputs.files(windowsRuntimeBinary, mainWorkerEszip, eventWorkerEszip)
     inputs.property('modVersion', project.version)
     outputs.file(runtimeManifest)
 
     doLast {
+        def sha256 = { File file ->
+            byte[] digest = java.security.MessageDigest.getInstance('SHA-256').digest(file.bytes)
+            digest.collect { byte value -> String.format('%02x', value & 0xff) }.join()
+        }
         String files = windowsRuntimeFiles.collect { runtimeFile ->
-            byte[] digest = java.security.MessageDigest.getInstance('SHA-256').digest(runtimeFile.file.bytes)
-            String sha256 = digest.collect { byte value -> String.format('%02x', value & 0xff) }.join()
             """        {
           "path": "${runtimeFile.resourcePath}",
-          "sha256": "${sha256}"
+          "sha256": "${sha256(runtimeFile.file)}"
         }"""
         }.join(',\n')
+        def workers = [
+                [file: mainWorkerEszip.get().asFile, resourcePath: 'main-worker.eszip'],
+                [file: eventWorkerEszip.get().asFile, resourcePath: 'event-worker.eszip'],
+        ]
+        String workerFiles = workers.collect { worker ->
+            """    {
+      "path": "${worker.resourcePath}",
+      "sha256": "${sha256(worker.file)}"
+    }"""
+        }.join(',\n')
+        String distributionIdentity = (windowsRuntimeFiles.collect { runtimeFile ->
+            "${runtimeFile.resourcePath}:${sha256(runtimeFile.file)}"
+        } + workers.collect { worker ->
+            "${worker.resourcePath}:${sha256(worker.file)}"
+        }).join('\n')
+        byte[] distributionDigest = java.security.MessageDigest.getInstance('SHA-256')
+                .digest(distributionIdentity.getBytes(java.nio.charset.StandardCharsets.UTF_8))
+        String distributionId = distributionDigest.collect { byte value -> String.format('%02x', value & 0xff) }.join()
         File manifest = runtimeManifest.get().asFile
         manifest.parentFile.mkdirs()
         manifest.setText("""{
   "schemaVersion": 1,
   "modVersion": "${project.version}",
+  "distributionId": "${distributionId}",
   "platforms": {
     "windows-x86_64": {
       "files": [
 ${files}
       ]
     }
-  }
+  },
+  "workers": [
+${workerFiles}
+  ]
 }
 """, 'UTF-8')
     }
@@ -241,6 +265,17 @@ def stageReleaseResources = tasks.register('stageReleaseResources', Sync) {
     }
     from(runtimeManifest) {
         into('cobbleware/runtime')
+    }
+}
+
+def bundledRuntimeForDevelopment = providers.gradleProperty('bundledRuntime')
+        .map { value -> value.isEmpty() || value.toBoolean() }
+        .orElse(false)
+
+if (bundledRuntimeForDevelopment.get()) {
+    tasks.named('runServer') {
+        dependsOn(stageReleaseResources)
+        classpath.from(releaseResourcesDirectory)
     }
 }
 
