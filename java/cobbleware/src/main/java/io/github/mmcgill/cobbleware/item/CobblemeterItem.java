@@ -2,9 +2,7 @@ package io.github.mmcgill.cobbleware.item;
 
 import eu.pb4.polymer.core.api.item.SimplePolymerItem;
 import io.github.mmcgill.cobbleware.CobblewareMod;
-import io.github.mmcgill.cobbleware.block.CobbleputerBlock;
 import io.github.mmcgill.cobbleware.block.CobbleputerBlockEntity;
-import io.github.mmcgill.cobbleware.block.CobbleputerState;
 import io.github.mmcgill.cobbleware.block.WirelessObserverBlockEntity;
 import io.github.mmcgill.cobbleware.execution.ExecutionDriver;
 import io.github.mmcgill.cobbleware.registry.CobblewareBlocks;
@@ -172,14 +170,9 @@ public final class CobblemeterItem extends SimplePolymerItem {
         }
     }
 
-    /** Returns whether a player may pair a Cobblemeter with a Cobbleputer in the given lifecycle state. */
-    static boolean canPairWith(
-            CobbleputerState lifecycleState, UUID ownerPlayerId, UUID actingPlayerId, boolean hasGamemasterPermission) {
-        return switch (lifecycleState) {
-            case UNINITIALIZED -> true;
-            case RUNNING, STOPPED, CRASHED ->
-                hasGamemasterPermission || (actingPlayerId != null && actingPlayerId.equals(ownerPlayerId));
-        };
+    /** Returns whether a player may pair a Cobblemeter with a Cobbleputer. */
+    static boolean canPairWith(UUID ownerPlayerId, UUID actingPlayerId, boolean hasGamemasterPermission) {
+        return hasGamemasterPermission || (actingPlayerId != null && actingPlayerId.equals(ownerPlayerId));
     }
 
     /** Returns whether a player may unpair an observer from a Cobbleputer. */
@@ -200,7 +193,6 @@ public final class CobblemeterItem extends SimplePolymerItem {
 
     private static boolean canPairWith(CobbleputerBlockEntity cobbleputer, ServerPlayer player) {
         return canPairWith(
-                cobbleputer.getBlockState().getValue(CobbleputerBlock.STATE),
                 cobbleputer.ownerPlayerId().orElse(null),
                 player == null ? null : player.getUUID(),
                 player != null && player.permissions().hasPermission(Permissions.COMMANDS_GAMEMASTER));

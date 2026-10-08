@@ -214,8 +214,7 @@ A Cobblemeter is an item that can be used by the player to pair or unpair Wirele
 A Cobblemeter is initially unpaired.
 A Cobblemeter (whether already paired or not) can be paired with a Cobbleputer by using it on the Cobbleputer.
 
-For running/stopped/crashed cobbleputers, ownership of the Cobbleputer and permission level determine
-who can pair a cobblemeter:
+Ownership of the Cobbleputer and permission level determine who can pair a cobblemeter:
 * users with permission level 2 or greater can pair with any cobbleputer
 * less privileged users can only pair with their own cobbleputers
 

@@ -22,47 +22,34 @@ class CobblemeterItemTest {
     }
 
     @Test
-    void permitsAnyPlayerToPairWithUninitializedCobbleputers() {
-        assertTrue(CobblemeterItem.canPairWith(CobbleputerState.UNINITIALIZED, null, null, false));
-    }
-
-    @Test
-    void permitsCobbleputerOwnersToPairWithActiveCobbleputers() {
+    void permitsCobbleputerOwnersToPairWithTheirCobbleputers() {
         UUID owner = UUID.randomUUID();
 
-        for (CobbleputerState state : activeStates()) {
-            assertTrue(CobblemeterItem.canPairWith(state, owner, owner, false));
-        }
+        assertTrue(CobblemeterItem.canPairWith(owner, owner, false));
     }
 
     @Test
-    void rejectsOtherNonPrivilegedPlayersForActiveCobbleputers() {
+    void rejectsOtherNonPrivilegedPlayers() {
         UUID owner = UUID.randomUUID();
         UUID otherPlayer = UUID.randomUUID();
 
-        for (CobbleputerState state : activeStates()) {
-            assertFalse(CobblemeterItem.canPairWith(state, owner, otherPlayer, false));
-        }
+        assertFalse(CobblemeterItem.canPairWith(owner, otherPlayer, false));
     }
 
     @Test
-    void permitsGamemastersToPairWithAnyActiveCobbleputer() {
+    void permitsGamemastersToPairWithAnyCobbleputer() {
         UUID owner = UUID.randomUUID();
         UUID gamemaster = UUID.randomUUID();
 
-        for (CobbleputerState state : activeStates()) {
-            assertTrue(CobblemeterItem.canPairWith(state, owner, gamemaster, true));
-        }
+        assertTrue(CobblemeterItem.canPairWith(owner, gamemaster, true));
     }
 
     @Test
-    void rejectsActiveCobbleputersWithoutAnOwnerOrPlayer() {
+    void rejectsNonPrivilegedPairingWhenTheCobbleputerOrPlayerHasNoOwner() {
         UUID owner = UUID.randomUUID();
 
-        for (CobbleputerState state : activeStates()) {
-            assertFalse(CobblemeterItem.canPairWith(state, null, UUID.randomUUID(), false));
-            assertFalse(CobblemeterItem.canPairWith(state, owner, null, false));
-        }
+        assertFalse(CobblemeterItem.canPairWith(null, UUID.randomUUID(), false));
+        assertFalse(CobblemeterItem.canPairWith(owner, null, false));
     }
 
     @Test
