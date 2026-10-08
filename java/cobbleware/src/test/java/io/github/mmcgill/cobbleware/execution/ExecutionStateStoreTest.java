@@ -3,9 +3,15 @@ package io.github.mmcgill.cobbleware.execution;
 import static org.junit.jupiter.api.Assertions.assertAll;
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import cobbleware.internal.PlayerExecutionStates;
+import cobbleware.internal.StoredExecutionState;
+import com.google.protobuf.ByteString;
+import com.google.protobuf.CodedOutputStream;
+import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -41,15 +47,14 @@ class ExecutionStateStoreTest {
         byte[] crashedState = {4, 5};
         Map<UUID, ExecutionStateStore.ExecutionRecord> records = Map.of(
                 activeCobbleputer,
-                new ExecutionStateStore.ExecutionRecord(execution, "active", activeState, 8, 3, 42L, true),
+                new ExecutionStateStore.ExecutionRecord(execution, activeState, 8, 3, 42L, true),
                 crashedCobbleputer,
-                new ExecutionStateStore.ExecutionRecord(null, "crashed", crashedState, 1, 0, null, false));
+                new ExecutionStateStore.ExecutionRecord(null, crashedState, 1, 0, null, false));
 
         Map<UUID, ExecutionStateStore.ExecutionRecord> decoded =
                 ExecutionStateStore.decode(ExecutionStateStore.encode(records));
 
         assertEquals(execution, decoded.get(activeCobbleputer).executionId());
-        assertEquals("active", decoded.get(activeCobbleputer).ownerPlayerName());
         assertArrayEquals(activeState, decoded.get(activeCobbleputer).executionState());
         assertEquals(8, decoded.get(activeCobbleputer).nextEventSequenceNum());
         assertEquals(3, decoded.get(activeCobbleputer).effectSequenceNum());
@@ -68,29 +73,25 @@ class ExecutionStateStoreTest {
     }
 
     @Test
-    void migratesVersionOneRecordsAndWritesFullVersionTwoChatBuckets() throws Exception {
+    void readsLegacyOwnerNamesAndWritesFullVersionTwoChatBucketsWithoutThem() throws Exception {
         UUID cobbleputer = UUID.randomUUID();
-        PlayerExecutionStates versionOne = PlayerExecutionStates.newBuilder()
-                .setFormatVersion(1)
-                .addExecutions(cobbleware.internal.StoredExecutionState.newBuilder()
-                        .setCobbleputerId(cobbleware.common.Uuid.newBuilder()
-                                .setHigh(cobbleputer.getMostSignificantBits())
-                                .setLow(cobbleputer.getLeastSignificantBits()))
-                        .setOwnerPlayerName("owner")
-                        .setExecutionState(com.google.protobuf.ByteString.copyFrom(new byte[] {1}))
-                        .setNextEventSequenceNum(1)
-                        .setEffectSequenceNum(0)
-                        .setWasRunningWhenUnloaded(false))
-                .build();
+        byte[] versionOne = legacyVersionOneRecord(cobbleputer, "owner");
 
-        assertEquals(1, ExecutionStateStore.decode(versionOne.toByteArray()).size());
-        PlayerExecutionStates migrated = PlayerExecutionStates.parseFrom(ExecutionStateStore.encode(Map.of()));
+        assertTrue(PlayerExecutionStates.parseFrom(versionOne)
+                .getExecutions(0)
+                .getUnknownFields()
+                .hasField(3));
+        assertEquals(1, ExecutionStateStore.decode(versionOne).size());
+        PlayerExecutionStates migrated = PlayerExecutionStates.parseFrom(ExecutionStateStore.encode(Map.of(
+                cobbleputer,
+                new ExecutionStateStore.ExecutionRecord(UUID.randomUUID(), new byte[] {1}, 1, 0, null, false))));
 
         assertEquals(2, migrated.getFormatVersion());
+        assertFalse(migrated.getExecutions(0).getUnknownFields().hasField(3));
         assertEquals(10, migrated.getBurstChatTokens());
         assertEquals(100, migrated.getSlowChatTokens());
         assertEquals(100, migrated.getNextBurstChatTransferTick());
-        assertEquals(1200, migrated.getNextSlowChatRefillTick());
+        assertEquals(400, migrated.getNextSlowChatRefillTick());
     }
 
     @Test
@@ -113,7 +114,7 @@ class ExecutionStateStoreTest {
     void executionRecordDefensivelyCopiesStateBytes() {
         byte[] original = {1, 2};
         ExecutionStateStore.ExecutionRecord record =
-                new ExecutionStateStore.ExecutionRecord(UUID.randomUUID(), "owner", original, 1, 0, null, false);
+                new ExecutionStateStore.ExecutionRecord(UUID.randomUUID(), original, 1, 0, null, false);
         original[0] = 9;
         byte[] returned = record.executionState();
         returned[1] = 9;
@@ -132,5 +133,29 @@ class ExecutionStateStoreTest {
         try (var children = Files.list(directory)) {
             assertEquals(1, children.count());
         }
+    }
+
+    private static byte[] legacyVersionOneRecord(UUID cobbleputerId, String ownerName) throws Exception {
+        StoredExecutionState currentRecord = StoredExecutionState.newBuilder()
+                .setCobbleputerId(cobbleware.common.Uuid.newBuilder()
+                        .setHigh(cobbleputerId.getMostSignificantBits())
+                        .setLow(cobbleputerId.getLeastSignificantBits()))
+                .setExecutionState(ByteString.copyFrom(new byte[] {1}))
+                .setNextEventSequenceNum(1)
+                .setEffectSequenceNum(0)
+                .setWasRunningWhenUnloaded(false)
+                .build();
+        ByteArrayOutputStream storedBytes = new ByteArrayOutputStream();
+        CodedOutputStream storedOutput = CodedOutputStream.newInstance(storedBytes);
+        storedOutput.writeRawBytes(currentRecord.toByteArray());
+        storedOutput.writeString(3, ownerName);
+        storedOutput.flush();
+
+        ByteArrayOutputStream fileBytes = new ByteArrayOutputStream();
+        CodedOutputStream fileOutput = CodedOutputStream.newInstance(fileBytes);
+        fileOutput.writeUInt32(1, 1);
+        fileOutput.writeByteArray(2, storedBytes.toByteArray());
+        fileOutput.flush();
+        return fileBytes.toByteArray();
     }
 }

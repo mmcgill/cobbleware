@@ -509,7 +509,6 @@ public final class CobblewareCommands {
         ExecutionDriver.ExecutionInitResult activation = executionDriver.startExecution(
                 ExecutionDriver.minecraft(serverLevel.getServer()),
                 resolvedTarget.blockEntity(),
-                player.getGameProfile().name(),
                 startState.orElseThrow());
         if (activation == ExecutionDriver.ExecutionInitResult.LIMIT_REACHED) {
             sendRunningExecutionLimitReached(player, executionDriver.maxRunningExecutionsPerPlayer());

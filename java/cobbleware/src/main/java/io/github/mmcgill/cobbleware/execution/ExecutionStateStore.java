@@ -22,7 +22,6 @@ import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import net.minecraft.server.MinecraftServer;
-import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.level.storage.LevelResource;
 import org.slf4j.Logger;
 
@@ -99,22 +98,6 @@ public final class ExecutionStateStore implements AutoCloseable, ExecutionStateA
         }
         UUID cobbleputerId = blockEntity.cobbleputerId();
         ExecutionRecord existing = player.records.get(cobbleputerId);
-        if (blockEntity.hasLegacyExecutionState()) {
-            if (existing == null) {
-                ExecutionRecord legacy = blockEntity.executionRecord().orElse(null);
-                if (legacy == null) {
-                    return;
-                }
-                player.records.put(cobbleputerId, legacy);
-                long generation = markDirty(player);
-                player.awaitingMigrationCompletion.put(blockEntity, generation);
-            } else {
-                if (loadValidatedRecord(blockEntity, existing, owner.orElseThrow())) {
-                    scheduleLegacyMigrationCompletion(blockEntity);
-                }
-            }
-            return;
-        }
         if (existing != null) {
             loadValidatedRecord(blockEntity, existing, owner.orElseThrow());
         } else {
@@ -364,9 +347,8 @@ public final class ExecutionStateStore implements AutoCloseable, ExecutionStateA
         return loaded;
     }
 
-    private long markDirty(PlayerState player) {
+    private void markDirty(PlayerState player) {
         player.generation += 1;
-        return player.generation;
     }
 
     private void queueWrite(UUID owner, PlayerState player) {
@@ -401,27 +383,7 @@ public final class ExecutionStateStore implements AutoCloseable, ExecutionStateA
                     return;
                 }
                 player.persistedGeneration = Math.max(player.persistedGeneration, generation);
-                var migrations = player.awaitingMigrationCompletion.entrySet().iterator();
-                while (migrations.hasNext()) {
-                    Map.Entry<CobbleputerBlockEntity, Long> migration = migrations.next();
-                    if (migration.getValue() <= generation) {
-                        CobbleputerBlockEntity blockEntity = migration.getKey();
-                        migrations.remove();
-                        scheduleLegacyMigrationCompletion(blockEntity);
-                    }
-                }
             }
-        });
-    }
-
-    private void scheduleLegacyMigrationCompletion(CobbleputerBlockEntity blockEntity) {
-        server.execute(() -> {
-            if (blockEntity.isRemoved()
-                    || !(blockEntity.getLevel() instanceof ServerLevel level)
-                    || !level.isLoaded(blockEntity.getBlockPos())) {
-                return;
-            }
-            blockEntity.completeLegacyMigration();
         });
     }
 
@@ -442,7 +404,6 @@ public final class ExecutionStateStore implements AutoCloseable, ExecutionStateA
             ExecutionRecord record = entry.getValue();
             StoredExecutionState.Builder stored = StoredExecutionState.newBuilder()
                     .setCobbleputerId(protoUuid(entry.getKey()))
-                    .setOwnerPlayerName(record.ownerPlayerName())
                     .setExecutionState(com.google.protobuf.ByteString.copyFrom(record.executionState()))
                     .setNextEventSequenceNum(record.nextEventSequenceNum())
                     .setEffectSequenceNum(record.effectSequenceNum())
@@ -488,7 +449,6 @@ public final class ExecutionStateStore implements AutoCloseable, ExecutionStateA
                 Long stoppedAtTick = stored.hasStoppedAtTick() ? stored.getStoppedAtTick() : null;
                 ExecutionRecord record = new ExecutionRecord(
                         executionId,
-                        stored.getOwnerPlayerName(),
                         stored.getExecutionState().toByteArray(),
                         stored.getNextEventSequenceNum(),
                         stored.getEffectSequenceNum(),
@@ -624,7 +584,6 @@ public final class ExecutionStateStore implements AutoCloseable, ExecutionStateA
     /** Immutable copy of the durable state stored for one Cobbleputer. */
     public record ExecutionRecord(
             UUID executionId,
-            String ownerPlayerName,
             byte[] executionState,
             long nextEventSequenceNum,
             long effectSequenceNum,
@@ -641,8 +600,6 @@ public final class ExecutionStateStore implements AutoCloseable, ExecutionStateA
 
         boolean isValid() {
             boolean validCrashed = executionId == null
-                    && ownerPlayerName != null
-                    && !ownerPlayerName.isEmpty()
                     && executionState != null
                     && nextEventSequenceNum >= 1
                     && effectSequenceNum >= 0
@@ -659,7 +616,6 @@ public final class ExecutionStateStore implements AutoCloseable, ExecutionStateA
     private static final class PlayerState {
         private final Map<UUID, ExecutionRecord> records;
         private final ChatTokenBucket chatTokens;
-        private final Map<CobbleputerBlockEntity, Long> awaitingMigrationCompletion = new HashMap<>();
         private long generation;
         private long queuedGeneration;
         private long persistedGeneration;

@@ -145,7 +145,7 @@ class ExecutionDriverTest {
 
         assertEquals(
                 ExecutionDriver.ExecutionInitResult.INVALID_STATE,
-                fixture.driver.startExecution(fixture.minecraft, cobbleputer, "owner", new byte[] {1}));
+                fixture.driver.startExecution(fixture.minecraft, cobbleputer, new byte[] {1}));
     }
 
     @Test
@@ -1062,6 +1062,8 @@ class ExecutionDriverTest {
         private final Map<UUID, ExecutionPoolManager.EligiblePlayer> eligiblePlayers = new HashMap<>();
         private final PlayerPriorityStore playerPriorityStore =
                 new PlayerPriorityStore(LoggerFactory.getLogger(ExecutionDriverTest.class));
+        private final PlayerNameStore playerNameStore =
+                new PlayerNameStore(LoggerFactory.getLogger(ExecutionDriverTest.class));
         private final ExecutionDriver driver;
         private int nextPos;
 
@@ -1086,6 +1088,7 @@ class ExecutionDriverTest {
                     stateStore,
                     instrumentation,
                     playerPriorityStore,
+                    playerNameStore,
                     executionPoolManager,
                     10,
                     queuedEventLimit,
@@ -1103,7 +1106,7 @@ class ExecutionDriverTest {
             cobbleputer.initializeOwner(owner);
             assertEquals(
                     ExecutionDriver.ExecutionInitResult.SUCCESS,
-                    driver.startExecution(minecraft, cobbleputer, "owner", initialState));
+                    driver.startExecution(minecraft, cobbleputer, initialState));
             eligiblePlayers.put(owner, new ExecutionPoolManager.EligiblePlayer(owner, "owner", 2, 0));
             executionPoolManager.refresh(eligiblePlayers.values());
             return cobbleputer;

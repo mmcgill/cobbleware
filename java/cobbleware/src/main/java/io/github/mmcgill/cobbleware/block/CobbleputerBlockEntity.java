@@ -26,13 +26,11 @@ public final class CobbleputerBlockEntity extends BlockEntity {
     private UUID cobbleputerId = UUID.randomUUID();
     private UUID executionId;
     private UUID ownerPlayerId;
-    private String executionOwnerPlayerName;
     private long nextEventSequenceNum = 1;
     private long effectSequenceNum;
     private byte[] executionState;
     private Long stoppedAtTick;
     private boolean wasRunningWhenUnloaded;
-    private boolean legacyExecutionStatePending;
 
     public CobbleputerBlockEntity(BlockPos pos, BlockState state, ExecutionStateAccess executionStateStore) {
         this(CobblewareBlockEntities.COBBLEPUTER, pos, state, executionStateStore);
@@ -86,18 +84,16 @@ public final class CobbleputerBlockEntity extends BlockEntity {
     }
 
     /** Starts a fresh execution for this Cobbleputer's permanent owner. */
-    public void startExecution(String ownerName, byte[] initialState) {
-        if (ownerPlayerId == null || ownerName == null || ownerName.isEmpty() || initialState == null) {
-            throw new IllegalStateException("execution requires a Cobbleputer owner, owner name, and initial state");
+    public void startExecution(byte[] initialState) {
+        if (ownerPlayerId == null || initialState == null) {
+            throw new IllegalStateException("execution requires a Cobbleputer owner and initial state");
         }
         executionId = UUID.randomUUID();
-        executionOwnerPlayerName = ownerName;
         nextEventSequenceNum = 1;
         effectSequenceNum = 0;
         executionState = Arrays.copyOf(initialState, initialState.length);
         stoppedAtTick = null;
         wasRunningWhenUnloaded = false;
-        legacyExecutionStatePending = false;
         persistExecutionState(null);
         CobblewareMod.LOGGER.info(
                 "Started Cobbleputer execution {} at {} for player {}",
@@ -117,11 +113,6 @@ public final class CobbleputerBlockEntity extends BlockEntity {
 
     public Optional<UUID> ownerPlayerId() {
         return Optional.ofNullable(ownerPlayerId);
-    }
-
-    /** Returns the name stored with this Cobbleputer's current execution record. */
-    public Optional<String> executionOwnerPlayerName() {
-        return Optional.ofNullable(executionOwnerPlayerName);
     }
 
     public long nextEventSequenceNum() {
@@ -156,16 +147,11 @@ public final class CobbleputerBlockEntity extends BlockEntity {
 
     /** Returns whether this block entity retains enough data to restart a crashed execution. */
     public boolean hasRecoverableCrashedExecution() {
-        return isRecoverableCrashedExecution(executionId, ownerPlayerId, executionOwnerPlayerName, executionState);
+        return isRecoverableCrashedExecution(executionId, ownerPlayerId, executionState);
     }
 
-    static boolean isRecoverableCrashedExecution(
-            UUID executionId, UUID ownerPlayerId, String ownerPlayerName, byte[] executionState) {
-        return executionId == null
-                && ownerPlayerId != null
-                && ownerPlayerName != null
-                && !ownerPlayerName.isEmpty()
-                && executionState != null;
+    static boolean isRecoverableCrashedExecution(UUID executionId, UUID ownerPlayerId, byte[] executionState) {
+        return executionId == null && ownerPlayerId != null && executionState != null;
     }
 
     /** Starts a fresh execution using the owner and state retained from a crash. */
@@ -174,7 +160,7 @@ public final class CobbleputerBlockEntity extends BlockEntity {
             throw new IllegalStateException("Cobbleputer has no recoverable crashed execution");
         }
         Long crashTick = stoppedAtTick;
-        startExecution(executionOwnerPlayerName, executionState);
+        startExecution(executionState);
         stoppedAtTick = crashTick;
         if (crashTick != null) {
             persistExecutionState(null);
@@ -265,9 +251,6 @@ public final class CobbleputerBlockEntity extends BlockEntity {
         super.saveAdditional(output);
         output.store(COBBLEPUTER_ID_TAG, UUIDUtil.CODEC, cobbleputerId);
         output.storeNullable(OWNER_PLAYER_ID_TAG, UUIDUtil.CODEC, ownerPlayerId);
-        if (legacyExecutionStatePending) {
-            saveLegacyExecutionState(output);
-        }
     }
 
     @Override
@@ -277,19 +260,13 @@ public final class CobbleputerBlockEntity extends BlockEntity {
         cobbleputerId = input.read(COBBLEPUTER_ID_TAG, UUIDUtil.CODEC)
                 .orElseThrow(() -> new IllegalStateException("Missing required cobbleputer_id"));
         ownerPlayerId = input.read(OWNER_PLAYER_ID_TAG, UUIDUtil.CODEC).orElse(null);
-        loadLegacyExecutionState(input);
-    }
-
-    /** Maps both current data and legacy persisted RUNNING records to a deferred resume decision. */
-    static boolean shouldResumeAfterChunkLoad(
-            CobbleputerState lifecycleState, Optional<Boolean> storedWasRunningWhenUnloaded) {
-        return lifecycleState == CobbleputerState.RUNNING || storedWasRunningWhenUnloaded.orElse(false);
+        clearLoadedExecutionState();
     }
 
     /** Returns the external-file representation of this block entity's execution, if it has one. */
     public Optional<ExecutionStateStore.ExecutionRecord> executionRecord() {
         boolean validCrashedRecord = getBlockState().getValue(CobbleputerBlock.STATE) == CobbleputerState.CRASHED
-                && isRecoverableCrashedExecution(executionId, ownerPlayerId, executionOwnerPlayerName, executionState)
+                && isRecoverableCrashedExecution(executionId, ownerPlayerId, executionState)
                 && nextEventSequenceNum >= 1
                 && effectSequenceNum >= 0
                 && (stoppedAtTick == null || stoppedAtTick >= 0);
@@ -304,7 +281,6 @@ public final class CobbleputerBlockEntity extends BlockEntity {
         }
         return Optional.of(new ExecutionStateStore.ExecutionRecord(
                 executionId,
-                executionOwnerPlayerName,
                 executionState,
                 nextEventSequenceNum,
                 effectSequenceNum,
@@ -318,7 +294,6 @@ public final class CobbleputerBlockEntity extends BlockEntity {
             throw new IllegalArgumentException("execution record and its owner locator must be present");
         }
         executionId = record.executionId();
-        executionOwnerPlayerName = record.ownerPlayerName();
         executionState = record.executionState();
         nextEventSequenceNum = record.nextEventSequenceNum();
         effectSequenceNum = record.effectSequenceNum();
@@ -332,8 +307,7 @@ public final class CobbleputerBlockEntity extends BlockEntity {
             return false;
         }
         boolean validCrashedRecord = getBlockState().getValue(CobbleputerBlock.STATE) == CobbleputerState.CRASHED
-                && isRecoverableCrashedExecution(
-                        record.executionId(), ownerPlayerId, record.ownerPlayerName(), record.executionState())
+                && isRecoverableCrashedExecution(record.executionId(), ownerPlayerId, record.executionState())
                 && record.nextEventSequenceNum() >= 1
                 && record.effectSequenceNum() >= 0
                 && (record.stoppedAtTick() == null || record.stoppedAtTick() >= 0);
@@ -346,59 +320,6 @@ public final class CobbleputerBlockEntity extends BlockEntity {
         return validCrashedRecord || validActiveRecord;
     }
 
-    /** Returns whether this entity still carries a legacy NBT execution record awaiting migration. */
-    public boolean hasLegacyExecutionState() {
-        return legacyExecutionStatePending;
-    }
-
-    /** Drops legacy NBT persistence after a safe server-thread migration completion. */
-    public void completeLegacyMigration() {
-        if (!legacyExecutionStatePending) {
-            return;
-        }
-        legacyExecutionStatePending = false;
-        setChanged();
-    }
-
-    private void saveLegacyExecutionState(ValueOutput output) {
-        LegacyCobbleputerExecutionStateMigrator.write(
-                output,
-                new LegacyCobbleputerExecutionStateMigrator.LegacyExecutionRecord(
-                        executionId,
-                        executionOwnerPlayerName,
-                        executionState,
-                        nextEventSequenceNum,
-                        effectSequenceNum,
-                        stoppedAtTick,
-                        wasRunningWhenUnloaded));
-    }
-
-    private void loadLegacyExecutionState(ValueInput input) {
-        Optional<LegacyCobbleputerExecutionStateMigrator.LegacyExecutionRecord> legacy =
-                LegacyCobbleputerExecutionStateMigrator.read(
-                        input, getBlockState().getValue(CobbleputerBlock.STATE), ownerPlayerId);
-        if (legacy.isEmpty()) {
-            executionId = null;
-            executionOwnerPlayerName = null;
-            executionState = null;
-            nextEventSequenceNum = 1;
-            effectSequenceNum = 0;
-            stoppedAtTick = null;
-            wasRunningWhenUnloaded = false;
-            legacyExecutionStatePending = false;
-            return;
-        }
-        LegacyCobbleputerExecutionStateMigrator.LegacyExecutionRecord record = legacy.orElseThrow();
-        executionId = record.executionId();
-        executionOwnerPlayerName = record.ownerPlayerName();
-        executionState = record.executionState();
-        nextEventSequenceNum = record.nextEventSequenceNum();
-        effectSequenceNum = record.effectSequenceNum();
-        stoppedAtTick = record.stoppedAtTick();
-        wasRunningWhenUnloaded = record.wasRunningWhenUnloaded();
-        legacyExecutionStatePending = true;
-    }
-
     private void persistExecutionState(UUID priorOwner) {
         executionStateStore.update(this, priorOwner);
     }
@@ -406,12 +327,15 @@ public final class CobbleputerBlockEntity extends BlockEntity {
     private void clearExecution() {
         executionId = null;
         ownerPlayerId = null;
-        executionOwnerPlayerName = null;
+        clearLoadedExecutionState();
+    }
+
+    private void clearLoadedExecutionState() {
+        executionId = null;
         nextEventSequenceNum = 1;
         effectSequenceNum = 0;
         executionState = null;
         stoppedAtTick = null;
         wasRunningWhenUnloaded = false;
-        legacyExecutionStatePending = false;
     }
 }

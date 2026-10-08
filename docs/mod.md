@@ -188,11 +188,14 @@ for owner display. Cobbleputer block entities deliberately store no player name,
 consistently across all of their Cobbleputers.
 
 The durable execution record is stored in `cobbleware-data/executions/<player-uuid>.pb` in the world directory,
-one protobuf file per Player. The file carries a Mod-defined format version and the record's execution ID, owner name,
-sequence counters, state bytes, stopped-at tick, and pending automatic-resume intent. The execution ID is `null` when
+one protobuf file per Player. The file carries a Mod-defined format version and the record's execution ID, sequence
+counters, state bytes, stopped-at tick, and pending automatic-resume intent. The execution ID is `null` when
 the block state is `UNINITIALIZED` or `CRASHED`, and reset to a fresh UUID whenever a program is started or a crashed
 Cobbleputer is restarted; it is not reset when a `STOPPED` Cobbleputer is resumed. A crashed Cobbleputer retains its
 owner and state before the failing event so it can restart.
+
+Execution records written by older Cobbleware builds may contain an owner name. Cobbleware accepts those records and
+omits the redundant name on the next write; owner display continues to use the UUID-keyed player-name cache.
 
 The Mod writes every Player file by forcing a complete same-directory temporary file and atomically replacing the
 previous file. It queues dirty files asynchronously before each world save and synchronously flushes all loaded Player

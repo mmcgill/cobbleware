@@ -109,7 +109,8 @@ message StoredExecutionState {
   cobbleware.common.Uuid cobbleputer_id = 1;
   // Absent for a crashed execution, which retains its owner and state for restart.
   cobbleware.common.Uuid execution_id = 2;
-  string owner_player_name = 3;
+  // Former owner_player_name field. New records use the Cobbleware UUID-keyed name cache instead.
+  reserved 3;
   bytes execution_state = 4;
   uint64 next_event_sequence_num = 5;
   uint64 effect_sequence_num = 6;

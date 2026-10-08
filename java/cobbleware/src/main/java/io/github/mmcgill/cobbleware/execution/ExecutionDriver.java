@@ -145,6 +145,7 @@ public final class ExecutionDriver {
     private final ExecutionStateAccess executionStateAccess;
     private final Instrumentation instrumentation;
     private final PlayerPriorityStore playerPriorityStore;
+    private final PlayerNameStore playerNameStore;
     private final ExecutionPoolManager executionPoolManager;
     private final int maxRunningExecutionsPerPlayer;
     private final int maxQueuedEventsPerPlayer;
@@ -178,6 +179,7 @@ public final class ExecutionDriver {
             ExecutionStateAccess executionStateAccess,
             Instrumentation instrumentation,
             PlayerPriorityStore playerPriorityStore,
+            PlayerNameStore playerNameStore,
             ExecutionPoolManager executionPoolManager,
             int maxRunningExecutionsPerPlayer,
             int maxQueuedEventsPerPlayer,
@@ -188,6 +190,7 @@ public final class ExecutionDriver {
                 || executionStateAccess == null
                 || instrumentation == null
                 || playerPriorityStore == null
+                || playerNameStore == null
                 || executionPoolManager == null
                 || logger == null
                 || maxRunningExecutionsPerPlayer <= 0
@@ -201,6 +204,7 @@ public final class ExecutionDriver {
         this.executionStateAccess = executionStateAccess;
         this.instrumentation = instrumentation;
         this.playerPriorityStore = playerPriorityStore;
+        this.playerNameStore = playerNameStore;
         this.executionPoolManager = executionPoolManager;
         this.maxRunningExecutionsPerPlayer = maxRunningExecutionsPerPlayer;
         this.maxQueuedEventsPerPlayer = maxQueuedEventsPerPlayer;
@@ -228,7 +232,7 @@ public final class ExecutionDriver {
             long onlineTime = onlinePlayer == null
                     ? Long.MAX_VALUE
                     : Math.max(0, onlinePlayer.getStats().getValue(Stats.CUSTOM, Stats.PLAY_TIME));
-            String ownerName = ownerName(blockEntity, ownerId);
+            String ownerName = ownerName(ownerId);
             eligible.merge(
                     ownerId,
                     new ExecutionPoolManager.EligiblePlayer(ownerId, ownerName, priority, onlineTime),
@@ -348,14 +352,13 @@ public final class ExecutionDriver {
 
     /** Starts a fresh execution and queues its first lifecycle event when the owner has capacity. */
     public ExecutionInitResult startExecution(
-            Minecraft minecraft, CobbleputerBlockEntity blockEntity, String ownerName, byte[] initialState) {
-        if (minecraft == null || blockEntity == null || ownerName == null || initialState == null) {
-            throw new IllegalArgumentException(
-                    "execution dependencies, owner name, and initial state must not be null");
+            Minecraft minecraft, CobbleputerBlockEntity blockEntity, byte[] initialState) {
+        if (minecraft == null || blockEntity == null || initialState == null) {
+            throw new IllegalArgumentException("execution dependencies and initial state must not be null");
         }
         OptionalLong gameTime = minecraft.gameTime(blockEntity);
         Optional<UUID> owner = blockEntity.ownerPlayerId();
-        if (gameTime.isEmpty() || owner.isEmpty() || ownerName.isEmpty()) {
+        if (gameTime.isEmpty() || owner.isEmpty()) {
             return ExecutionInitResult.INVALID_STATE;
         }
         activate(blockEntity);
@@ -363,7 +366,7 @@ public final class ExecutionDriver {
             return ExecutionInitResult.LIMIT_REACHED;
         }
         discardPendingEvents(blockEntity, loadedCobbleputers.get(blockEntity));
-        blockEntity.startExecution(ownerName, initialState);
+        blockEntity.startExecution(initialState);
         if (minecraft.setCobbleputerState(blockEntity, CobbleputerState.RUNNING)) {
             enqueueEvent(
                     blockEntity,
@@ -1415,7 +1418,7 @@ public final class ExecutionDriver {
                         target -> instrumentation.recordEffect(target, effect.getEffectCase(), elapsedNanos, failed));
     }
 
-    private static Optional<Instrumentation.PlayerCobbleputerKey> instrumentationKey(
+    private Optional<Instrumentation.PlayerCobbleputerKey> instrumentationKey(
             Minecraft minecraft, CobbleputerBlockEntity blockEntity) {
         Optional<net.minecraft.core.GlobalPos> globalPos = minecraft.globalPos(blockEntity, blockEntity.getBlockPos());
         if (globalPos.isEmpty()) {
@@ -1425,15 +1428,14 @@ public final class ExecutionDriver {
                 blockEntity, globalPos.orElseThrow().dimension().identifier());
     }
 
-    private static Optional<Instrumentation.PlayerCobbleputerKey> instrumentationKey(
-            CobbleputerBlockEntity blockEntity) {
+    private Optional<Instrumentation.PlayerCobbleputerKey> instrumentationKey(CobbleputerBlockEntity blockEntity) {
         if (!(blockEntity.getLevel() instanceof ServerLevel level)) {
             return Optional.empty();
         }
         return instrumentationKey(blockEntity, level.dimension().identifier());
     }
 
-    private static Optional<Instrumentation.PlayerCobbleputerKey> instrumentationKey(
+    private Optional<Instrumentation.PlayerCobbleputerKey> instrumentationKey(
             CobbleputerBlockEntity blockEntity, Identifier dimension) {
         Optional<UUID> owner = blockEntity.ownerPlayerId();
         if (owner.isEmpty()) {
@@ -1442,7 +1444,7 @@ public final class ExecutionDriver {
         BlockPos pos = blockEntity.getBlockPos();
         return Optional.of(new Instrumentation.PlayerCobbleputerKey(
                 owner.orElseThrow(),
-                ownerName(blockEntity, owner.orElseThrow()),
+                ownerName(owner.orElseThrow()),
                 new Instrumentation.CobbleputerKey(
                         blockEntity.cobbleputerId(), dimension.toString(), pos.getX(), pos.getY(), pos.getZ())));
     }
@@ -1537,11 +1539,8 @@ public final class ExecutionDriver {
         };
     }
 
-    private static String ownerName(CobbleputerBlockEntity blockEntity, UUID ownerId) {
-        return blockEntity
-                .executionOwnerPlayerName()
-                .filter(name -> !name.isEmpty())
-                .orElse(ownerId.toString());
+    private String ownerName(UUID ownerId) {
+        return playerNameStore.nameFor(ownerId).orElse(ownerId.toString());
     }
 
     private static Instrumentation.SyncOutcome syncOutcome(MainWorker.ExecutionSyncResult result, Throwable failure) {

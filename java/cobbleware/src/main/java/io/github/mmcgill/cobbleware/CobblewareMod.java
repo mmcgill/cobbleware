@@ -101,6 +101,7 @@ public final class CobblewareMod implements ModInitializer {
                 executionStateStore,
                 instrumentation,
                 playerPriorityStore,
+                playerNameStore,
                 executionPoolManager,
                 config.maxRunningExecutionsPerPlayer(),
                 config.maxQueuedEventsPerPlayer(),
