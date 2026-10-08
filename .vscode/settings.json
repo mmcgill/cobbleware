@@ -1,4 +1,32 @@
 {
     "java.compile.nullAnalysis.mode": "disabled",
-    "java.configuration.updateBuildConfiguration": "interactive"
+    "java.configuration.updateBuildConfiguration": "interactive",
+    "files.exclude": {
+        "**/worktrees": true
+    },
+    "search.exclude": {
+        "**/worktrees/**": true
+    },
+    "files.watcherExclude": {
+        "**/worktrees/**": true
+    },
+    "java.import.exclusions": [
+        "**/node_modules/**",
+        "**/.metadata/**",
+        "**/archetype-resources/**",
+        "**/META-INF/maven/**",
+        "**/worktrees/**"
+    ],
+    "java.project.resourceFilters": [
+        "node_modules",
+        "\\.git",
+        "worktrees"
+    ],
+    "rust-analyzer.files.exclude": [
+        "worktrees"
+    ],
+    "deno.enablePaths": [
+        "./typescript",
+        "./mc-edge-runtime"
+    ]
 }
