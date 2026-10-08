@@ -3,7 +3,9 @@ package io.github.mmcgill.cobbleware.execution;
 import cobbleware.common.Uuid;
 import cobbleware.internal.PlayerExecutionStates;
 import cobbleware.internal.StoredExecutionState;
+import io.github.mmcgill.cobbleware.block.CobbleputerBlock;
 import io.github.mmcgill.cobbleware.block.CobbleputerBlockEntity;
+import io.github.mmcgill.cobbleware.block.CobbleputerState;
 import java.io.IOException;
 import java.nio.channels.FileChannel;
 import java.nio.file.AtomicMoveNotSupportedException;
@@ -82,6 +84,9 @@ public final class ExecutionStateStore implements AutoCloseable, ExecutionStateA
     public synchronized void attach(CobbleputerBlockEntity blockEntity) {
         requireInitialized();
         if (closing || blockEntity == null) {
+            return;
+        }
+        if (blockEntity.getBlockState().getValue(CobbleputerBlock.STATE) == CobbleputerState.UNINITIALIZED) {
             return;
         }
         Optional<UUID> owner = blockEntity.ownerPlayerId();

@@ -143,6 +143,7 @@ Prints an appropriate error message if no program can be started because:
 
 * there is no Cobbleputer within 3m, or
 * the nearest Cobbleputer is Running, or
+* the nearest Cobbleputer belongs to another Player, or
 * the player has no active program, or
 * the named start state does not exist
 
@@ -157,10 +158,9 @@ Prints an appropriate error message if no program can be started because:
 the closest Stopped or Crashed Cobbleputer within 3m. Resuming a Stopped
 Cobbleputer continues its existing execution; resuming a Crashed Cobbleputer starts a
 fresh execution with its stored state. Selection is identical to
-`/cobbleware start`. Only the Player associated with that execution may use
-either command. Each command prints confirmation on success and an appropriate
-error message when there is no Cobbleputer within 3m, the nearest Cobbleputer is
-not in the required lifecycle state, or its execution belongs to another Player.
+`/cobbleware start`. Only the Cobbleputer's owner may use either command. Each command prints
+confirmation on success and an appropriate error message when there is no Cobbleputer within 3m,
+the nearest Cobbleputer is not in the required lifecycle state, or it belongs to another Player.
 Right-clicking a Cobbleputer does not change its lifecycle state.
 
 ### Cobbleputer Ownership
@@ -169,9 +169,8 @@ Right-clicking a Cobbleputer does not change its lifecycle state.
 /cobbleware owner
 ```
 
-The `owner` command identifies the owner (by player name and UUID) of the closest Cobbleputer within 3m, if
-that 'puter is running/paused/crashed. The command requires permission level 2
-or higher.
+The `owner` command identifies the owner (by player name and UUID) of the closest Cobbleputer within 3m.
+The command requires permission level 2 or higher.
 
 ## Program Execution Design
 
@@ -180,8 +179,13 @@ A placed Cobbleputer block has an associated block entity that stores:
 * Cobbleputer ID: a UUID generated when the block entity is created and durable
   until that block is broken. It identifies the physical Cobbleputer for
   instrumentation and administrative commands, independently of executions.
-* owner player ID: `null` when the block state is `UNINITIALIZED`; otherwise a locator for the Player's
-  external execution-state file. It permits chunk loading to locate the record without scanning every Player file.
+* owner player ID: recorded from the Player who places the block and durable until that block is broken.
+  The ID locates that Player's external execution-state file without scanning every Player file.
+
+Cobbleware stores each Player's last observed profile name once in
+`cobbleware-data/player-names.json`, keyed by UUID. It refreshes the cache while the Player is online and uses it
+for owner display. Cobbleputer block entities deliberately store no player name, so a renamed Player is represented
+consistently across all of their Cobbleputers.
 
 The durable execution record is stored in `cobbleware-data/executions/<player-uuid>.pb` in the world directory,
 one protobuf file per Player. The file carries a Mod-defined format version and the record's execution ID, owner name,
@@ -238,15 +242,23 @@ a fresh UUID.
 
 ### Pairing and Unpairing
 
-A successful use of a paired Cobblemeter on an observer emits a `WirelessObserverPaired` event to
-the meter's target Cobbleputer. Re-pairing an observer from one target to another emits a
-`WirelessObserverUnpaired` event to the old target before emitting `WirelessObserverPaired` to the
-new target. Re-pairing to the same target emits only `WirelessObserverPaired`. Breaking or
-otherwise replacing a paired observer emits `WirelessObserverUnpaired` to its target before its
-block entity is removed; chunk unloading does not emit that event. These lifecycle events are
-best-effort just like block-state changes: the pairing remains durable, while delivery is dropped
-when the target is unloaded, unavailable, or its owner's queued-event allowance is full. Events produced while the
-target is stopped are not enqueued and are not replayed when it resumes.
+Using an unpaired Cobblemeter on an unpaired observer has no effect. Using an unpaired Cobblemeter
+on a paired observer pairs the meter to the observer's target exactly as if the meter had been used
+on that Cobbleputer; it therefore requires the normal Cobbleputer-pairing permission. The target
+must already be loaded: this interaction never loads a chunk just to inspect ownership.
+
+Using a paired Cobblemeter on an unpaired observer pairs that observer with the meter's target and
+emits a `WirelessObserverPaired` event. Any Player may do this. Using it on an observer already
+paired to that same target unpairs the observer, resets its power level to zero, and emits a
+`WirelessObserverUnpaired` event; only the target Cobbleputer's owner or a Player with permission
+level 2 or higher may do so. A paired meter used on an observer paired to a different Cobbleputer
+has no effect.
+
+Breaking or otherwise replacing a paired observer emits `WirelessObserverUnpaired` to its target
+before its block entity is removed; chunk unloading does not emit that event. These lifecycle events
+are best-effort just like block-state changes: the pairing remains durable, while delivery is dropped
+when the target is unloaded, unavailable, or its owner's queued-event allowance is full. Events
+produced while the target is stopped are not enqueued and are not replayed when it resumes.
 
 Breaking a Cobbleputer unpairs all currently loaded observers indexed for its global position.
 That index is held by the Mod, not by a Cobbleputer block entity. An unloaded paired observer is

@@ -24,7 +24,7 @@ class CobblemeterItemTest {
     }
 
     @Test
-    void permitsExecutionOwnersToPairWithActiveCobbleputers() {
+    void permitsCobbleputerOwnersToPairWithActiveCobbleputers() {
         UUID owner = UUID.randomUUID();
 
         for (CobbleputerState state : activeStates()) {
@@ -60,6 +60,24 @@ class CobblemeterItemTest {
             assertFalse(CobblemeterItem.canPairWith(state, null, UUID.randomUUID(), false));
             assertFalse(CobblemeterItem.canPairWith(state, owner, null, false));
         }
+    }
+
+    @Test
+    void permitsOwnersAndGamemastersToUnpairObservers() {
+        UUID owner = UUID.randomUUID();
+        UUID otherPlayer = UUID.randomUUID();
+
+        assertTrue(CobblemeterItem.canUnpairFrom(owner, owner, false));
+        assertTrue(CobblemeterItem.canUnpairFrom(owner, otherPlayer, true));
+    }
+
+    @Test
+    void rejectsNonOwnersFromUnpairingObservers() {
+        UUID owner = UUID.randomUUID();
+
+        assertFalse(CobblemeterItem.canUnpairFrom(owner, UUID.randomUUID(), false));
+        assertFalse(CobblemeterItem.canUnpairFrom(owner, null, false));
+        assertFalse(CobblemeterItem.canUnpairFrom(null, UUID.randomUUID(), false));
     }
 
     private static List<CobbleputerState> activeStates() {

@@ -12,6 +12,7 @@ import io.github.mmcgill.cobbleware.block.CobbleputerBlockEntity;
 import io.github.mmcgill.cobbleware.block.CobbleputerState;
 import io.github.mmcgill.cobbleware.execution.ExecutionDriver;
 import io.github.mmcgill.cobbleware.execution.ExecutionPoolManager;
+import io.github.mmcgill.cobbleware.execution.PlayerNameStore;
 import io.github.mmcgill.cobbleware.execution.PlayerPriorityStore;
 import io.github.mmcgill.cobbleware.execution.PlayerPriorityStore.PriorityTarget;
 import io.github.mmcgill.cobbleware.instrumentation.Instrumentation;
@@ -54,6 +55,7 @@ public final class CobblewareCommands {
             Instrumentation instrumentation,
             ExecutionDriver executionDriver,
             PlayerPriorityStore playerPriorityStore,
+            PlayerNameStore playerNameStore,
             ExecutionPoolManager executionPoolManager) {
         CommandRegistrationCallback.EVENT.register((dispatcher, registryAccess, environment) ->
                 dispatcher.register(Commands.literal("cobbleware")
@@ -113,7 +115,7 @@ public final class CobblewareCommands {
                                         .executes(context -> stats(context, instrumentation))))
                         .then(Commands.literal("owner")
                                 .requires(source -> source.permissions().hasPermission(Permissions.COMMANDS_GAMEMASTER))
-                                .executes(CobblewareCommands::owner))));
+                                .executes(context -> owner(context, playerNameStore)))));
     }
 
     private static int ownPriority(
@@ -450,6 +452,10 @@ public final class CobblewareCommands {
             player.sendSystemMessage(Component.literal("No Cobbleputer is within 3m."));
             return 0;
         }
+        if (!ownsCobbleputer(player, target.orElseThrow().blockEntity())) {
+            player.sendSystemMessage(Component.literal("You can only start your own Cobbleputer."));
+            return 0;
+        }
         if (target.orElseThrow().state().getValue(CobbleputerBlock.STATE) == CobbleputerState.RUNNING) {
             player.sendSystemMessage(Component.literal("The nearest Cobbleputer is already running."));
             return 0;
@@ -472,6 +478,10 @@ public final class CobblewareCommands {
         Optional<CobbleputerTarget> target = findNearestCobbleputer(player);
         if (target.isEmpty()) {
             player.sendSystemMessage(Component.literal("No Cobbleputer is within 3m."));
+            return;
+        }
+        if (!ownsCobbleputer(player, target.orElseThrow().blockEntity())) {
+            player.sendSystemMessage(Component.literal("You can only start your own Cobbleputer."));
             return;
         }
         if (target.orElseThrow().state().getValue(CobbleputerBlock.STATE) == CobbleputerState.RUNNING) {
@@ -499,7 +509,6 @@ public final class CobblewareCommands {
         ExecutionDriver.ExecutionInitResult activation = executionDriver.startExecution(
                 ExecutionDriver.minecraft(serverLevel.getServer()),
                 resolvedTarget.blockEntity(),
-                player.getUUID(),
                 player.getGameProfile().name(),
                 startState.orElseThrow());
         if (activation == ExecutionDriver.ExecutionInitResult.LIMIT_REACHED) {
@@ -558,10 +567,8 @@ public final class CobblewareCommands {
             player.sendSystemMessage(Component.literal("The nearest Cobbleputer is not stopped or crashed."));
             return 0;
         }
-        if (!player.getUUID()
-                .equals(resolvedTarget.blockEntity().ownerPlayerId().orElse(null))) {
-            player.sendSystemMessage(
-                    Component.literal("You can only change the state of your own Cobbleputer execution."));
+        if (!ownsCobbleputer(player, resolvedTarget.blockEntity())) {
+            player.sendSystemMessage(Component.literal("You can only change the state of your own Cobbleputer."));
             return 0;
         }
         if (!(resolvedTarget.level() instanceof ServerLevel serverLevel)) {
@@ -618,10 +625,8 @@ public final class CobblewareCommands {
             player.sendSystemMessage(Component.literal("The nearest Cobbleputer is not " + requiredStateName + "."));
             return 0;
         }
-        if (!player.getUUID()
-                .equals(resolvedTarget.blockEntity().ownerPlayerId().orElse(null))) {
-            player.sendSystemMessage(
-                    Component.literal("You can only change the state of your own Cobbleputer execution."));
+        if (!ownsCobbleputer(player, resolvedTarget.blockEntity())) {
+            player.sendSystemMessage(Component.literal("You can only change the state of your own Cobbleputer."));
             return 0;
         }
         if (!(resolvedTarget.level() instanceof ServerLevel serverLevel)) {
@@ -639,7 +644,7 @@ public final class CobblewareCommands {
         return 1;
     }
 
-    private static int owner(CommandContext<CommandSourceStack> context) {
+    private static int owner(CommandContext<CommandSourceStack> context, PlayerNameStore playerNameStore) {
         CommandSourceStack source = context.getSource();
         ServerPlayer player;
         try {
@@ -655,25 +660,22 @@ public final class CobblewareCommands {
             return 0;
         }
 
-        CobbleputerTarget resolvedTarget = target.orElseThrow();
-        CobbleputerState lifecycleState = resolvedTarget.state().getValue(CobbleputerBlock.STATE);
-        if (lifecycleState != CobbleputerState.RUNNING
-                && lifecycleState != CobbleputerState.STOPPED
-                && lifecycleState != CobbleputerState.CRASHED) {
-            player.sendSystemMessage(Component.literal("The nearest Cobbleputer is not running, paused, or crashed."));
-            return 0;
-        }
-
-        Optional<UUID> ownerId = resolvedTarget.blockEntity().ownerPlayerId();
-        Optional<String> ownerName = resolvedTarget.blockEntity().ownerPlayerName();
-        if (ownerId.isEmpty() || ownerName.isEmpty()) {
+        CobbleputerBlockEntity cobbleputer = target.orElseThrow().blockEntity();
+        Optional<UUID> ownerId = cobbleputer.ownerPlayerId();
+        if (ownerId.isEmpty()) {
             player.sendSystemMessage(Component.literal("The nearest Cobbleputer has no owner."));
             return 0;
         }
 
-        player.sendSystemMessage(Component.literal("The nearest Cobbleputer is owned by " + ownerName.orElseThrow()
-                + " (" + ownerId.orElseThrow() + ")."));
+        UUID owner = ownerId.orElseThrow();
+        String ownerName = playerNameStore.nameFor(owner).orElse(owner.toString());
+        player.sendSystemMessage(
+                Component.literal("The nearest Cobbleputer is owned by " + ownerName + " (" + owner + ")."));
         return 1;
+    }
+
+    private static boolean ownsCobbleputer(ServerPlayer player, CobbleputerBlockEntity cobbleputer) {
+        return player.getUUID().equals(cobbleputer.ownerPlayerId().orElse(null));
     }
 
     private static Optional<CobbleputerTarget> findNearestCobbleputer(ServerPlayer player) {

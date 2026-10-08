@@ -10,6 +10,7 @@ import io.github.mmcgill.cobbleware.config.CobblewareConfigLoader;
 import io.github.mmcgill.cobbleware.execution.ExecutionDriver;
 import io.github.mmcgill.cobbleware.execution.ExecutionPoolManager;
 import io.github.mmcgill.cobbleware.execution.ExecutionStateStore;
+import io.github.mmcgill.cobbleware.execution.PlayerNameStore;
 import io.github.mmcgill.cobbleware.execution.PlayerPriorityStore;
 import io.github.mmcgill.cobbleware.instrumentation.Instrumentation;
 import io.github.mmcgill.cobbleware.polymer.CobblewarePolymer;
@@ -32,6 +33,7 @@ public final class CobblewareMod implements ModInitializer {
     public static final Logger LOGGER = LoggerFactory.getLogger(MOD_ID);
     private static final ExecutionStateStore executionStateStore = new ExecutionStateStore(LOGGER);
     private static final PlayerPriorityStore playerPriorityStore = new PlayerPriorityStore(LOGGER);
+    private static final PlayerNameStore playerNameStore = new PlayerNameStore(LOGGER);
     private static ExecutionDriver executionDriver;
     private static ExecutionPoolManager executionPoolManager;
     private static WirelessObserverNetwork wirelessObserverNetwork;
@@ -57,6 +59,11 @@ public final class CobblewareMod implements ModInitializer {
     /** Returns the server-owned player execution-priority store. */
     public static PlayerPriorityStore playerPriorityStore() {
         return playerPriorityStore;
+    }
+
+    /** Returns the server-owned last-seen player-name cache. */
+    public static PlayerNameStore playerNameStore() {
+        return playerNameStore;
     }
 
     /** Returns the server-owned execution-pool assignment manager after Mod initialization. */
@@ -105,6 +112,7 @@ public final class CobblewareMod implements ModInitializer {
         wirelessObserverNetwork = new WirelessObserverNetwork();
         ServerLifecycleEvents.SERVER_STARTING.register(executionStateStore::initialize);
         ServerLifecycleEvents.SERVER_STARTING.register(playerPriorityStore::initialize);
+        ServerLifecycleEvents.SERVER_STARTING.register(playerNameStore::initialize);
         ServerLifecycleEvents.SERVER_STARTED.register(server -> {
             executionPoolManager.initialize(server.getPlayerList().getMaxPlayers());
             runtimeManager.start(
@@ -113,10 +121,12 @@ public final class CobblewareMod implements ModInitializer {
         ServerLifecycleEvents.BEFORE_SAVE.register((server, flush, force) -> {
             executionStateStore.beforeSave();
             playerPriorityStore.beforeSave();
+            playerNameStore.beforeSave();
         });
         ServerLifecycleEvents.SERVER_STOPPING.register(server -> {
             executionStateStore.close();
             playerPriorityStore.close();
+            playerNameStore.close();
             mainWorkerClient.close();
             runtimeManager.close();
         });
@@ -155,12 +165,21 @@ public final class CobblewareMod implements ModInitializer {
                     }
                 }));
         ServerTickEvents.END_SERVER_TICK.register((server) -> {
+            server.getPlayerList()
+                    .getPlayers()
+                    .forEach(player -> playerNameStore.record(
+                            player.getUUID(), player.getGameProfile().name()));
             instrumentation.advanceTick();
             wirelessObserverNetwork.tick(server);
             executionDriver.refreshExecutionPools(server);
             executionDriver.driveExecutions(ExecutionDriver.minecraft(server));
         });
         CobblewareCommands.register(
-                mainWorkerClient, instrumentation, executionDriver, playerPriorityStore, executionPoolManager);
+                mainWorkerClient,
+                instrumentation,
+                executionDriver,
+                playerPriorityStore,
+                playerNameStore,
+                executionPoolManager);
     }
 }

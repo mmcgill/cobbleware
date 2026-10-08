@@ -3,6 +3,7 @@ package io.github.mmcgill.cobbleware.execution;
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import cobbleware.effects.Effect;
@@ -135,6 +136,26 @@ class ExecutionDriverTest {
         assertEquals(true, ExecutionDriver.countsRejectedEventAsDropped(CobbleputerState.UNINITIALIZED));
         assertEquals(true, ExecutionDriver.countsRejectedEventAsDropped(CobbleputerState.RUNNING));
         assertEquals(true, ExecutionDriver.countsRejectedEventAsDropped(CobbleputerState.CRASHED));
+    }
+
+    @Test
+    void rejectsStartingAnUnownedCobbleputer() {
+        Fixture fixture = new Fixture(32);
+        CobbleputerBlockEntity cobbleputer = fixture.newCobbleputer();
+
+        assertEquals(
+                ExecutionDriver.ExecutionInitResult.INVALID_STATE,
+                fixture.driver.startExecution(fixture.minecraft, cobbleputer, "owner", new byte[] {1}));
+    }
+
+    @Test
+    void doesNotAllowCobbleputerOwnershipToChange() {
+        Fixture fixture = new Fixture(32);
+        CobbleputerBlockEntity cobbleputer = fixture.newCobbleputer();
+
+        cobbleputer.initializeOwner(UUID.randomUUID());
+
+        assertThrows(IllegalStateException.class, () -> cobbleputer.initializeOwner(UUID.randomUUID()));
     }
 
     @Test
@@ -1078,14 +1099,19 @@ class ExecutionDriverTest {
         }
 
         private CobbleputerBlockEntity startNewExecution(UUID owner, byte[] initialState) {
-            CobbleputerBlockEntity cobbleputer = new CobbleputerBlockEntity(
-                    testCobbleputerBlockEntity, new BlockPos(nextPos++, 64, 0), uninitializedState, stateStore);
+            CobbleputerBlockEntity cobbleputer = newCobbleputer();
+            cobbleputer.initializeOwner(owner);
             assertEquals(
                     ExecutionDriver.ExecutionInitResult.SUCCESS,
-                    driver.startExecution(minecraft, cobbleputer, owner, "owner", initialState));
+                    driver.startExecution(minecraft, cobbleputer, "owner", initialState));
             eligiblePlayers.put(owner, new ExecutionPoolManager.EligiblePlayer(owner, "owner", 2, 0));
             executionPoolManager.refresh(eligiblePlayers.values());
             return cobbleputer;
+        }
+
+        private CobbleputerBlockEntity newCobbleputer() {
+            return new CobbleputerBlockEntity(
+                    testCobbleputerBlockEntity, new BlockPos(nextPos++, 64, 0), uninitializedState, stateStore);
         }
 
         private void refreshAndAdvancePools() {

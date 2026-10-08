@@ -23,33 +23,28 @@ They are invoked by the 'puter as a result of Events that happen in the Minecraf
 Effects to be processed by the Mainframe as output.
 
 When a 'puter block is placed, it is _uninitialized_: it has no state and is not executing a program.
-A player can run their active program on a placed 'puter block via the `/cobbleware start <start-state>`
+The placed block's _owner_ is the player that placed it.
+The owning player can run their active program on a placed 'puter block via the `/cobbleware start <start-state>`
 command. An executing 'puter block stores its own runtime state, which persists across
 chunk reloads and server restarts.
 
-When an executing 'puter block is broken, its associated execution is terminated and its
-execution state is destroyed. 'puter block items are from one another.
+When an executing 'puter block is broken, its associated execution is terminated, its
+execution state is destroyed, and its owner is forgotten. 'puter block items are
+indistinguishable from one another.
 
-The Mod does not itself provide any notion of player ownership
-of 'puter blocks. Once a 'puter is placed, any player can interact with it.
-The 'puter _state_, however, remains associated with the player that loaded the
-associated program. Only that player can pause or resume the execution with
+Only the owning player can pause or resume the execution of a Cobbleputer with
 `/cobbleware pause` or `/cobbleware resume`. Those commands select the closest
-'puter within 3m, as `/cobbleware start` does. Loading a new program creates a
-new execution state that is associated with the player doing the loading, even
-if the previous execution state was bound to a different player. Resetting a
-'puter _preserves_ execution ownership.
+'puter within 3m, as `/cobbleware start` does.
 
 ### Execution Model
 
 A Cobbleputer is single-threaded, and executes events sequentially in the order they are produced.
 
 A 'puter is either `UNINITIALIZED`, `RUNNING`, `STOPPED` or `CRASHED`. A newly placed 'puter
-is in the `UNINITIALIZED` state. A User can load a program as described above for a 'puter in any
-state. On successful load, the 'puter state is set to `RUNNING`. Its associated
-player may pause a running 'puter with `/cobbleware pause` and resume a stopped
-or crashed 'puter with `/cobbleware resume`.
-If an unhandled exception bubbles up out of a
+is in the `UNINITIALIZED` state. Its owner can load a program as described above for a 'puter in
+any state. On successful load, the 'puter state is set to `RUNNING`. Its owner may pause a
+running 'puter with `/cobbleware pause` and resume a stopped
+or crashed 'puter with `/cobbleware resume`. If an unhandled exception bubbles up out of a
 Program's event handler function, the 'puter enters the `CRASHED` state. Resuming
 a crashed 'puter starts a new execution using its most recently stored state.
 
@@ -67,9 +62,9 @@ processed or lost.
 
 ### State Durability
 
-The execution id, execution owner, current state, and sequence counters are durable across
+The execution id, owner, current state, and sequence counters are durable across
 server restarts and chunk reloads while the Cobbleputer has not crashed or been broken. When a
-'puter crashes, its old execution id and sequence counters are discarded, but its execution owner
+'puter crashes, its old execution id and sequence counters are discarded, but its owner
 and most recently stored state remain durable so that its owner can restart it. That restart gets a
 fresh execution id and sequence counters.
 
@@ -214,10 +209,31 @@ Wireless Observers emit weak redstone signal out their backs, in the direction o
 
 ## Cobblemeter
 
-A Cobblemeter is an item that can be used by the player to pair Wireless Observers
-and troubleshoot Cobbleputers.
+A Cobblemeter is an item that can be used by the player to pair or unpair Wireless Observers.
+
 A Cobblemeter is initially unpaired.
 A Cobblemeter (whether already paired or not) can be paired with a Cobbleputer by using it on the Cobbleputer.
+
+For running/stopped/crashed cobbleputers, ownership of the Cobbleputer and permission level determine
+who can pair a cobblemeter:
+* users with permission level 2 or greater can pair with any cobbleputer
+* less privileged users can only pair with their own cobbleputers
+
+Using an unpaired Cobblemeter on an unpaired Wireless Observer has no effect.
+
+Using an unpaired Cobblemeter on a paired Wireless Observer behaves as
+if using an unpaired Cobblemeter on the Cobbleputer to which the observer is paired.
+
+Using a paired Cobblemeter on an unpaired Wireless Observer pairs that
+observer with the Cobblemeter's associated Cobbleputer.
+
+Using a paired Cobblemeter on a Wireless Observer paired with the same Cobbleputer
+unpairs the Wireless Observer. Using a paired Cobblemeter on a Wireless Observer
+paired with a different Cobbleputer has no effect.
+
+Any player can use a paired cobblemeter to pair an unpaired Wireless Observer.
+For paired Wireless Observers, however, only the player owning the Cobbleputer
+to which it is paired, or a player with permission level 2 or higher, may unpair.
 
 While holding a paired Cobblemeter the player can "see"
 the wireless transmission paths from the paired 'puter to its paired Wireless Observers.

@@ -337,27 +337,33 @@ public final class ExecutionDriver {
         observer.pairedCobbleputer().ifPresent(target -> deliverObserverUnpaired(minecraft, observer, target));
     }
 
+    /** Delivers the lifecycle event for a user-initiated observer unpair. */
+    public void observerUnpaired(
+            Minecraft minecraft, WirelessObserverBlockEntity observer, net.minecraft.core.GlobalPos formerTarget) {
+        if (minecraft == null || observer == null || formerTarget == null || observer.isRemoved()) {
+            return;
+        }
+        deliverObserverUnpaired(minecraft, observer, formerTarget);
+    }
+
     /** Starts a fresh execution and queues its first lifecycle event when the owner has capacity. */
     public ExecutionInitResult startExecution(
-            Minecraft minecraft,
-            CobbleputerBlockEntity blockEntity,
-            UUID owner,
-            String ownerName,
-            byte[] initialState) {
-        if (minecraft == null || owner == null || ownerName == null || ownerName.isEmpty() || initialState == null) {
+            Minecraft minecraft, CobbleputerBlockEntity blockEntity, String ownerName, byte[] initialState) {
+        if (minecraft == null || blockEntity == null || ownerName == null || initialState == null) {
             throw new IllegalArgumentException(
-                    "execution dependencies, owner, owner name, and initial state must not be null or empty");
+                    "execution dependencies, owner name, and initial state must not be null");
         }
         OptionalLong gameTime = minecraft.gameTime(blockEntity);
-        if (gameTime.isEmpty()) {
+        Optional<UUID> owner = blockEntity.ownerPlayerId();
+        if (gameTime.isEmpty() || owner.isEmpty() || ownerName.isEmpty()) {
             return ExecutionInitResult.INVALID_STATE;
         }
         activate(blockEntity);
-        if (!hasRunningExecutionCapacity(owner)) {
+        if (!hasRunningExecutionCapacity(owner.orElseThrow())) {
             return ExecutionInitResult.LIMIT_REACHED;
         }
         discardPendingEvents(blockEntity, loadedCobbleputers.get(blockEntity));
-        blockEntity.startExecution(owner, ownerName, initialState);
+        blockEntity.startExecution(ownerName, initialState);
         if (minecraft.setCobbleputerState(blockEntity, CobbleputerState.RUNNING)) {
             enqueueEvent(
                     blockEntity,
@@ -1532,7 +1538,10 @@ public final class ExecutionDriver {
     }
 
     private static String ownerName(CobbleputerBlockEntity blockEntity, UUID ownerId) {
-        return blockEntity.ownerPlayerName().filter(name -> !name.isEmpty()).orElse(ownerId.toString());
+        return blockEntity
+                .executionOwnerPlayerName()
+                .filter(name -> !name.isEmpty())
+                .orElse(ownerId.toString());
     }
 
     private static Instrumentation.SyncOutcome syncOutcome(MainWorker.ExecutionSyncResult result, Throwable failure) {

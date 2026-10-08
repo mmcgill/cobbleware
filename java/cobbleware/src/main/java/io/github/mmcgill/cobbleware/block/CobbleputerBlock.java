@@ -5,6 +5,9 @@ import io.github.mmcgill.cobbleware.CobblewareMod;
 import io.github.mmcgill.cobbleware.execution.ExecutionStateAccess;
 import net.fabricmc.fabric.api.networking.v1.context.PacketContext;
 import net.minecraft.core.BlockPos;
+import net.minecraft.server.level.ServerPlayer;
+import net.minecraft.world.entity.LivingEntity;
+import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.EntityBlock;
@@ -31,6 +34,18 @@ public final class CobbleputerBlock extends Block implements EntityBlock, Polyme
     @Override
     public BlockEntity newBlockEntity(BlockPos pos, BlockState state) {
         return new CobbleputerBlockEntity(pos, state, executionStateStore);
+    }
+
+    @Override
+    public void setPlacedBy(Level level, BlockPos pos, BlockState state, LivingEntity placer, ItemStack stack) {
+        super.setPlacedBy(level, pos, state, placer, stack);
+        if (!level.isClientSide()
+                && placer instanceof ServerPlayer player
+                && level.getBlockEntity(pos) instanceof CobbleputerBlockEntity cobbleputer) {
+            CobblewareMod.playerNameStore()
+                    .record(player.getUUID(), player.getGameProfile().name());
+            cobbleputer.initializeOwner(player.getUUID());
+        }
     }
 
     /** Updates and logs a Cobbleputer lifecycle transition. */
