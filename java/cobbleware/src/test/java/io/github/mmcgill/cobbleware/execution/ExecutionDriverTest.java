@@ -569,6 +569,102 @@ class ExecutionDriverTest {
     }
 
     @Test
+    void queuesResumedAheadOfPendingEventsWhenAStoppedExecutionReturnsToTheScheduler() {
+        Fixture fixture = new Fixture(32);
+        CobbleputerBlockEntity cobbleputer = fixture.startNewExecution(new byte[] {1});
+        fixture.driver.stop(fixture.minecraft, cobbleputer);
+        assertEquals(
+                ExecutionDriver.ExecutionInitResult.SUCCESS, fixture.driver.resume(fixture.minecraft, cobbleputer));
+        fixture.worker.enqueueSyncResult();
+
+        fixture.serverTick();
+
+        ExecutionState offered = execution(fixture.worker.syncRequests.getFirst(), 0);
+        assertEquals(2, offered.getEventsCount());
+        assertEquals(Event.EventCase.RESUMED, offered.getEvents(0).getEventCase());
+        assertEquals(100, offered.getEvents(0).getResumed().getStopTick());
+        assertEquals(101, offered.getEvents(0).getResumed().getResumeTick());
+        assertEquals(Event.EventCase.STARTED, offered.getEvents(1).getEventCase());
+        assertEquals(1, offered.getEventSeqNum());
+    }
+
+    @Test
+    void resumesDespiteAFullQueueByEvictingTheOldestPendingEvent() {
+        Fixture fixture = new Fixture(32, 1);
+        CobbleputerBlockEntity cobbleputer = fixture.startNewExecution(new byte[] {1});
+        fixture.driver.stop(fixture.minecraft, cobbleputer);
+        assertEquals(
+                ExecutionDriver.ExecutionInitResult.SUCCESS, fixture.driver.resume(fixture.minecraft, cobbleputer));
+        fixture.worker.enqueueSyncResult();
+
+        fixture.serverTick();
+
+        ExecutionState offered = execution(fixture.worker.syncRequests.getFirst(), 0);
+        assertEquals(1, offered.getEventsCount());
+        assertEquals(Event.EventCase.RESUMED, offered.getEvents(0).getEventCase());
+        assertEquals(2, offered.getEventSeqNum());
+    }
+
+    @Test
+    void restartingACrashedExecutionBeginsWithResumed() {
+        Fixture fixture = new Fixture(32);
+        CobbleputerBlockEntity cobbleputer = fixture.startNewExecution(new byte[] {1});
+        fixture.minecraft.setCobbleputerState(cobbleputer, CobbleputerState.CRASHED);
+        cobbleputer.crashExecution(fixture.minecraft.gameTime(cobbleputer).orElseThrow());
+        assertEquals(
+                ExecutionDriver.ExecutionInitResult.SUCCESS,
+                fixture.driver.restartCrashedExecution(fixture.minecraft, cobbleputer));
+        fixture.worker.enqueueSyncResult();
+
+        fixture.serverTick();
+
+        ExecutionState offered = execution(fixture.worker.syncRequests.getFirst(), 0);
+        assertEquals(1, offered.getEventsCount());
+        assertEquals(Event.EventCase.RESUMED, offered.getEvents(0).getEventCase());
+        assertEquals(100, offered.getEvents(0).getResumed().getStopTick());
+        assertEquals(101, offered.getEvents(0).getResumed().getResumeTick());
+        assertEquals(
+                List.of(
+                        ExecutionTransition.EXECUTION_TRANSITION_STARTED,
+                        ExecutionTransition.EXECUTION_TRANSITION_RESUMED),
+                fixture.worker.transitions);
+    }
+
+    @Test
+    void queuesResumedWhenAWaitingPlayerReentersAnExecutionPool() {
+        Fixture fixture = new Fixture(32, 200, 1);
+        UUID owner = UUID.randomUUID();
+        fixture.startNewExecution(owner, new byte[] {1});
+        CompletableFuture<MainWorker.ExecutionSyncResult> first = fixture.worker.enqueueSyncResult();
+        CompletableFuture<MainWorker.ExecutionSyncResult> empty = fixture.worker.enqueueSyncResult();
+        fixture.worker.enqueueSyncResult();
+
+        fixture.serverTick();
+        ExecutionState initial = execution(fixture.worker.syncRequests.getFirst(), 0);
+        first.complete(MainWorker.ExecutionSyncResult.success(ExecutionsResponse.newBuilder()
+                .addResults(resultFor(initial, 1, new byte[] {2}))
+                .build()));
+        fixture.eligiblePlayers.clear();
+        fixture.driver.refreshExecutionPools(fixture.eligiblePlayers.values());
+
+        fixture.serverTick();
+        assertEquals(0, executionCount(fixture.worker.syncRequests.get(1)));
+
+        fixture.eligiblePlayers.put(owner, new ExecutionPoolManager.EligiblePlayer(owner, "owner", 2, 0));
+        fixture.driver.refreshExecutionPools(fixture.eligiblePlayers.values());
+        fixture.serverTick();
+        empty.complete(MainWorker.ExecutionSyncResult.success(ExecutionsResponse.getDefaultInstance()));
+
+        fixture.serverTick();
+
+        ExecutionState resumed = execution(fixture.worker.syncRequests.get(2), 0);
+        assertEquals(1, resumed.getEventsCount());
+        assertEquals(Event.EventCase.RESUMED, resumed.getEvents(0).getEventCase());
+        assertEquals(102, resumed.getEvents(0).getResumed().getStopTick());
+        assertEquals(104, resumed.getEvents(0).getResumed().getResumeTick());
+    }
+
+    @Test
     void discardsTheEntireResponseWhenItDoesNotCoverEveryOfferedExecution() {
         Fixture fixture = new Fixture(32);
         CobbleputerBlockEntity firstCobbleputer = fixture.startNewExecution(new byte[] {1});

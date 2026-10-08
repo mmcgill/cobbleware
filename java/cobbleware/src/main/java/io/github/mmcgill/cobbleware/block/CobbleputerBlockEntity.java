@@ -168,7 +168,12 @@ public final class CobbleputerBlockEntity extends BlockEntity {
         if (!hasRecoverableCrashedExecution()) {
             throw new IllegalStateException("Cobbleputer has no recoverable crashed execution");
         }
+        Long crashTick = stoppedAtTick;
         startExecution(ownerPlayerId, ownerPlayerName, executionState);
+        stoppedAtTick = crashTick;
+        if (crashTick != null) {
+            persistExecutionState(null);
+        }
     }
 
     /** Replaces the durable execution state received from the Runtime. */
@@ -196,6 +201,11 @@ public final class CobbleputerBlockEntity extends BlockEntity {
         }
         stoppedAtTick = tick;
         persistExecutionState(null);
+    }
+
+    /** Returns the durable tick at which this execution last became inactive. */
+    public Optional<Long> stoppedAtTick() {
+        return Optional.ofNullable(stoppedAtTick);
     }
 
     /** Returns and clears the durable stop tick after a resume event has been enqueued. */
@@ -233,11 +243,14 @@ public final class CobbleputerBlockEntity extends BlockEntity {
     }
 
     /** Retires a crashed execution while retaining its owner and last successfully stored state. */
-    public void crashExecution() {
+    public void crashExecution(long tick) {
+        if (!hasExecution() || tick < 0) {
+            throw new IllegalArgumentException("crash tick requires a complete execution record");
+        }
         executionId = null;
         nextEventSequenceNum = 1;
         effectSequenceNum = 0;
-        stoppedAtTick = null;
+        stoppedAtTick = tick;
         wasRunningWhenUnloaded = false;
         persistExecutionState(null);
     }
@@ -274,7 +287,7 @@ public final class CobbleputerBlockEntity extends BlockEntity {
                 && isRecoverableCrashedExecution(executionId, ownerPlayerId, ownerPlayerName, executionState)
                 && nextEventSequenceNum >= 1
                 && effectSequenceNum >= 0
-                && stoppedAtTick == null;
+                && (stoppedAtTick == null || stoppedAtTick >= 0);
         boolean validActiveRecord = executionId != null
                 && ownerPlayerId != null
                 && executionState != null
@@ -318,7 +331,7 @@ public final class CobbleputerBlockEntity extends BlockEntity {
                         record.executionId(), ownerPlayerId, record.ownerPlayerName(), record.executionState())
                 && record.nextEventSequenceNum() >= 1
                 && record.effectSequenceNum() >= 0
-                && record.stoppedAtTick() == null;
+                && (record.stoppedAtTick() == null || record.stoppedAtTick() >= 0);
         boolean validActiveRecord = getBlockState().getValue(CobbleputerBlock.STATE) != CobbleputerState.CRASHED
                 && record.executionId() != null
                 && record.executionState() != null

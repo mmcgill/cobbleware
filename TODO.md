@@ -5,7 +5,6 @@ or comprehensive task tracking.
 
 * [ ] GHA
 * [ ] Distance limits on wireless observer pairing
-* [ ] wireless observers forward chat events
 * [ ] Rewrite conway
 * [ ] Release process for cobbleware TS lib
 * [ ] Versioning for Mod

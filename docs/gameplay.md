@@ -48,8 +48,8 @@ A 'puter is either `UNINITIALIZED`, `RUNNING`, `STOPPED` or `CRASHED`. A newly p
 is in the `UNINITIALIZED` state. A User can load a program as described above for a 'puter in any
 state. On successful load, the 'puter state is set to `RUNNING`. Its associated
 player may pause a running 'puter with `/cobbleware pause` and resume a stopped
-or crashed 'puter with `/cobbleware resume`; right-clicking the block does not
-change its lifecycle state. If an unhandled exception bubbles up out of a
+or crashed 'puter with `/cobbleware resume`.
+If an unhandled exception bubbles up out of a
 Program's event handler function, the 'puter enters the `CRASHED` state. Resuming
 a crashed 'puter starts a new execution using its most recently stored state.
 
@@ -221,3 +221,48 @@ A Cobblemeter (whether already paired or not) can be paired with a Cobbleputer b
 
 While holding a paired Cobblemeter the player can "see"
 the wireless transmission paths from the paired 'puter to its paired Wireless Observers.
+
+## Events
+
+Cobbleputer programs are fundamentally event-driven state machines.
+The sub-sections below describe the types of events that can be delivered
+to running Cobbleputers.
+
+Events are only enqueued for _running_ Cobbleputers (i.e. Cobbleputers
+in the `RUNNING` state, which are Cobbleputers with associated executions).
+
+### Chat Message
+
+When a chat message is sent by a player within 16 units of the Cobbleputer or a paired Wireless Observer,
+a `ChatMessage` event is queued for the associated Cobbleputer. At most one event per Cobbleputer
+is queued per chat message; in other words, multiple observers paired to the same 'puter
+and in range of the chat message do not produce separate events.
+
+### Block State Changes
+
+When the [block state](https://minecraft.wiki/w/Block_states)
+of the block directly observed by a paired Wireless Observer changes,
+a `BlockStateChange` event is queued for the associated Cobbleputer.
+The event identifies and locates the triggering observer and the changed block,
+and provides both the old and new block types and states.
+
+### Cobbleputer Lifecycle Events
+
+When an execution is started, it receives a `Started` event with the game tick
+on which it was started.
+
+For various reasons, an execution may become _inactive_, which means the execution
+state is preserved but events are not being dispatched. Reasons include:
+
+* The owning player explicitly stopped the execution.
+* The chunk containing the host Cobbleputer was unloaded.
+* The execution crashed.
+* There are insufficient server resources available for the execution to make progress.
+
+When an inactive execution becomes active again it receives a `Resumed` message
+delivering the game ticks on which the execution became inactive and then active again.
+
+### Wireless Observer Pairing
+
+When a Wireless Observer is paired to or unpaired from a Cobbleputer with a running
+execution, the execution receives a `WirelessObserverPaired` or `WirelessObserverUnpaired` event.

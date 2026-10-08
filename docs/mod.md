@@ -208,11 +208,13 @@ the Cobbleputer. That restart creates a fresh execution ID and resets its sequen
 Events and Effects, on the other hand, are ephemeral and best-effort. There is no guarantee that every
 event will be processed, and there is no guarantee that every effect will be applied.
 
-The currently emitted lifecycle events are `Started` after `/cobbleware start` or after a crashed Cobbleputer
-is restarted with `/cobbleware resume`, and `Resumed` after its owner resumes a stopped Cobbleputer or a
-Cobbleputer in a newly block-ticking chunk is successfully admitted back to running. The driver retains at most the configured
-number of pending events across a player's active Cobbleputers and offers each active Cobbleputer's full pending queue to the Runtime in each
-execution-sync request. Currently `EmitBeep` sends nearby players a
+The currently emitted lifecycle events are `Started` after `/cobbleware start`, and `Resumed` when an execution
+that was not driven during the preceding scheduler tick is driven again. This includes an owner resuming a stopped
+Cobbleputer, a crashed Cobbleputer restarting from its retained state, a Cobbleputer in a newly block-ticking chunk
+being admitted back to running, and a Player re-entering an execution pool. `Resumed` is placed ahead of ordinary
+pending work. If the owning Player's shared pending-event allowance is full, the oldest pending event for that Player
+is dropped to make room. The driver retains at most the configured number of pending events across a player's active
+Cobbleputers and offers each active Cobbleputer's full pending queue to the Runtime in each execution-sync request. Currently `EmitBeep` sends nearby players a
 `beep` system-chat message and `SendChat` sends its message to those same nearby players; neither effect
 has audio or durable delivery semantics yet.
 

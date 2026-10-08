@@ -108,6 +108,28 @@ public final class WirelessObserverNetwork {
         return changed;
     }
 
+    /** Returns whether a loaded observer paired to {@code target} is within range in {@code level}. */
+    public boolean hasPairedObserverNear(GlobalPos target, Level level, Vec3 position, double rangeSquared) {
+        if (target == null || level == null || position == null || rangeSquared < 0) {
+            throw new IllegalArgumentException("target, level, position, and non-negative range must be provided");
+        }
+        Set<WirelessObserverBlockEntity> indexedObservers = observersByTarget.get(target);
+        if (indexedObservers == null) {
+            return false;
+        }
+        for (WirelessObserverBlockEntity observer : List.copyOf(indexedObservers)) {
+            if (observer.isRemoved()
+                    || observer.getLevel() != level
+                    || !observer.pairedCobbleputer().filter(target::equals).isPresent()) {
+                continue;
+            }
+            if (position.distanceToSqr(Vec3.atCenterOf(observer.getBlockPos())) <= rangeSquared) {
+                return true;
+            }
+        }
+        return false;
+    }
+
     static boolean matchesRedstonePowerTarget(
             UUID observerId, DyeColor observerColor, Optional<UUID> targetObserverId, Optional<DyeColor> targetColor) {
         return targetObserverId.map(observerId::equals).orElse(true)

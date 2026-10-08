@@ -641,7 +641,7 @@ public final class ExecutionStateStore implements AutoCloseable, ExecutionStateA
                     && executionState != null
                     && nextEventSequenceNum >= 1
                     && effectSequenceNum >= 0
-                    && stoppedAtTick == null;
+                    && (stoppedAtTick == null || stoppedAtTick >= 0);
             boolean validActive = executionId != null
                     && executionState != null
                     && nextEventSequenceNum >= 1

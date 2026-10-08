@@ -25,6 +25,7 @@ import io.github.mmcgill.cobbleware.block.CobbleputerBlockEntity;
 import io.github.mmcgill.cobbleware.block.CobbleputerState;
 import io.github.mmcgill.cobbleware.block.WirelessObserverBlock;
 import io.github.mmcgill.cobbleware.block.WirelessObserverBlockEntity;
+import io.github.mmcgill.cobbleware.block.WirelessObserverNetwork;
 import io.github.mmcgill.cobbleware.instrumentation.ExecutionStatsReporter;
 import io.github.mmcgill.cobbleware.instrumentation.Instrumentation;
 import java.util.ArrayDeque;
@@ -33,6 +34,7 @@ import java.util.Collection;
 import java.util.Collections;
 import java.util.Comparator;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.IdentityHashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -151,6 +153,10 @@ public final class ExecutionDriver {
     private final Logger logger;
     private final Map<CobbleputerBlockEntity, EphemeralCobbleputerState> loadedCobbleputers = new IdentityHashMap<>();
     private final Map<UUID, Integer> queuedEventsByOwner = new HashMap<>();
+    private final Set<UUID> drivenExecutionIds = new HashSet<>();
+    private final Set<UUID> initialExecutionIds = new HashSet<>();
+    private final Set<UUID> pendingResumedExecutionIds = new HashSet<>();
+    private final Map<UUID, Long> inactiveSinceByExecutionId = new HashMap<>();
     private Map<UUID, ExecutionPoolTransition> publishedPoolTransitions = Map.of();
     private final Set<WirelessObserverBlockEntity> pendingObserverInitializations =
             Collections.newSetFromMap(new IdentityHashMap<>());
@@ -165,6 +171,7 @@ public final class ExecutionDriver {
     private CompletableFuture<MainWorker.ExecutionSyncResult> inFlight;
     private Flight flight;
     private boolean runtimeMayHaveExecutions;
+    private long nextQueuedEventOrder;
 
     public ExecutionDriver(
             MainWorker mainWorker,
@@ -357,6 +364,7 @@ public final class ExecutionDriver {
                     Event.newBuilder()
                             .setStarted(Started.newBuilder().setTick(gameTime.getAsLong()))
                             .build());
+            initialExecutionIds.add(blockEntity.executionId().orElseThrow());
             reportExecutionTransition(blockEntity, ExecutionTransition.EXECUTION_TRANSITION_STARTED);
             return ExecutionInitResult.SUCCESS;
         }
@@ -378,7 +386,7 @@ public final class ExecutionDriver {
         }
     }
 
-    /** Resumes a stopped execution and queues its resume lifecycle event when the owner has capacity. */
+    /** Resumes a stopped execution when the owner has capacity. */
     public ExecutionInitResult resume(Minecraft minecraft, CobbleputerBlockEntity blockEntity) {
         if (minecraft == null
                 || !blockEntity.hasExecution()
@@ -389,7 +397,7 @@ public final class ExecutionDriver {
         if (!hasRunningExecutionCapacity(blockEntity.ownerPlayerId().orElseThrow())) {
             return ExecutionInitResult.LIMIT_REACHED;
         }
-        return transitionToRunningAndQueueResumed(minecraft, blockEntity);
+        return transitionToRunning(minecraft, blockEntity);
     }
 
     /** Restarts a crashed execution with its retained state when the owner has capacity. */
@@ -409,14 +417,8 @@ public final class ExecutionDriver {
         discardPendingEvents(blockEntity, active);
         blockEntity.restartCrashedExecution();
         if (minecraft.setCobbleputerState(blockEntity, CobbleputerState.RUNNING)) {
-            enqueueEvent(
-                    blockEntity,
-                    Event.newBuilder()
-                            .setStarted(Started.newBuilder()
-                                    .setTick(minecraft.gameTime(blockEntity).orElseThrow())
-                                    .build())
-                            .build());
-            reportExecutionTransition(blockEntity, ExecutionTransition.EXECUTION_TRANSITION_STARTED);
+            pendingResumedExecutionIds.add(blockEntity.executionId().orElseThrow());
+            reportExecutionTransition(blockEntity, ExecutionTransition.EXECUTION_TRANSITION_RESUMED);
             return ExecutionInitResult.SUCCESS;
         }
         return ExecutionInitResult.INVALID_STATE;
@@ -447,7 +449,10 @@ public final class ExecutionDriver {
             return;
         }
         try {
-            appendPendingEvent(ephemeralState, owner, new QueuedEvent(blockEntity.claimNextEventSequenceNum(), event));
+            appendPendingEvent(
+                    ephemeralState,
+                    owner,
+                    new QueuedEvent(blockEntity.claimNextEventSequenceNum(), event, nextQueuedEventOrder++));
             recordEvent(blockEntity, event, true);
         } catch (RuntimeException exception) {
             logger.error(
@@ -458,15 +463,25 @@ public final class ExecutionDriver {
         }
     }
 
-    /** Delivers raw player chat to every eligible active Cobbleputer in the sender's level and range. */
+    /** Delivers raw player chat to every eligible active Cobbleputer in range of its host or a paired observer. */
     public void dispatchChatMessage(ServerPlayer sender, String message) {
         Event event = Event.newBuilder()
                 .setChatMessage(ChatMessage.newBuilder().setMessage(message))
                 .build();
         Level senderLevel = sender.level();
+        Vec3 senderPosition = sender.position();
+        WirelessObserverNetwork observerNetwork = CobblewareMod.wirelessObserverNetworkOrNull();
         for (CobbleputerBlockEntity blockEntity : loadedCobbleputers.keySet()) {
-            if (blockEntity.getLevel() != senderLevel
-                    || sender.distanceToSqr(Vec3.atCenterOf(blockEntity.getBlockPos())) > CHAT_RADIUS_SQUARED) {
+            boolean nearCobbleputer = blockEntity.getLevel() == senderLevel
+                    && senderPosition.distanceToSqr(Vec3.atCenterOf(blockEntity.getBlockPos())) <= CHAT_RADIUS_SQUARED;
+            boolean nearObserver = observerNetwork != null
+                    && blockEntity.getLevel() instanceof ServerLevel serverLevel
+                    && observerNetwork.hasPairedObserverNear(
+                            net.minecraft.core.GlobalPos.of(serverLevel.dimension(), blockEntity.getBlockPos()),
+                            senderLevel,
+                            senderPosition,
+                            CHAT_RADIUS_SQUARED);
+            if (!nearCobbleputer && !nearObserver) {
                 continue;
             }
             enqueueEvent(blockEntity, event);
@@ -503,11 +518,13 @@ public final class ExecutionDriver {
             }
             flight = null;
         }
+        refreshDrivenExecutions(minecraft);
         // We drain observer changes after processing a previous sync response specifically to ensure
         // that applied effects that produced block state change events go into the next sync request,
         // minimizing end-to-end latency.
         drainObserverChanges(minecraft);
         if (!syncStillPending) {
+            enqueueReadyResumedEvents(minecraft);
             Flight nextFlight = buildFlight(minecraft);
             if (nextFlight.hadExecutions() || runtimeMayHaveExecutions) {
                 if (nextFlight.hadExecutions()) {
@@ -607,11 +624,10 @@ public final class ExecutionDriver {
         if (state != CobbleputerState.STOPPED && state != CobbleputerState.RUNNING) {
             return ExecutionInitResult.INVALID_STATE;
         }
-        return transitionToRunningAndQueueResumed(minecraft, blockEntity);
+        return transitionToRunning(minecraft, blockEntity);
     }
 
-    private ExecutionInitResult transitionToRunningAndQueueResumed(
-            Minecraft minecraft, CobbleputerBlockEntity blockEntity) {
+    private ExecutionInitResult transitionToRunning(Minecraft minecraft, CobbleputerBlockEntity blockEntity) {
         OptionalLong gameTime = minecraft.gameTime(blockEntity);
         if (gameTime.isEmpty()) {
             return ExecutionInitResult.INVALID_STATE;
@@ -624,14 +640,8 @@ public final class ExecutionDriver {
         } else if (lifecycleState != CobbleputerState.RUNNING) {
             return ExecutionInitResult.INVALID_STATE;
         }
-        long resumeTick = gameTime.getAsLong();
         blockEntity.takeChunkUnloadResumeIntent();
-        long stopTick = blockEntity.takeStoppedAtTick().orElse(resumeTick);
-        enqueueEvent(
-                blockEntity,
-                Event.newBuilder()
-                        .setResumed(Resumed.newBuilder().setStopTick(stopTick).setResumeTick(resumeTick))
-                        .build());
+        pendingResumedExecutionIds.add(blockEntity.executionId().orElseThrow());
         reportExecutionTransition(blockEntity, ExecutionTransition.EXECUTION_TRANSITION_RESUMED);
         return ExecutionInitResult.SUCCESS;
     }
@@ -684,6 +694,74 @@ public final class ExecutionDriver {
         return count;
     }
 
+    /** Tracks scheduler selection independently from the asynchronous Runtime request currently in flight. */
+    private void refreshDrivenExecutions(Minecraft minecraft) {
+        Map<UUID, CobbleputerBlockEntity> selected = selectedExecutions(minecraft);
+        long tick = minecraft.serverGameTime();
+        for (UUID executionId : drivenExecutionIds) {
+            if (!selected.containsKey(executionId)) {
+                inactiveSinceByExecutionId.putIfAbsent(executionId, tick);
+            }
+        }
+        for (UUID executionId : selected.keySet()) {
+            if (initialExecutionIds.remove(executionId)) {
+                continue;
+            }
+            if (!drivenExecutionIds.contains(executionId)) {
+                pendingResumedExecutionIds.add(executionId);
+            }
+        }
+        drivenExecutionIds.clear();
+        drivenExecutionIds.addAll(selected.keySet());
+    }
+
+    /** Adds guaranteed resume events only when no older flight can acknowledge the reordered queue. */
+    private void enqueueReadyResumedEvents(Minecraft minecraft) {
+        if (pendingResumedExecutionIds.isEmpty()) {
+            return;
+        }
+        Map<UUID, CobbleputerBlockEntity> selected = selectedExecutions(minecraft);
+        List<UUID> pending = List.copyOf(pendingResumedExecutionIds);
+        for (UUID executionId : pending) {
+            CobbleputerBlockEntity blockEntity = selected.get(executionId);
+            if (blockEntity == null) {
+                continue;
+            }
+            long resumeTick = minecraft.gameTime(blockEntity).orElse(minecraft.serverGameTime());
+            long stopTick = blockEntity
+                    .stoppedAtTick()
+                    .orElse(inactiveSinceByExecutionId.getOrDefault(executionId, resumeTick));
+            Event event = Event.newBuilder()
+                    .setResumed(Resumed.newBuilder().setStopTick(stopTick).setResumeTick(resumeTick))
+                    .build();
+            if (enqueueResumedEvent(blockEntity, event)) {
+                blockEntity.takeStoppedAtTick();
+                inactiveSinceByExecutionId.remove(executionId);
+                pendingResumedExecutionIds.remove(executionId);
+            }
+        }
+    }
+
+    /** Returns executions currently selected by the pool scheduler and safe to include in a sync request. */
+    private Map<UUID, CobbleputerBlockEntity> selectedExecutions(Minecraft minecraft) {
+        Map<UUID, CobbleputerBlockEntity> selected = new HashMap<>();
+        for (CobbleputerBlockEntity blockEntity : loadedCobbleputers.keySet()) {
+            if (!isRunningExecution(blockEntity)
+                    || minecraft.gameTime(blockEntity).isEmpty()) {
+                continue;
+            }
+            UUID owner = blockEntity.ownerPlayerId().orElseThrow();
+            if (executionPoolManager.poolFor(owner).isEmpty()) {
+                continue;
+            }
+            UUID executionId = blockEntity.executionId().orElseThrow();
+            if (selected.put(executionId, blockEntity) != null) {
+                throw new IllegalStateException("duplicate selected Cobbleputer execution " + executionId);
+            }
+        }
+        return selected;
+    }
+
     private int queuedEventCount(UUID owner) {
         return queuedEventsByOwner.getOrDefault(owner, 0);
     }
@@ -695,6 +773,71 @@ public final class ExecutionDriver {
         state.events.addLast(event);
         state.eventOwner = owner;
         incrementQueuedEventCount(owner);
+    }
+
+    /**
+     * Inserts the guaranteed lifecycle event ahead of ordinary work while preserving the Runtime's contiguous sequence
+     * protocol. This is called only after any prior flight has completed.
+     */
+    private boolean enqueueResumedEvent(CobbleputerBlockEntity blockEntity, Event event) {
+        EphemeralCobbleputerState state = loadedCobbleputers.get(blockEntity);
+        if (state == null
+                || !blockEntity.hasExecution()
+                || blockEntity.getBlockState().getValue(CobbleputerBlock.STATE) != CobbleputerState.RUNNING) {
+            return false;
+        }
+        UUID owner = blockEntity.ownerPlayerId().orElseThrow();
+        if (queuedEventCount(owner) >= maxQueuedEventsPerPlayer && !evictOldestPendingEvent(owner)) {
+            throw new IllegalStateException("queued-event count has no matching pending event for player " + owner);
+        }
+        if (state.events.isEmpty()) {
+            state.events.addFirst(
+                    new QueuedEvent(blockEntity.claimNextEventSequenceNum(), event, nextQueuedEventOrder++));
+            state.eventOwner = owner;
+            incrementQueuedEventCount(owner);
+        } else {
+            List<QueuedEvent> retained = List.copyOf(state.events);
+            long resumeSequence = retained.getFirst().sequenceNum;
+            long nextSequence = blockEntity.claimNextEventSequenceNum();
+            if (nextSequence != resumeSequence + retained.size()) {
+                throw new IllegalStateException("pending event sequences are not contiguous");
+            }
+            state.events.clear();
+            state.events.addLast(new QueuedEvent(resumeSequence, event, nextQueuedEventOrder++));
+            for (int index = 0; index < retained.size(); index += 1) {
+                QueuedEvent queued = retained.get(index);
+                state.events.addLast(new QueuedEvent(resumeSequence + index + 1, queued.event, queued.queueOrder));
+            }
+            incrementQueuedEventCount(owner);
+        }
+        recordEvent(blockEntity, event, true);
+        return true;
+    }
+
+    /** Drops the earliest ordinary pending event for one owner to reserve its bounded allowance for a resume. */
+    private boolean evictOldestPendingEvent(UUID owner) {
+        CobbleputerBlockEntity oldestBlockEntity = null;
+        EphemeralCobbleputerState oldestState = null;
+        QueuedEvent oldestEvent = null;
+        for (Map.Entry<CobbleputerBlockEntity, EphemeralCobbleputerState> entry : loadedCobbleputers.entrySet()) {
+            EphemeralCobbleputerState state = entry.getValue();
+            if (!owner.equals(state.eventOwner) || state.events.isEmpty()) {
+                continue;
+            }
+            QueuedEvent candidate = state.events.getFirst();
+            if (oldestEvent == null || candidate.queueOrder < oldestEvent.queueOrder) {
+                oldestBlockEntity = entry.getKey();
+                oldestState = state;
+                oldestEvent = candidate;
+            }
+        }
+        if (oldestEvent == null) {
+            return false;
+        }
+        oldestState.events.removeFirst();
+        removeQueuedEvents(oldestBlockEntity, oldestState, 1);
+        recordEvent(oldestBlockEntity, oldestEvent.event, false);
+        return true;
     }
 
     private void removeConsumedEvents(
@@ -1036,7 +1179,9 @@ public final class ExecutionDriver {
                 mainWorker.reportLimitExceeded(owner, executionId, "ProgramStepResponseSize");
             }
             updateVisibleState(minecraft, offered.blockEntity, CobbleputerState.CRASHED);
-            offered.blockEntity.crashExecution();
+            retireExecution(offered.blockEntity.executionId().orElseThrow());
+            offered.blockEntity.crashExecution(
+                    minecraft.gameTime(offered.blockEntity).orElse(minecraft.serverGameTime()));
             reportExecutionTransition(owner, executionId, ExecutionTransition.EXECUTION_TRANSITION_CRASHED);
             return;
         }
@@ -1047,7 +1192,9 @@ public final class ExecutionDriver {
             discardPendingEvents(offered.blockEntity, active);
             mainWorker.reportLimitExceeded(owner, executionId, "TotalExecutionStateSize");
             updateVisibleState(minecraft, offered.blockEntity, CobbleputerState.CRASHED);
-            offered.blockEntity.crashExecution();
+            retireExecution(offered.blockEntity.executionId().orElseThrow());
+            offered.blockEntity.crashExecution(
+                    minecraft.gameTime(offered.blockEntity).orElse(minecraft.serverGameTime()));
             reportExecutionTransition(owner, executionId, ExecutionTransition.EXECUTION_TRANSITION_CRASHED);
             return;
         }
@@ -1400,7 +1547,14 @@ public final class ExecutionDriver {
         };
     }
 
-    private record QueuedEvent(long sequenceNum, Event event) {}
+    private void retireExecution(UUID executionId) {
+        drivenExecutionIds.remove(executionId);
+        initialExecutionIds.remove(executionId);
+        pendingResumedExecutionIds.remove(executionId);
+        inactiveSinceByExecutionId.remove(executionId);
+    }
+
+    private record QueuedEvent(long sequenceNum, Event event, long queueOrder) {}
 
     private record SyncCompletion(long elapsedNanos, Instrumentation.SyncOutcome outcome) {}
 
