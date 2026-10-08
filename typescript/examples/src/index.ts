@@ -102,7 +102,8 @@ export const echoHandler: Program = function handle(state, event) {
 };
 
 export const hangHandler: Program = function handle(state, event) {
-  if (event.event.case === 'started') {
+  console.log(`hangHandler: ${JSON.stringify(event.event.case)}`);
+  if (event.event.case === 'chatMessage' && event.event.value.message === 'hang') {
     while (true) {
       // Intentionally never completes; used to test Main Worker robustness.
     }
