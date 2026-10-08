@@ -7,6 +7,7 @@
   "item.cobbleware.cobblemeter.cobbleputer_not_owned": "You can only pair a Cobblemeter with your own Cobbleputer.",
   "item.cobbleware.cobblemeter.observer_unpaired": "Pair this Cobblemeter with a Cobbleputer first.",
   "item.cobbleware.cobblemeter.observer_paired": "Cobblemeter paired Wireless Observer at %s, %s, %s",
+  "item.cobbleware.cobblemeter.observer_out_of_range": "The Wireless Observer must be within 64 blocks of the paired Cobbleputer.",
   "item.cobbleware.cobblemeter.observer_not_owned": "You can only unpair a Wireless Observer from your own Cobbleputer.",
   "item.cobbleware.cobblemeter.observer_unpaired_success": "Cobblemeter unpaired Wireless Observer.",
   "item.cobbleware.cobblemeter.target_unavailable": "The paired Cobbleputer is unavailable.",

@@ -22,6 +22,10 @@ import net.minecraft.world.item.context.UseOnContext;
 
 /** An item that pairs itself with the Cobbleputer on which it is used. */
 public final class CobblemeterItem extends SimplePolymerItem {
+    static final int OBSERVER_PAIRING_RANGE_BLOCKS = 64;
+    private static final int OBSERVER_PAIRING_RANGE_SQUARED =
+            OBSERVER_PAIRING_RANGE_BLOCKS * OBSERVER_PAIRING_RANGE_BLOCKS;
+
     public CobblemeterItem(Item.Properties properties) {
         super(properties);
     }
@@ -65,7 +69,12 @@ public final class CobblemeterItem extends SimplePolymerItem {
             return InteractionResult.SUCCESS;
         }
         if (observerTarget.isEmpty()) {
-            pairObserver(context, level, observer, meterTarget.orElseThrow());
+            GlobalPos target = meterTarget.orElseThrow();
+            if (isWithinObserverPairingRange(GlobalPos.of(level.dimension(), context.getClickedPos()), target)) {
+                pairObserver(context, level, observer, target);
+            } else {
+                sendMessage(player, "item.cobbleware.cobblemeter.observer_out_of_range");
+            }
             return InteractionResult.SUCCESS;
         }
         if (meterTarget.orElseThrow().equals(observerTarget.orElseThrow())) {
@@ -176,6 +185,17 @@ public final class CobblemeterItem extends SimplePolymerItem {
     /** Returns whether a player may unpair an observer from a Cobbleputer. */
     static boolean canUnpairFrom(UUID ownerPlayerId, UUID actingPlayerId, boolean hasGamemasterPermission) {
         return hasGamemasterPermission || (actingPlayerId != null && actingPlayerId.equals(ownerPlayerId));
+    }
+
+    /** Returns whether an observer may be paired with a target Cobbleputer at the two positions. */
+    static boolean isWithinObserverPairingRange(GlobalPos observerPosition, GlobalPos target) {
+        if (!observerPosition.dimension().equals(target.dimension())) {
+            return false;
+        }
+        double dx = (double) observerPosition.pos().getX() - target.pos().getX();
+        double dy = (double) observerPosition.pos().getY() - target.pos().getY();
+        double dz = (double) observerPosition.pos().getZ() - target.pos().getZ();
+        return dx * dx + dy * dy + dz * dz <= OBSERVER_PAIRING_RANGE_SQUARED;
     }
 
     private static boolean canPairWith(CobbleputerBlockEntity cobbleputer, ServerPlayer player) {

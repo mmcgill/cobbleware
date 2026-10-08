@@ -4,7 +4,6 @@ This is for capturing brief descriptions of future development tasks. It is _not
 or comprehensive task tracking.
 
 * [ ] GHA
-* [ ] Distance limits on wireless observer pairing
 * [ ] Rewrite conway
 * [ ] Release process for cobbleware TS lib
 * [ ] Versioning for Mod

@@ -7,7 +7,10 @@ import io.github.mmcgill.cobbleware.block.CobbleputerState;
 import java.util.List;
 import java.util.UUID;
 import net.minecraft.SharedConstants;
+import net.minecraft.core.BlockPos;
+import net.minecraft.core.GlobalPos;
 import net.minecraft.server.Bootstrap;
+import net.minecraft.world.level.Level;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
@@ -78,6 +81,33 @@ class CobblemeterItemTest {
         assertFalse(CobblemeterItem.canUnpairFrom(owner, UUID.randomUUID(), false));
         assertFalse(CobblemeterItem.canUnpairFrom(owner, null, false));
         assertFalse(CobblemeterItem.canUnpairFrom(null, UUID.randomUUID(), false));
+    }
+
+    @Test
+    void permitsObserverPairingAtOrBelowTheRangeLimit() {
+        GlobalPos target = GlobalPos.of(Level.OVERWORLD, BlockPos.ZERO);
+
+        assertTrue(CobblemeterItem.isWithinObserverPairingRange(target, target));
+        assertTrue(CobblemeterItem.isWithinObserverPairingRange(
+                GlobalPos.of(Level.OVERWORLD, new BlockPos(CobblemeterItem.OBSERVER_PAIRING_RANGE_BLOCKS, 0, 0)),
+                target));
+    }
+
+    @Test
+    void rejectsObserverPairingBeyondTheRangeLimit() {
+        GlobalPos target = GlobalPos.of(Level.OVERWORLD, BlockPos.ZERO);
+
+        assertFalse(CobblemeterItem.isWithinObserverPairingRange(
+                GlobalPos.of(Level.OVERWORLD, new BlockPos(CobblemeterItem.OBSERVER_PAIRING_RANGE_BLOCKS + 1, 0, 0)),
+                target));
+        assertFalse(CobblemeterItem.isWithinObserverPairingRange(
+                GlobalPos.of(Level.OVERWORLD, new BlockPos(46, 46, 0)), target));
+    }
+
+    @Test
+    void rejectsObserverPairingAcrossDimensions() {
+        assertFalse(CobblemeterItem.isWithinObserverPairingRange(
+                GlobalPos.of(Level.NETHER, BlockPos.ZERO), GlobalPos.of(Level.OVERWORLD, BlockPos.ZERO)));
     }
 
     private static List<CobbleputerState> activeStates() {

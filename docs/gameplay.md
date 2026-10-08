@@ -225,7 +225,8 @@ Using an unpaired Cobblemeter on a paired Wireless Observer behaves as
 if using an unpaired Cobblemeter on the Cobbleputer to which the observer is paired.
 
 Using a paired Cobblemeter on an unpaired Wireless Observer pairs that
-observer with the Cobblemeter's associated Cobbleputer.
+observer with the Cobblemeter's associated Cobbleputer, provided the Wireless Observer
+and Cobbleputer are in the same dimension and 64 blocks or less apart.
 
 Using a paired Cobblemeter on a Wireless Observer paired with the same Cobbleputer
 unpairs the Wireless Observer. Using a paired Cobblemeter on a Wireless Observer

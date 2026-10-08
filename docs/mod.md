@@ -251,8 +251,9 @@ on that Cobbleputer; it therefore requires the normal Cobbleputer-pairing permis
 must already be loaded: this interaction never loads a chunk just to inspect ownership.
 
 Using a paired Cobblemeter on an unpaired observer pairs that observer with the meter's target and
-emits a `WirelessObserverPaired` event. Any Player may do this. Using it on an observer already
-paired to that same target unpairs the observer, resets its power level to zero, and emits a
+emits a `WirelessObserverPaired` event, provided the two blocks are in the same dimension and at
+most 64 blocks apart. Any Player may do this. Using it on an observer already paired to that same
+target unpairs the observer, resets its power level to zero, and emits a
 `WirelessObserverUnpaired` event; only the target Cobbleputer's owner or a Player with permission
 level 2 or higher may do so. A paired meter used on an observer paired to a different Cobbleputer
 has no effect.
