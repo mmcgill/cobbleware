@@ -84,7 +84,7 @@ def edgeRuntimeDirectory = new File(repositoryRoot, 'mc-edge-runtime')
 def typescriptDirectory = new File(repositoryRoot, 'typescript')
 def mainWorkerDirectory = new File(typescriptDirectory, 'main-worker')
 def eventWorkerDirectory = new File(typescriptDirectory, 'event-worker')
-def windowsRuntimeBinary = new File(edgeRuntimeDirectory, 'target/release/edge-runtime.exe')
+def windowsRuntimeBinary = new File(edgeRuntimeDirectory, 'target/release-small/edge-runtime.exe')
 def windowsRuntimeFiles = [
         [file: windowsRuntimeBinary, resourcePath: 'edge-runtime.exe'],
 ]
@@ -128,7 +128,7 @@ def buildWindowsEdgeRuntime = tasks.register('buildWindowsEdgeRuntime', Exec) {
             '/d',
             '/s',
             '/c',
-            'call scripts\\windows-env.cmd && cargo build --release --package cli --bin edge-runtime --no-default-features --features tracing')
+            'call scripts\\windows-env.cmd && cargo build --profile release-small --package cli --bin edge-runtime --no-default-features --features tracing')
 
     doFirst {
         if (!System.getProperty('os.name').toLowerCase(java.util.Locale.ROOT).contains('windows')) {
