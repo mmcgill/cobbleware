@@ -1,0 +1,189 @@
+name: Build Edge Runtime
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build-windows:
+    name: Build Windows x86_64 runtime
+    runs-on: windows-2022
+    timeout-minutes: 45
+
+    steps:
+      - name: Check out Cobbleware
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 1
+          persist-credentials: false
+          submodules: false
+
+      - name: Check out public runtime submodules
+        shell: pwsh
+        run: |
+          git submodule sync -- mc-edge-runtime
+          git submodule update --init --depth 1 mc-edge-runtime
+          git -C mc-edge-runtime submodule sync -- rusty_v8
+          git -C mc-edge-runtime submodule update --init --depth 1 rusty_v8
+          git -C mc-edge-runtime/rusty_v8 submodule sync -- v8
+          git -C mc-edge-runtime/rusty_v8 config submodule.v8.update checkout
+          git -C mc-edge-runtime/rusty_v8 submodule update --init --depth 1 v8
+          git submodule status
+          git -C mc-edge-runtime submodule status
+
+      - name: Install Rust toolchain from manifest
+        shell: pwsh
+        working-directory: mc-edge-runtime
+        run: rustup toolchain install
+
+      - name: Verify Windows build environment
+        shell: cmd
+        working-directory: mc-edge-runtime
+        run: |
+          call scripts\windows-env.cmd
+          if errorlevel 1 exit /b 1
+          rustc --version
+          cargo --version
+          where cl
+          if not exist "%RUSTY_V8_INCLUDE_DIR%\v8.h" exit /b 1
+
+      - name: Build release runtime
+        shell: cmd
+        working-directory: mc-edge-runtime
+        run: |
+          call scripts\windows-env.cmd
+          if errorlevel 1 exit /b 1
+          cargo build --locked --profile release-small --package cli --bin edge-runtime --no-default-features --features tracing
+
+      - name: Verify runtime executable
+        id: runtime
+        shell: pwsh
+        run: |
+          $binary = 'mc-edge-runtime/target/release-small/edge-runtime.exe'
+          if (-not (Test-Path -LiteralPath $binary -PathType Leaf)) {
+            throw "Expected runtime executable was not produced: $binary"
+          }
+
+          & $binary --help
+          if ($LASTEXITCODE -ne 0) {
+            exit $LASTEXITCODE
+          }
+
+          $file = Get-Item -LiteralPath $binary
+          $sha256 = (Get-FileHash -LiteralPath $binary -Algorithm SHA256).Hash.ToLowerInvariant()
+          $artifactName = "edge-runtime-windows-x86_64-$($env:GITHUB_SHA.Substring(0, 12))"
+          "artifact_name=$artifactName" >> $env:GITHUB_OUTPUT
+
+          @"
+          ## Windows Edge Runtime build
+
+          - Commit: $env:GITHUB_SHA
+          - File: $($file.Name)
+          - Size: $($file.Length) bytes
+          - SHA-256: $sha256
+          "@ >> $env:GITHUB_STEP_SUMMARY
+
+      - name: Upload runtime executable
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: ${{ steps.runtime.outputs.artifact_name }}
+          path: mc-edge-runtime/target/release-small/edge-runtime.exe
+          if-no-files-found: error
+          retention-days: 14
+          compression-level: 0
+
+  build-linux:
+    name: Build Linux x86_64 runtime
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+
+    steps:
+      - name: Check out Cobbleware
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 1
+          persist-credentials: false
+          submodules: false
+
+      - name: Check out public runtime submodules
+        shell: bash
+        run: |
+          set -euo pipefail
+          git submodule sync -- mc-edge-runtime
+          git submodule update --init --depth 1 mc-edge-runtime
+          git -C mc-edge-runtime submodule sync -- rusty_v8
+          git -C mc-edge-runtime submodule update --init --depth 1 rusty_v8
+          git -C mc-edge-runtime/rusty_v8 submodule sync -- v8
+          git -C mc-edge-runtime/rusty_v8 config submodule.v8.update checkout
+          git -C mc-edge-runtime/rusty_v8 submodule update --init --depth 1 v8
+          git submodule status
+          git -C mc-edge-runtime submodule status
+
+      - name: Install Linux build dependencies
+        shell: bash
+        run: |
+          set -euo pipefail
+          sudo apt-get update
+          sudo apt-get install --no-install-recommends --yes \
+            binutils \
+            clang \
+            cmake \
+            libclang-dev \
+            llvm-dev
+
+      - name: Install Rust toolchain from manifest
+        shell: bash
+        working-directory: mc-edge-runtime
+        run: rustup toolchain install
+
+      - name: Verify Linux build environment
+        shell: bash
+        working-directory: mc-edge-runtime
+        run: |
+          set -euo pipefail
+          rustc --version
+          cargo --version
+          clang --version
+          cmake --version
+          test -f rusty_v8/v8/include/v8.h
+
+      - name: Build release runtime
+        shell: bash
+        working-directory: mc-edge-runtime
+        run: |
+          set -euo pipefail
+          cargo build --locked --profile release-small --package cli --bin edge-runtime --no-default-features --features tracing
+
+      - name: Verify runtime executable
+        id: runtime
+        shell: bash
+        run: |
+          set -euo pipefail
+          binary=mc-edge-runtime/target/release-small/edge-runtime
+          test -f "$binary"
+          "$binary" --help
+
+          sha256=$(sha256sum "$binary" | cut -d ' ' -f 1)
+          size=$(stat --format=%s "$binary")
+          artifact_name="edge-runtime-linux-x86_64-${GITHUB_SHA:0:12}"
+          echo "artifact_name=$artifact_name" >> "$GITHUB_OUTPUT"
+
+          {
+            echo "## Linux Edge Runtime build"
+            echo
+            echo "- Commit: $GITHUB_SHA"
+            echo "- File: $(basename "$binary")"
+            echo "- Size: $size bytes"
+            echo "- SHA-256: $sha256"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload runtime executable
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: ${{ steps.runtime.outputs.artifact_name }}
+          path: mc-edge-runtime/target/release-small/edge-runtime
+          if-no-files-found: error
+          retention-days: 14
+          compression-level: 0
