@@ -173,7 +173,9 @@ public final class CobblewareMod implements ModInitializer {
             instrumentation.advanceTick();
             wirelessObserverNetwork.tick(server);
             executionDriver.refreshExecutionPools(server);
-            executionDriver.driveExecutions(ExecutionDriver.minecraft(server));
+            if (runtimeManager.isReadyForExecutions()) {
+                executionDriver.driveExecutions(ExecutionDriver.minecraft(server));
+            }
         });
         CobblewareCommands.register(
                 mainWorkerClient,
@@ -181,6 +183,7 @@ public final class CobblewareMod implements ModInitializer {
                 executionDriver,
                 playerPriorityStore,
                 playerNameStore,
-                executionPoolManager);
+                executionPoolManager,
+                runtimeManager);
     }
 }

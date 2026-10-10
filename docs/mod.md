@@ -8,14 +8,13 @@ design details for how the Mod facilitates program execution.
 The Mod reads `config/cobbleware.json` when the server starts. In addition to its Main Worker
 connection settings, it accepts these optional settings:
 
-* `runtimeMode`, an optional string that defaults to `auto`. On a release JAR with a compatible
-  bundled Runtime, `auto` unpacks and owns the Runtime process; on an ordinary development JAR
-  with no bundled Runtime, it leaves the configured external Runtime alone. `managed` requires
-  bundled artifacts and owns the process, `external` does neither, and `extract-only` unpacks
-  artifacts without starting a process.
+* `runtimeMode`, an optional string that defaults to `auto`. On a release JAR with compatible
+  packaged workers and a pinned Runtime release, `auto` downloads (when no verified cached copy
+  exists), stages, and owns the Runtime process asynchronously; on an ordinary development JAR with no packaged
+  Runtime manifest, it leaves the configured external Runtime alone. `managed` requires the
+  packaged resources and owns the process, while `external` does neither.
 * `runtimePort`, which defaults to 9000 and selects the loopback port used by a Mod-managed Runtime.
   It must be an integer from 1 through 65535.
-
 * `instrumentationWindowTicks`, which defaults to 600 and controls the number of server ticks
   retained for the in-memory instrumentation window.
 * `maxRunningExecutionsPerPlayer`, which defaults to 10 and caps the number of a player's loaded
@@ -38,7 +37,7 @@ connection settings, it accepts these optional settings:
 When the Mod starts a Runtime itself, it creates a fresh in-memory API key for that server start
 and supplies it to both the Runtime and its own Main Worker client. The key is never stored in the
 configuration file. A non-empty `mainWorkerApiKey` is ignored in that case and produces a warning;
-it remains the credential for `external`, `extract-only`, and `auto` without bundled artifacts.
+it remains the credential for `external` and `auto` without packaged resources.
 
 Starting or resuming an execution is rejected when it would exceed the running-execution cap. When a
 chunk falls below Minecraft's `BLOCK_TICKING` status, the Mod immediately removes a running execution
@@ -415,20 +414,32 @@ alignment in the command output.
 
 ## Managed Runtime Development Test
 
-The ordinary `./gradlew.bat runServer` development server deliberately has no bundled Runtime
-resources, so the default `runtimeMode: auto` leaves a manually started Runtime alone. On Windows,
-run the following to exercise the release-resource unpacking and managed-process paths against the
-usual `java/cobbleware/run` server directory:
+On Windows, `./gradlew.bat runServer` stages the same worker resources and pinned release manifest
+as a release JAR, so the default development server exercises the release-resource download,
+staging, and managed-process paths against the usual `java/cobbleware/run` server directory:
 
 ```powershell
-./gradlew.bat runServer -PbundledRuntime
+./gradlew.bat runServer
 ```
 
-The opt-in Gradle property builds the Windows Runtime and worker ESZips, stages the same resources
-that `releaseBuild` embeds, and adds only that generated resource directory to the `runServer`
-classpath. It does not alter the normal development JAR or configuration. With `runtimeMode` omitted
-or set to `auto`, the Mod detects those resources, unpacks them under
-`run/world/cobbleware-data/runtime`, and starts a loopback Runtime using `runtimePort` (default
-9000). A configured `mainWorkerApiKey` is intentionally ignored for this run because the managed
-Runtime receives a fresh in-memory key. Set `runtimeMode` to `extract-only` to test staging without
-launching a process.
+Gradle downloads the pinned Windows Runtime to bundle worker ESZips, then the Mod independently
+downloads the pinned Windows or Linux x86_64 release asset if a verified world cache is absent.
+It stages the runtime under `run/world/cobbleware-data/runtime` and starts it on `runtimePort`
+(default 9000). The binary and both ESZips are SHA-256 verified on every reuse; a partial or
+tampered cache is discarded and replaced, while a failed download or checksum mismatch never starts
+a Runtime. Staging and startup run outside the Minecraft server thread; the server logs when a
+Runtime download starts and when its checksum-verified download finishes. Until a managed Runtime
+is ready, execution delivery is deferred and Runtime-dependent player commands explain that it is
+still preparing. A configured `mainWorkerApiKey` is intentionally ignored for this run because the
+managed Runtime receives a fresh in-memory key.
+
+To build and run the local `mc-edge-runtime` checkout instead of downloading a pinned binary, add
+`-PuseLocalRuntime`:
+
+```powershell
+./gradlew.bat runServer -PuseLocalRuntime
+```
+
+This is intended for Runtime development. Gradle builds the local Windows Runtime for worker
+bundling and passes it to the Mod, which verifies and stages that local file without contacting
+GitHub for the managed Runtime.

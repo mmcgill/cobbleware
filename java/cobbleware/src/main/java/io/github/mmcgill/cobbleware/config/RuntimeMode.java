@@ -6,8 +6,7 @@ import java.util.Locale;
 public enum RuntimeMode {
     AUTO,
     MANAGED,
-    EXTERNAL,
-    EXTRACT_ONLY;
+    EXTERNAL;
 
     /** Parses the documented lowercase JSON spelling. */
     public static RuntimeMode parse(String value) {
@@ -17,8 +16,7 @@ public enum RuntimeMode {
         try {
             return RuntimeMode.valueOf(value.replace('-', '_').toUpperCase(Locale.ROOT));
         } catch (IllegalArgumentException exception) {
-            throw new IllegalArgumentException(
-                    "runtimeMode must be one of auto, managed, external, or extract-only", exception);
+            throw new IllegalArgumentException("runtimeMode must be one of auto, managed, or external", exception);
         }
     }
 }

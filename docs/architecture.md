@@ -7,13 +7,16 @@ The mod comprises:
   all user-supplied typescript code in isolated sandboxes.
 * a Browser UI served by the Runtime and used by Players to upload programs and monitor executions.
 
-The Mod bundles native binaries for the Runtime together with Main Worker and Event Worker ESZips,
-and is responsible for unpacking the correct platform-specific version and maintaining the Runtime
-process. A release JAR stages verified immutable artifacts below the world directory's
-`cobbleware-data/runtime` directory and starts its managed Runtime on loopback. The Mod creates a
-new in-memory Mod API key for every managed Runtime start; it never writes that key to disk. An
-ordinary development JAR has no bundled artifacts, so the default runtime-management mode leaves a
-manually run Runtime untouched across server restarts.
+The Mod bundles Main Worker and Event Worker ESZips, and compiles a pinned GitHub Release tag,
+asset names, and SHA-256 checksums for native Runtime binaries. It downloads the correct supported
+platform binary only when a verified copy is absent, then stages verified immutable artifacts below
+the world directory's `cobbleware-data/runtime` directory and starts its managed Runtime on loopback.
+Staging, download, and process readiness checks run on a dedicated background thread, so a slow
+download never blocks the Minecraft server thread. Until the managed Runtime is ready, the Mod holds
+execution delivery and tells Players who use Runtime-dependent commands to try again shortly.
+The Mod creates a new in-memory Mod API key for every managed Runtime start; it never writes that
+key to disk. An ordinary development JAR has no packaged worker/runtime manifest, so the default
+runtime-management mode leaves a manually run Runtime untouched across server restarts.
 
 The Mod is server-only, and uses Polymer to introduce new block types and items without
 requiring a client-side mod install.

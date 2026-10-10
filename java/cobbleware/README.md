@@ -14,28 +14,32 @@ environment.
 
 ### Windows release build
 
-On Windows, the self-contained release build compiles the Edge Runtime, bundles the Main Worker and Event Worker,
-then embeds them in a separate release JAR:
+On Windows, the release build downloads the pinned Edge Runtime to bundle the Main Worker and Event Worker, then
+embeds those worker ESZips and the pinned Runtime GitHub Release description in a separate release JAR:
 
 ```powershell
 .\gradlew.bat releaseBuild
 ```
 
-This requires Deno, Rust, and the Visual Studio C++ workload. The Runtime build task
-initializes the repository's `mc-edge-runtime/scripts/windows-env.cmd` environment before running Cargo with local AI
-inference disabled. The resulting
+This requires Deno. The resulting
 `build/libs/*-release.jar` contains these resources:
 
 ```text
-cobbleware/runtime/windows-x86_64/edge-runtime.exe
 cobbleware/runtime/manifest.json
 cobbleware/workers/main-worker.eszip
 cobbleware/workers/event-worker.eszip
 ```
 
-`releaseBuild` is intentionally separate from `build`; ordinary Fabric development builds and run configurations do
-not build Rust or Deno artifacts. Linux and macOS resource paths will follow the same `cobbleware/runtime/<platform>/`
-layout when their native build lanes are added.
+`releaseBuild` is intentionally separate from `build`; ordinary Fabric development builds do not build workers.
+`runServer` does generate those resources by default, downloading the pinned Runtime for worker bundling and again
+for the Mod's verified world cache as necessary. Add `-PuseLocalRuntime` to `runServer` or `releaseBuild` to build
+the local Windows `mc-edge-runtime` checkout instead; that requires Rust and the Visual Studio C++ workload. At
+server startup, a release JAR downloads the pinned native Runtime asset for Windows or Linux x86_64 only if a
+SHA-256-verified copy is not already under the world's `cobbleware-data/runtime` directory. This preparation is
+asynchronous, so a slow initial download does not block server startup; the server log records its start and
+checksum-verified completion. To update that pin,
+first publish and verify an Edge Runtime release, then review and copy its tag, asset names, and checksums into
+`build.gradle`.
 
 ## Formatting
 
@@ -62,6 +66,9 @@ Generation is also wired into Java compilation. Gradle regenerates bindings when
 ```powershell
 .\gradlew.bat runServer
 ```
+
+This starts a managed Runtime through the pinned-download path. For Edge Runtime checkout development, use
+`.\gradlew.bat runServer -PuseLocalRuntime` to build and stage the local Windows binary instead.
 
 The development server continues to use `run` and is configured with `online-mode=false`, so the named development clients
 can join without Mojang authentication. Start each client in its own run directory with:
@@ -104,12 +111,12 @@ the value is empty only when it is not starting a managed Runtime. `mainWorkerUr
 retains in-memory Mod instrumentation for that many server ticks; it defaults to 600 when omitted
 from an existing configuration file.
 
-`runtimeMode` defaults to `auto` when omitted. A release JAR containing a supported bundled Runtime
-unpacks it into the world's `cobbleware-data/runtime` directory and manages it for the Minecraft
-server lifetime; the ordinary development JAR has no bundled Runtime, so `auto` continues to use a
-manually run process. Set `runtimeMode` to `external` to opt out, `managed` to require the bundled
-Runtime, or `extract-only` to unpack without launching. `runtimePort` is the optional loopback port
-for a managed Runtime and defaults to 9000.
+`runtimeMode` defaults to `auto` when omitted. A release JAR containing packaged workers and a
+pinned Runtime release downloads its supported Windows or Linux x86_64 asset when no verified copy
+is cached under the world's `cobbleware-data/runtime` directory, then manages it for the Minecraft
+server lifetime; the ordinary development JAR has no packaged Runtime, so `auto` continues to use a
+manually run process. Set `runtimeMode` to `external` to opt out, `managed` to require the pinned
+Runtime. `runtimePort` is the optional loopback port for a managed Runtime and defaults to 9000.
 
 For a managed Runtime, Cobbleware creates a fresh in-memory `COBBLEWARE_API_KEY` on every server
 start and uses it for its own requests. It does not write that key to this file. If

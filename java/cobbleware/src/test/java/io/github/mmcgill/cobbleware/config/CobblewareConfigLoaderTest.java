@@ -149,20 +149,20 @@ class CobblewareConfigLoaderTest {
     }
 
     @Test
-    void parsesRuntimeModeAndPort() throws Exception {
+    void parsesManagedRuntimeModeAndPort() throws Exception {
         Path configPath = tempDir.resolve(CobblewareConfigLoader.FILE_NAME);
         Files.writeString(configPath, """
             {
               "mainWorkerUrl": "http://localhost:9000",
               "mainWorkerApiKey": "secret",
-              "runtimeMode": "extract-only",
+              "runtimeMode": "managed",
               "runtimePort": 9123
             }
             """);
 
         CobblewareConfig config = CobblewareConfigLoader.load(configPath, LOGGER);
 
-        assertEquals(RuntimeMode.EXTRACT_ONLY, config.runtimeMode());
+        assertEquals(RuntimeMode.MANAGED, config.runtimeMode());
         assertEquals(9123, config.runtimePort());
     }
 
@@ -173,7 +173,7 @@ class CobblewareConfigLoaderTest {
             {
               "mainWorkerUrl": "http://localhost:9000",
               "mainWorkerApiKey": "secret",
-              "runtimeMode": "unknown"
+              "runtimeMode": "extract-only"
             }
             """);
 

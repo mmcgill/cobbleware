@@ -18,6 +18,7 @@ import io.github.mmcgill.cobbleware.execution.PlayerPriorityStore.PriorityTarget
 import io.github.mmcgill.cobbleware.instrumentation.Instrumentation;
 import io.github.mmcgill.cobbleware.instrumentation.StatsFormatter;
 import io.github.mmcgill.cobbleware.registry.CobblewareBlocks;
+import io.github.mmcgill.cobbleware.runtime.RuntimeManager;
 import java.util.Collection;
 import java.util.Optional;
 import java.util.UUID;
@@ -56,20 +57,24 @@ public final class CobblewareCommands {
             ExecutionDriver executionDriver,
             PlayerPriorityStore playerPriorityStore,
             PlayerNameStore playerNameStore,
-            ExecutionPoolManager executionPoolManager) {
+            ExecutionPoolManager executionPoolManager,
+            RuntimeManager runtimeManager) {
         CommandRegistrationCallback.EVENT.register((dispatcher, registryAccess, environment) ->
                 dispatcher.register(Commands.literal("cobbleware")
                         .then(Commands.literal("auth")
                                 .then(Commands.argument("code", StringArgumentType.word())
                                         .executes(context -> authenticate(context, mainWorkerClient))))
-                        .then(Commands.literal("program").executes(context -> program(context, mainWorkerClient)))
+                        .then(Commands.literal("program")
+                                .executes(context -> program(context, mainWorkerClient, runtimeManager)))
                         .then(Commands.literal("start")
                                 .then(Commands.argument("start-state", StringArgumentType.word())
                                         .suggests((context, builder) ->
-                                                suggestStartStates(context, builder, mainWorkerClient))
-                                        .executes(context -> execute(context, mainWorkerClient, executionDriver))))
+                                                suggestStartStates(context, builder, mainWorkerClient, runtimeManager))
+                                        .executes(context ->
+                                                execute(context, mainWorkerClient, executionDriver, runtimeManager))))
                         .then(Commands.literal("pause").executes(context -> pause(context, executionDriver)))
-                        .then(Commands.literal("resume").executes(context -> resume(context, executionDriver)))
+                        .then(Commands.literal("resume")
+                                .executes(context -> resume(context, executionDriver, runtimeManager)))
                         .then(Commands.literal("setpriority")
                                 .requires(source -> source.permissions().hasPermission(Permissions.COMMANDS_GAMEMASTER))
                                 .then(Commands.argument("player", GameProfileArgument.gameProfile())
@@ -383,13 +388,19 @@ public final class CobblewareCommands {
         player.sendSystemMessage(message);
     }
 
-    private static int program(CommandContext<CommandSourceStack> context, MainWorkerClient mainWorkerClient) {
+    private static int program(
+            CommandContext<CommandSourceStack> context,
+            MainWorkerClient mainWorkerClient,
+            RuntimeManager runtimeManager) {
         CommandSourceStack source = context.getSource();
         ServerPlayer player;
         try {
             player = source.getPlayerOrException();
         } catch (CommandSyntaxException exception) {
             source.sendFailure(Component.literal("Only a player can view a Cobbleware program."));
+            return 0;
+        }
+        if (!requireReadyRuntime(player, runtimeManager)) {
             return 0;
         }
 
@@ -419,11 +430,17 @@ public final class CobblewareCommands {
     }
 
     private static CompletableFuture<Suggestions> suggestStartStates(
-            CommandContext<CommandSourceStack> context, SuggestionsBuilder builder, MainWorkerClient mainWorkerClient) {
+            CommandContext<CommandSourceStack> context,
+            SuggestionsBuilder builder,
+            MainWorkerClient mainWorkerClient,
+            RuntimeManager runtimeManager) {
         ServerPlayer player;
         try {
             player = context.getSource().getPlayerOrException();
         } catch (CommandSyntaxException exception) {
+            return builder.buildFuture();
+        }
+        if (!runtimeManager.isReadyForExecutions()) {
             return builder.buildFuture();
         }
 
@@ -437,13 +454,17 @@ public final class CobblewareCommands {
     private static int execute(
             CommandContext<CommandSourceStack> context,
             MainWorkerClient mainWorkerClient,
-            ExecutionDriver executionDriver) {
+            ExecutionDriver executionDriver,
+            RuntimeManager runtimeManager) {
         CommandSourceStack source = context.getSource();
         ServerPlayer player;
         try {
             player = source.getPlayerOrException();
         } catch (CommandSyntaxException exception) {
             source.sendFailure(Component.literal("Only a player can start a Cobbleware execution."));
+            return 0;
+        }
+        if (!requireReadyRuntime(player, runtimeManager)) {
             return 0;
         }
 
@@ -544,13 +565,19 @@ public final class CobblewareCommands {
         return changeExecutionState(context, executionDriver, CobbleputerState.RUNNING);
     }
 
-    private static int resume(CommandContext<CommandSourceStack> context, ExecutionDriver executionDriver) {
+    private static int resume(
+            CommandContext<CommandSourceStack> context,
+            ExecutionDriver executionDriver,
+            RuntimeManager runtimeManager) {
         CommandSourceStack source = context.getSource();
         ServerPlayer player;
         try {
             player = source.getPlayerOrException();
         } catch (CommandSyntaxException exception) {
             source.sendFailure(Component.literal("Only a player can change a Cobbleware execution's state."));
+            return 0;
+        }
+        if (!requireReadyRuntime(player, runtimeManager)) {
             return 0;
         }
 
@@ -597,6 +624,14 @@ public final class CobblewareCommands {
             player.sendSystemMessage(Component.literal("Restarted your crashed Cobbleputer with its saved state."));
         }
         return 1;
+    }
+
+    private static boolean requireReadyRuntime(ServerPlayer player, RuntimeManager runtimeManager) {
+        if (runtimeManager.isReadyForExecutions()) {
+            return true;
+        }
+        player.sendSystemMessage(Component.literal(runtimeManager.unavailableReason()));
+        return false;
     }
 
     private static int changeExecutionState(

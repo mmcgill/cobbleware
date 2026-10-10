@@ -85,15 +85,32 @@ def typescriptDirectory = new File(repositoryRoot, 'typescript')
 def mainWorkerDirectory = new File(typescriptDirectory, 'main-worker')
 def eventWorkerDirectory = new File(typescriptDirectory, 'event-worker')
 def windowsRuntimeBinary = new File(edgeRuntimeDirectory, 'target/release-small/edge-runtime.exe')
-def windowsRuntimeFiles = [
-        [file: windowsRuntimeBinary, resourcePath: 'edge-runtime.exe'],
+// Update this pin only from a published, non-draft Runtime release after reviewing compatibility with the workers.
+// Gradle deliberately does not query GitHub: the release JAR must contain its reviewed release identity and digests.
+def runtimeRelease = [
+        repository: 'mmcgill/cobbleware',
+        tag: 'edge-runtime-1b87488c4cff',
+        platforms: [
+                'windows-x86_64': [
+                        asset: 'edge-runtime-windows-x86_64.exe',
+                        sha256: '446d7ed8f7cc017bd00c1136607861d0542c16c5352595889e87ed0125c721e6',
+                ],
+                'linux-x86_64': [
+                        asset: 'edge-runtime-linux-x86_64',
+                        sha256: '7323da0888d00e136015bb5cc551f61a54d4ac326eeba281a926177884000855',
+                ],
+        ],
 ]
 def releaseWorkersDirectory = layout.buildDirectory.dir('generated/cobbleware-release/workers')
 def releaseStaticDirectory = layout.buildDirectory.dir('generated/cobbleware-release/static')
 def mainWorkerEszip = releaseWorkersDirectory.map { it.file('main-worker.eszip') }
 def eventWorkerEszip = releaseWorkersDirectory.map { it.file('event-worker.eszip') }
 def runtimeManifest = layout.buildDirectory.file('generated/cobbleware-release/manifest/manifest.json')
-def releaseResourcesDirectory = layout.buildDirectory.dir('generated/cobbleware-release/resources')
+def releaseResourcesDirectory = layout.buildDirectory.dir('generated/cobbleware-release-v2/resources')
+def downloadedWindowsRuntime = layout.buildDirectory.file('generated/cobbleware-runtime-bundler/edge-runtime.exe')
+def useLocalRuntime = providers.gradleProperty('useLocalRuntime')
+        .map { value -> value.isEmpty() || value.toBoolean() }
+        .orElse(false)
 
 def edgeRuntimeSources = fileTree(edgeRuntimeDirectory) {
     include 'Cargo.lock'
@@ -137,15 +154,67 @@ def buildWindowsEdgeRuntime = tasks.register('buildWindowsEdgeRuntime', Exec) {
     }
 }
 
+def downloadPinnedWindowsRuntime = tasks.register('downloadPinnedWindowsRuntime') {
+    group = 'distribution'
+    description = 'Downloads the pinned Windows Runtime used to bundle worker ESZips.'
+    def specification = runtimeRelease.platforms['windows-x86_64']
+    inputs.property('releaseRepository', runtimeRelease.repository)
+    inputs.property('releaseTag', runtimeRelease.tag)
+    inputs.property('asset', specification.asset)
+    inputs.property('sha256', specification.sha256)
+    outputs.file(downloadedWindowsRuntime)
+    outputs.upToDateWhen { false }
+
+    doLast {
+        def sha256 = { File file ->
+            byte[] digest = java.security.MessageDigest.getInstance('SHA-256').digest(file.bytes)
+            digest.collect { byte value -> String.format('%02x', value & 0xff) }.join()
+        }
+        File destination = downloadedWindowsRuntime.get().asFile
+        if (destination.isFile() && sha256(destination) == specification.sha256) {
+            return
+        }
+        destination.parentFile.mkdirs()
+        File temporary = new File(destination.parentFile, "${destination.name}.tmp-${java.util.UUID.randomUUID()}")
+        String url = "https://github.com/${runtimeRelease.repository}/releases/download/${runtimeRelease.tag}/${specification.asset}"
+        try {
+            java.net.HttpURLConnection connection = (java.net.HttpURLConnection) new URL(url).openConnection()
+            connection.instanceFollowRedirects = true
+            connection.connectTimeout = 15_000
+            connection.readTimeout = 300_000
+            if (connection.responseCode != 200) {
+                throw new GradleException("Pinned Runtime download returned HTTP ${connection.responseCode}")
+            }
+            temporary.withOutputStream { output ->
+                connection.inputStream.withCloseable { input ->
+                    input.transferTo(output)
+                }
+            }
+            if (sha256(temporary) != specification.sha256) {
+                throw new GradleException('Downloaded Runtime checksum does not match the pinned release')
+            }
+            java.nio.file.Files.move(
+                    temporary.toPath(),
+                    destination.toPath(),
+                    java.nio.file.StandardCopyOption.REPLACE_EXISTING)
+        } finally {
+            temporary.delete()
+        }
+    }
+}
+
+def runtimeForBundling = useLocalRuntime.get() ? windowsRuntimeBinary : downloadedWindowsRuntime.get().asFile
+def prepareRuntimeForBundling = useLocalRuntime.get() ? buildWindowsEdgeRuntime : downloadPinnedWindowsRuntime
+
 def bundleMainWorker = tasks.register('bundleMainWorkerEszip', Exec) {
     group = 'distribution'
     description = 'Bundles the Main Worker and Browser UI into an ESZip for releaseBuild.'
-    dependsOn(buildWindowsEdgeRuntime)
+    dependsOn(prepareRuntimeForBundling)
     workingDir(mainWorkerDirectory)
-    inputs.files(typescriptSources, windowsRuntimeBinary)
+    inputs.files(typescriptSources, runtimeForBundling)
     outputs.file(mainWorkerEszip)
     outputs.dir(releaseStaticDirectory)
-    environment('EDGE_RUNTIME_BIN', windowsRuntimeBinary.absolutePath)
+    environment('EDGE_RUNTIME_BIN', runtimeForBundling.absolutePath)
     commandLine(
             'deno',
             'run',
@@ -168,11 +237,11 @@ def bundleMainWorker = tasks.register('bundleMainWorkerEszip', Exec) {
 def bundleEventWorker = tasks.register('bundleEventWorkerEszip', Exec) {
     group = 'distribution'
     description = 'Bundles the Event Worker into an ESZip for releaseBuild.'
-    dependsOn(buildWindowsEdgeRuntime)
+    dependsOn(prepareRuntimeForBundling)
     workingDir(eventWorkerDirectory)
-    inputs.files(typescriptSources, windowsRuntimeBinary)
+    inputs.files(typescriptSources, runtimeForBundling)
     outputs.file(eventWorkerEszip)
-    environment('EDGE_RUNTIME_BIN', windowsRuntimeBinary.absolutePath)
+    environment('EDGE_RUNTIME_BIN', runtimeForBundling.absolutePath)
     commandLine(
             'deno',
             'run',
@@ -189,12 +258,13 @@ def bundleEventWorker = tasks.register('bundleEventWorkerEszip', Exec) {
     }
 }
 
-def generateRuntimeManifest = tasks.register('generateWindowsRuntimeManifest') {
+def generateRuntimeManifest = tasks.register('generateRuntimeManifest') {
     group = 'distribution'
-    description = 'Generates metadata and checksums for the embedded Windows Runtime distribution.'
-    dependsOn(buildWindowsEdgeRuntime, bundleMainWorker, bundleEventWorker)
-    inputs.files(windowsRuntimeBinary, mainWorkerEszip, eventWorkerEszip)
+    description = 'Generates metadata and checksums for the downloaded Runtime and embedded workers.'
+    dependsOn(bundleMainWorker, bundleEventWorker)
+    inputs.files(mainWorkerEszip, eventWorkerEszip)
     inputs.property('modVersion', project.version)
+    inputs.property('runtimeRelease', runtimeRelease)
     outputs.file(runtimeManifest)
 
     doLast {
@@ -202,11 +272,11 @@ def generateRuntimeManifest = tasks.register('generateWindowsRuntimeManifest') {
             byte[] digest = java.security.MessageDigest.getInstance('SHA-256').digest(file.bytes)
             digest.collect { byte value -> String.format('%02x', value & 0xff) }.join()
         }
-        String files = windowsRuntimeFiles.collect { runtimeFile ->
-            """        {
-          "path": "${runtimeFile.resourcePath}",
-          "sha256": "${sha256(runtimeFile.file)}"
-        }"""
+        String platforms = runtimeRelease.platforms.collect { platform, specification ->
+            """    "${platform}": {
+      "asset": "${specification.asset}",
+      "sha256": "${specification.sha256}"
+    }"""
         }.join(',\n')
         def workers = [
                 [file: mainWorkerEszip.get().asFile, resourcePath: 'main-worker.eszip'],
@@ -218,26 +288,17 @@ def generateRuntimeManifest = tasks.register('generateWindowsRuntimeManifest') {
       "sha256": "${sha256(worker.file)}"
     }"""
         }.join(',\n')
-        String distributionIdentity = (windowsRuntimeFiles.collect { runtimeFile ->
-            "${runtimeFile.resourcePath}:${sha256(runtimeFile.file)}"
-        } + workers.collect { worker ->
-            "${worker.resourcePath}:${sha256(worker.file)}"
-        }).join('\n')
-        byte[] distributionDigest = java.security.MessageDigest.getInstance('SHA-256')
-                .digest(distributionIdentity.getBytes(java.nio.charset.StandardCharsets.UTF_8))
-        String distributionId = distributionDigest.collect { byte value -> String.format('%02x', value & 0xff) }.join()
         File manifest = runtimeManifest.get().asFile
         manifest.parentFile.mkdirs()
         manifest.setText("""{
-  "schemaVersion": 1,
+  "schemaVersion": 2,
   "modVersion": "${project.version}",
-  "distributionId": "${distributionId}",
+  "release": {
+    "repository": "${runtimeRelease.repository}",
+    "tag": "${runtimeRelease.tag}"
+  },
   "platforms": {
-    "windows-x86_64": {
-      "files": [
-${files}
-      ]
-    }
+${platforms}
   },
   "workers": [
 ${workerFiles}
@@ -249,14 +310,9 @@ ${workerFiles}
 
 def stageReleaseResources = tasks.register('stageReleaseResources', Sync) {
     group = 'distribution'
-    description = 'Stages Runtime binaries and worker ESZips under their stable JAR resource paths.'
+    description = 'Stages Runtime release metadata and worker ESZips under their stable JAR resource paths.'
     dependsOn(bundleMainWorker, bundleEventWorker, generateRuntimeManifest)
     into(releaseResourcesDirectory)
-    windowsRuntimeFiles.each { runtimeFile ->
-        from(runtimeFile.file) {
-            into('cobbleware/runtime/windows-x86_64')
-        }
-    }
     from(mainWorkerEszip) {
         into('cobbleware/workers')
     }
@@ -268,14 +324,11 @@ def stageReleaseResources = tasks.register('stageReleaseResources', Sync) {
     }
 }
 
-def bundledRuntimeForDevelopment = providers.gradleProperty('bundledRuntime')
-        .map { value -> value.isEmpty() || value.toBoolean() }
-        .orElse(false)
-
-if (bundledRuntimeForDevelopment.get()) {
-    tasks.named('runServer') {
-        dependsOn(stageReleaseResources)
-        classpath.from(releaseResourcesDirectory)
+tasks.named('runServer') {
+    dependsOn(stageReleaseResources)
+    classpath.from(releaseResourcesDirectory)
+    if (useLocalRuntime.get()) {
+        jvmArgs("-Dcobbleware.localRuntime=${windowsRuntimeBinary.absolutePath}")
     }
 }
 
@@ -366,7 +419,7 @@ java {
 
 def releaseJar = tasks.register('releaseJar', Jar) {
     group = 'distribution'
-    description = 'Creates the self-contained Cobbleware release JAR.'
+    description = 'Creates the Cobbleware release JAR with pinned Runtime download metadata.'
     archiveClassifier.set('release')
     dependsOn(tasks.named('classes'), stageReleaseResources)
     from(sourceSets.main.output)
@@ -375,6 +428,6 @@ def releaseJar = tasks.register('releaseJar', Jar) {
 
 tasks.register('releaseBuild') {
     group = 'distribution'
-    description = 'Builds a Windows x86_64 self-contained Cobbleware release JAR.'
+    description = 'Builds a Cobbleware release JAR using Windows Runtime tooling.'
     dependsOn(releaseJar)
 }
