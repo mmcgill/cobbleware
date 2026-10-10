@@ -174,8 +174,14 @@ def downloadPinnedHostRuntime = tasks.register('downloadPinnedHostRuntime') {
             byte[] digest = java.security.MessageDigest.getInstance('SHA-256').digest(file.bytes)
             digest.collect { byte value -> String.format('%02x', value & 0xff) }.join()
         }
+        def makeExecutable = { File file ->
+            if (!hostPlatform.startsWith('windows-') && !file.setExecutable(true)) {
+                throw new GradleException("Could not mark pinned Runtime executable: ${file}")
+            }
+        }
         File destination = downloadedHostRuntime.get().asFile
         if (destination.isFile() && sha256(destination) == specification.sha256) {
+            makeExecutable(destination)
             return
         }
         destination.parentFile.mkdirs()
@@ -201,6 +207,7 @@ def downloadPinnedHostRuntime = tasks.register('downloadPinnedHostRuntime') {
                     temporary.toPath(),
                     destination.toPath(),
                     java.nio.file.StandardCopyOption.REPLACE_EXISTING)
+            makeExecutable(destination)
         } finally {
             temporary.delete()
         }
