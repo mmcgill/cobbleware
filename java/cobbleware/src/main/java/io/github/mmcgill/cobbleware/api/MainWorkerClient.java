@@ -40,34 +40,41 @@ public final class MainWorkerClient implements MainWorker {
     private static final Duration REQUEST_TIMEOUT = Duration.ofSeconds(10);
 
     private final CobblewareConfig config;
+    private final MainWorkerConnection connection;
     private final HttpClient httpClient;
     private final Logger logger;
     private final ExecutionStatsStreamer executionStatsStreamer;
     private final ExecutionTransitionPublisher executionTransitionPublisher;
 
-    public MainWorkerClient(CobblewareConfig config, Logger logger) {
-        this(config, HttpClient.newBuilder().connectTimeout(CONNECT_TIMEOUT).build(), logger);
+    public MainWorkerClient(CobblewareConfig config, MainWorkerConnection connection, Logger logger) {
+        this(
+                config,
+                connection,
+                HttpClient.newBuilder().connectTimeout(CONNECT_TIMEOUT).build(),
+                logger);
     }
 
-    MainWorkerClient(CobblewareConfig config, HttpClient httpClient, Logger logger) {
+    MainWorkerClient(CobblewareConfig config, MainWorkerConnection connection, HttpClient httpClient, Logger logger) {
         this.config = config;
+        this.connection = connection;
         this.httpClient = httpClient;
         this.logger = logger;
-        this.executionStatsStreamer = new ExecutionStatsStreamer(config, httpClient, logger);
-        this.executionTransitionPublisher = new ExecutionTransitionPublisher(config, httpClient, logger);
+        this.executionStatsStreamer = new ExecutionStatsStreamer(connection, httpClient, logger);
+        this.executionTransitionPublisher = new ExecutionTransitionPublisher(connection, httpClient, logger);
     }
 
     /** Authenticates a player for a pending browser-generated code without blocking the server thread. */
     public CompletableFuture<AuthenticationResult> authenticate(AuthenticationRequest authentication) {
-        if (!config.isEnabled()) {
-            return CompletableFuture.completedFuture(AuthenticationResult.configurationError(config.disabledReason()));
+        if (config.configurationError() != null) {
+            return CompletableFuture.completedFuture(
+                    AuthenticationResult.configurationError(config.configurationError()));
         }
 
-        URI endpoint = config.mainWorkerBaseUri().resolve("modapi/v1/authentication");
+        URI endpoint = connection.baseUri().resolve("modapi/v1/authentication");
         HttpRequest request = HttpRequest.newBuilder(endpoint)
                 .timeout(REQUEST_TIMEOUT)
                 .header("Accept", "application/json")
-                .header("Authorization", "Bearer " + config.mainWorkerApiKey())
+                .header("Authorization", "Bearer " + connection.apiKey())
                 .header("Content-Type", "application/json")
                 .POST(HttpRequest.BodyPublishers.ofString(requestJson(authentication)))
                 .build();
@@ -86,15 +93,15 @@ public final class MainWorkerClient implements MainWorker {
 
     /** Gets the authenticated player's active program information without blocking the server thread. */
     public CompletableFuture<ProgramResult> getProgram(UUID playerUuid) {
-        if (!config.isEnabled()) {
-            return CompletableFuture.completedFuture(ProgramResult.configurationError(config.disabledReason()));
+        if (config.configurationError() != null) {
+            return CompletableFuture.completedFuture(ProgramResult.configurationError(config.configurationError()));
         }
 
-        URI endpoint = config.mainWorkerBaseUri().resolve("modapi/v1/players/" + playerUuid + "/program");
+        URI endpoint = connection.baseUri().resolve("modapi/v1/players/" + playerUuid + "/program");
         HttpRequest request = HttpRequest.newBuilder(endpoint)
                 .timeout(REQUEST_TIMEOUT)
                 .header("Accept", "application/json")
-                .header("Authorization", "Bearer " + config.mainWorkerApiKey())
+                .header("Authorization", "Bearer " + connection.apiKey())
                 .GET()
                 .build();
 
@@ -115,15 +122,16 @@ public final class MainWorkerClient implements MainWorker {
         if (executions == null) {
             throw new IllegalArgumentException("executions must not be null");
         }
-        if (!config.isEnabled()) {
-            return CompletableFuture.completedFuture(ExecutionSyncResult.configurationError(config.disabledReason()));
+        if (config.configurationError() != null) {
+            return CompletableFuture.completedFuture(
+                    ExecutionSyncResult.configurationError(config.configurationError()));
         }
 
-        URI endpoint = config.mainWorkerBaseUri().resolve("modapi/v1/executions");
+        URI endpoint = connection.baseUri().resolve("modapi/v1/executions");
         HttpRequest request = HttpRequest.newBuilder(endpoint)
                 .timeout(REQUEST_TIMEOUT)
                 .header("Accept", "application/octet-stream")
-                .header("Authorization", "Bearer " + config.mainWorkerApiKey())
+                .header("Authorization", "Bearer " + connection.apiKey())
                 .header("Content-Type", "application/octet-stream")
                 .POST(HttpRequest.BodyPublishers.ofByteArray(executions.toByteArray()))
                 .build();
@@ -145,6 +153,9 @@ public final class MainWorkerClient implements MainWorker {
         if (stats == null) {
             throw new IllegalArgumentException("execution stats must not be null");
         }
+        if (config.configurationError() != null) {
+            return;
+        }
         executionStatsStreamer.offer(stats);
     }
 
@@ -156,6 +167,9 @@ public final class MainWorkerClient implements MainWorker {
             int executionCount,
             int executionLimit,
             long totalExecutionStateLimit) {
+        if (config.configurationError() != null) {
+            return;
+        }
         executionTransitionPublisher.offer(
                 playerId, executionId, transition, executionCount, executionLimit, totalExecutionStateLimit);
     }
@@ -163,11 +177,17 @@ public final class MainWorkerClient implements MainWorker {
     /** Publishes a non-durable execution-pool transition without blocking the server tick. */
     @Override
     public void reportExecutionPoolTransition(UUID playerId, ExecutionPoolTransition transition) {
+        if (config.configurationError() != null) {
+            return;
+        }
         executionTransitionPublisher.offerPoolTransition(playerId, transition);
     }
 
     /** Publishes a non-durable state-limit log entry without blocking the server tick. */
     public void reportLimitExceeded(UUID playerId, UUID executionId, String reason) {
+        if (config.configurationError() != null) {
+            return;
+        }
         executionTransitionPublisher.offerLimitExceeded(playerId, executionId, reason);
     }
 
@@ -182,7 +202,7 @@ public final class MainWorkerClient implements MainWorker {
         private static final long INITIAL_RECONNECT_MILLIS = 1_000;
         private static final long MAX_RECONNECT_MILLIS = 30_000;
 
-        private final CobblewareConfig config;
+        private final MainWorkerConnection connection;
         private final HttpClient httpClient;
         private final Logger logger;
         private final Object lock = new Object();
@@ -200,16 +220,13 @@ public final class MainWorkerClient implements MainWorker {
         private boolean closed;
         private long nextReconnectMillis = INITIAL_RECONNECT_MILLIS;
 
-        private ExecutionStatsStreamer(CobblewareConfig config, HttpClient httpClient, Logger logger) {
-            this.config = config;
+        private ExecutionStatsStreamer(MainWorkerConnection connection, HttpClient httpClient, Logger logger) {
+            this.connection = connection;
             this.httpClient = httpClient;
             this.logger = logger;
         }
 
         private void offer(ExecutionStatsTick tick) {
-            if (!config.isEnabled()) {
-                return;
-            }
             byte[] bytes = tick.toByteArray();
             WebSocket target;
             synchronized (lock) {
@@ -245,11 +262,11 @@ public final class MainWorkerClient implements MainWorker {
             if (closed || socket != null || connecting != null || (reconnect != null && !reconnect.isDone())) {
                 return;
             }
-            URI endpoint = websocketUri(config.mainWorkerBaseUri().resolve("modapi/v1/execution-stats"));
+            URI endpoint = websocketUri(connection.baseUri().resolve("modapi/v1/execution-stats"));
             connecting = httpClient
                     .newWebSocketBuilder()
                     .connectTimeout(CONNECT_TIMEOUT)
-                    .header("Authorization", "Bearer " + config.mainWorkerApiKey())
+                    .header("Authorization", "Bearer " + connection.apiKey())
                     .buildAsync(endpoint, this);
             connecting.whenComplete((opened, failure) -> {
                 synchronized (lock) {

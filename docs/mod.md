@@ -5,14 +5,8 @@ design details for how the Mod facilitates program execution.
 
 ## Configuration
 
-The Mod reads `config/cobbleware.json` when the server starts. In addition to its Main Worker
-connection settings, it accepts these optional settings:
+The Mod reads `config/cobbleware.json` when the server starts. It accepts these optional settings:
 
-* `runtimeMode`, an optional string that defaults to `auto`. On a release JAR with compatible
-  packaged workers and a pinned Runtime release, `auto` downloads (when no verified cached copy
-  exists), stages, and owns the Runtime process asynchronously; on an ordinary development JAR with no packaged
-  Runtime manifest, it leaves the configured external Runtime alone. `managed` requires the
-  packaged resources and owns the process, while `external` does neither.
 * `runtimePort`, which defaults to 9000 and selects the loopback port used by a Mod-managed Runtime.
   It must be an integer from 1 through 65535.
 * `instrumentationWindowTicks`, which defaults to 600 and controls the number of server ticks
@@ -34,10 +28,8 @@ connection settings, it accepts these optional settings:
 * `bestEffortPoolSize`, a non-negative integer that defaults to zero and sets the size of the
   best-effort execution pool.
 
-When the Mod starts a Runtime itself, it creates a fresh in-memory API key for that server start
-and supplies it to both the Runtime and its own Main Worker client. The key is never stored in the
-configuration file. A non-empty `mainWorkerApiKey` is ignored in that case and produces a warning;
-it remains the credential for `external` and `auto` without packaged resources.
+The Mod always starts the Runtime and creates a fresh in-memory API key to secure
+communication between the Mod and the Runtime.
 
 Starting or resuming an execution is rejected when it would exceed the running-execution cap. When a
 chunk falls below Minecraft's `BLOCK_TICKING` status, the Mod immediately removes a running execution
@@ -412,34 +404,45 @@ counts; qualified views contain their relevant breakdowns. Metric rows use
 Minecraft's built-in uniform font and ordinary-space padding for readable column
 alignment in the command output.
 
-## Managed Runtime Development Test
+## Runtime Management
 
-On Windows, `./gradlew.bat runServer` stages the same worker resources and pinned release manifest
-as a release JAR, so the default development server exercises the release-resource download,
-staging, and managed-process paths against the usual `java/cobbleware/run` server directory:
+To keep the size of the Mod manageable, the Mod does not bundle the Runtime binaries.
+Instead, an architecture-specific Runtime release is downloaded on startup and placed
+in `cobbleware-data/runtime/{os}-{arch}/{sha}`. The Mod is built and tested
+against a specific Runtime release version. That version and the SHA of the binary
+for each supported OS/arch are built into the Mod. Shipping a new Runtime release
+cannot (by design) be done transparently without server admin awareness.
+It requires a new Mod release.
 
-```powershell
-./gradlew.bat runServer
+Bundled ESZips of the main and event worker code _are_ bundled in the Mod.
+These are extracted at startup to `cobbleware-data/workers`, replacing
+the existing files if there are any.
+
+The Mod is responsible for managing the process lifecycle of the Runtime.
+Downloading and starting the runtime process happen asynchronously and do
+not block server start-up. The server will still start if a problem is encountered,
+and programs will not execute until the problem is resolved.
+
+## Local Development and Testing
+
+```bash
+gradlew runServer
 ```
 
-Gradle downloads the pinned Windows Runtime to bundle worker ESZips, then the Mod independently
-downloads the pinned Windows or Linux x86_64 release asset if a verified world cache is absent.
-It stages the runtime under `run/world/cobbleware-data/runtime` and starts it on `runtimePort`
-(default 9000). The binary and both ESZips are SHA-256 verified on every reuse; a partial or
-tampered cache is discarded and replaced, while a failed download or checksum mismatch never starts
-a Runtime. Staging and startup run outside the Minecraft server thread; the server logs when a
-Runtime download starts and when its checksum-verified download finishes. Until a managed Runtime
-is ready, execution delivery is deferred and Runtime-dependent player commands explain that it is
-still preparing. A configured `mainWorkerApiKey` is intentionally ignored for this run because the
-managed Runtime receives a fresh in-memory key.
+The `gradlew runServer` task builds the Mod and starts a development server.
+The main and event workers are bundled and placed on the classpath.
+By default, the bundling is done using the edge runtime release pinned in
+`build.gradle` (see `runtimeRelease`), and the server will likewise download
+and run that runtime release. Local development on the Mod and workers does not
+require a rust toolchain and local runtime build.
 
-To build and run the local `mc-edge-runtime` checkout instead of downloading a pinned binary, add
-`-PuseLocalRuntime`:
+For development tasks that involve changes to the runtime itself, a developer
+can force the use of the locally built edge runtime in the `mc-edge-runtime` submodule
+with
 
-```powershell
-./gradlew.bat runServer -PuseLocalRuntime
+```bash
+gradlew runServer -PuseLocalRuntime
 ```
 
-This is intended for Runtime development. Gradle builds the local Windows Runtime for worker
-bundling and passes it to the Mod, which verifies and stages that local file without contacting
-GitHub for the managed Runtime.
+The local `mc-edge-runtime` checkout will be built, if necessary, and used by the Mod as
+the Runtime.

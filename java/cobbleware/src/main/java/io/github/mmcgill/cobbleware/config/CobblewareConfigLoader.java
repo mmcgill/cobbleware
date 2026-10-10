@@ -5,8 +5,6 @@ import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
 import java.io.IOException;
 import java.math.BigDecimal;
-import java.net.URI;
-import java.net.URISyntaxException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.FileAlreadyExistsException;
 import java.nio.file.Files;
@@ -18,7 +16,6 @@ import org.slf4j.Logger;
 /** Loads Cobbleware's server configuration from Fabric's config directory. */
 public final class CobblewareConfigLoader {
     public static final String FILE_NAME = "cobbleware.json";
-    public static final String DEFAULT_MAIN_WORKER_URL = "http://localhost:9000";
     public static final int DEFAULT_INSTRUMENTATION_WINDOW_TICKS = 600;
     public static final int DEFAULT_MAX_RUNNING_EXECUTIONS_PER_PLAYER = 10;
     public static final int DEFAULT_MAX_QUEUED_EVENTS_PER_PLAYER = 200;
@@ -74,8 +71,6 @@ public final class CobblewareConfigLoader {
         }
 
         JsonObject object = element.getAsJsonObject();
-        String mainWorkerUrl = requiredString(object, "mainWorkerUrl");
-        String mainWorkerApiKey = requiredString(object, "mainWorkerApiKey");
         int instrumentationWindowTicks =
                 optionalPositiveInt(object, "instrumentationWindowTicks", DEFAULT_INSTRUMENTATION_WINDOW_TICKS);
         int maxRunningExecutionsPerPlayer =
@@ -88,12 +83,8 @@ public final class CobblewareConfigLoader {
                 object, "maxTotalExecutionStateBytesPerPlayer", DEFAULT_MAX_TOTAL_EXECUTION_STATE_BYTES_PER_PLAYER);
         int guaranteedPoolSize = optionalPositiveInt(object, "guaranteedPoolSize", DEFAULT_GUARANTEED_POOL_SIZE);
         int bestEffortPoolSize = optionalNonNegativeInt(object, "bestEffortPoolSize", DEFAULT_BEST_EFFORT_POOL_SIZE);
-        RuntimeMode runtimeMode = optionalRuntimeMode(object);
         int runtimePort = optionalPort(object, "runtimePort", DEFAULT_RUNTIME_PORT);
-        URI baseUri = normalizeBaseUri(mainWorkerUrl);
         return new CobblewareConfig(
-                baseUri,
-                mainWorkerApiKey,
                 instrumentationWindowTicks,
                 maxRunningExecutionsPerPlayer,
                 maxQueuedEventsPerPlayer,
@@ -101,19 +92,8 @@ public final class CobblewareConfigLoader {
                 maxTotalExecutionStateBytesPerPlayer,
                 guaranteedPoolSize,
                 bestEffortPoolSize,
-                runtimeMode,
                 runtimePort,
                 null);
-    }
-
-    private static String requiredString(JsonObject object, String property) {
-        JsonElement value = object.get(property);
-        if (value == null
-                || !value.isJsonPrimitive()
-                || !value.getAsJsonPrimitive().isString()) {
-            throw new IllegalArgumentException(property + " must be a JSON string");
-        }
-        return value.getAsString();
     }
 
     private static int optionalPositiveInt(JsonObject object, String property, int defaultValue) {
@@ -174,17 +154,6 @@ public final class CobblewareConfigLoader {
         }
     }
 
-    private static RuntimeMode optionalRuntimeMode(JsonObject object) {
-        JsonElement value = object.get("runtimeMode");
-        if (value == null) {
-            return RuntimeMode.AUTO;
-        }
-        if (!value.isJsonPrimitive() || !value.getAsJsonPrimitive().isString()) {
-            throw new IllegalArgumentException("runtimeMode must be a JSON string");
-        }
-        return RuntimeMode.parse(value.getAsString());
-    }
-
     private static int optionalPort(JsonObject object, String property, int defaultValue) {
         JsonElement value = object.get(property);
         if (value == null) {
@@ -204,29 +173,9 @@ public final class CobblewareConfigLoader {
         }
     }
 
-    private static URI normalizeBaseUri(String value) {
-        try {
-            URI parsed = new URI(value);
-            String scheme = parsed.getScheme();
-            if (!parsed.isAbsolute()
-                    || parsed.getHost() == null
-                    || !("http".equalsIgnoreCase(scheme) || "https".equalsIgnoreCase(scheme))
-                    || parsed.getRawUserInfo() != null
-                    || parsed.getRawQuery() != null
-                    || parsed.getRawFragment() != null) {
-                throw new IllegalArgumentException(
-                        "mainWorkerUrl must be an absolute HTTP or HTTPS URL without credentials, query, or fragment");
-            }
-            return new URI(parsed.toString().endsWith("/") ? parsed.toString() : parsed + "/");
-        } catch (URISyntaxException exception) {
-            throw new IllegalArgumentException("mainWorkerUrl is not a valid URI", exception);
-        }
-    }
-
     private static String defaultJson() {
         return "{\n"
-                + "  \"mainWorkerUrl\": \"" + DEFAULT_MAIN_WORKER_URL + "\",\n"
-                + "  \"mainWorkerApiKey\": \"\",\n"
+                + "  \"runtimePort\": " + DEFAULT_RUNTIME_PORT + ",\n"
                 + "  \"instrumentationWindowTicks\": " + DEFAULT_INSTRUMENTATION_WINDOW_TICKS + ",\n"
                 + "  \"maxRunningExecutionsPerPlayer\": "
                 + DEFAULT_MAX_RUNNING_EXECUTIONS_PER_PLAYER + ",\n"

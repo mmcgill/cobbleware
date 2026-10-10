@@ -44,10 +44,7 @@ The Fabric Mod currently creates `config/cobbleware.json` on first start.
 | Setting | Default | Description |
 | --- | --- | --- |
 | `instrumentationWindowTicks` | `600` | Positive integer number of server ticks retained in the in-memory instrumentation window (30 seconds at 20 ticks per second). Existing configuration files may omit it. |
-| `mainWorkerApiKey` | Empty string | Required string shared with the Main Worker's `COBBLEWARE_API_KEY` for external/manual Runtimes. It is ignored, with a warning, when the Mod starts a managed Runtime because that process receives a fresh in-memory key. |
-| `mainWorkerUrl` | `http://localhost:9000` | Required absolute HTTP or HTTPS Main Worker base URL, without credentials, query, or fragment. A path is allowed. |
-| `runtimeMode` | `auto` | Optional lifecycle mode. A release JAR with bundled workers and a Runtime release pin downloads, stages, and manages a local Runtime; a development JAR without them continues to use an externally started Runtime. Use `external` to opt out or `managed` to require the packaged resources. |
-| `runtimePort` | `9000` | Integer from 1 through 65535 used by a Mod-managed Runtime listening on loopback. |
+| `runtimePort` | `9000` | Integer from 1 through 65535 used by the Mod-managed Runtime listening on loopback. The Mod creates its API key in memory on every server start. |
 | `maxRunningExecutionsPerPlayer` | `10` | Positive integer cap on each player's block-ticking `RUNNING` Cobbleputer executions across all dimensions. Starting or resuming beyond it is rejected; a running execution is stopped when its chunk stops block ticking and resumes when it starts block ticking again only when capacity permits. Existing configuration files may omit it. |
 | `maxTotalExecutionStateBytesPerPlayer` | `1048576` | Positive integer cap, in bytes, on all durable Cobbleputer execution-state arrays owned by one player. Running, stopped, crashed, and unloaded executions count; events, effects, and protobuf/file overhead do not. The Mod derives a per-execution state-size allowance for each Runtime sync, and discards/crashes an execution whose returned state would exceed the authoritative total. Existing configuration files may omit it. |
 

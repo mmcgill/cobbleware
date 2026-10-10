@@ -1,7 +1,7 @@
 package io.github.mmcgill.cobbleware.runtime;
 
+import io.github.mmcgill.cobbleware.api.MainWorkerConnection;
 import io.github.mmcgill.cobbleware.config.CobblewareConfig;
-import io.github.mmcgill.cobbleware.config.RuntimeMode;
 import java.io.BufferedReader;
 import java.io.IOException;
 import java.net.InetSocketAddress;
@@ -28,10 +28,9 @@ public final class RuntimeManager implements AutoCloseable {
     private static final Duration READY_TIMEOUT = Duration.ofSeconds(30);
     private static final Duration READY_RETRY_DELAY = Duration.ofMillis(100);
     private final CobblewareConfig configured;
-    private final CobblewareConfig effective;
+    private final MainWorkerConnection connection;
     private final RuntimeDistribution distribution;
     private final Logger logger;
-    private final boolean managesProcess;
     private final ExecutorService startupExecutor = Executors.newSingleThreadExecutor(runnable -> {
         Thread thread = new Thread(runnable, "Cobbleware Runtime startup");
         thread.setDaemon(true);
@@ -44,46 +43,32 @@ public final class RuntimeManager implements AutoCloseable {
 
     private RuntimeManager(
             CobblewareConfig configured,
-            CobblewareConfig effective,
+            MainWorkerConnection connection,
             RuntimeDistribution distribution,
-            Logger logger,
-            boolean managesProcess) {
+            Logger logger) {
         this.configured = configured;
-        this.effective = effective;
+        this.connection = connection;
         this.distribution = distribution;
         this.logger = logger;
-        this.managesProcess = managesProcess;
-        state = managesProcess ? State.IDLE : State.EXTERNAL;
+        state = State.IDLE;
     }
 
-    /** Prepares the effective Mod connection before Main Worker clients are constructed. */
+    /** Prepares the per-server Main Worker connection before clients are constructed. */
     public static RuntimeManager prepare(CobblewareConfig config, Logger logger) {
         RuntimeDistribution distribution = new RuntimeDistribution(RuntimeManager.class.getClassLoader(), logger);
-        boolean bundled = distribution.isBundled();
-        boolean managesProcess = config.configurationError() == null
-                && (config.runtimeMode() == RuntimeMode.MANAGED
-                        || (config.runtimeMode() == RuntimeMode.AUTO && bundled));
-        CobblewareConfig effective = config;
-        if (managesProcess) {
-            if (!config.mainWorkerApiKey().isEmpty()) {
-                logger.warn(
-                        "Cobbleware mainWorkerApiKey is ignored because this server starts a managed Runtime with a per-start API key");
-            }
-            String apiKey = newApiKey();
-            URI localRuntime = URI.create("http://127.0.0.1:" + config.runtimePort() + "/");
-            effective = config.withMainWorkerConnection(localRuntime, apiKey);
-        }
-        return new RuntimeManager(config, effective, distribution, logger, managesProcess);
+        String apiKey = newApiKey();
+        URI localRuntime = URI.create("http://127.0.0.1:" + config.runtimePort() + "/");
+        return new RuntimeManager(config, new MainWorkerConnection(localRuntime, apiKey), distribution, logger);
     }
 
-    /** Returns the immutable Main Worker configuration selected for this server lifetime. */
-    public CobblewareConfig effectiveConfig() {
-        return effective;
+    /** Returns the immutable Main Worker connection selected for this server lifetime. */
+    public MainWorkerConnection connection() {
+        return connection;
     }
 
     /** Starts asynchronous staging after execution-pool capacity is known. */
     public synchronized void start(MinecraftServer server, int executionPoolCapacity) {
-        if (!managesProcess || closing || startupTask != null || process != null) {
+        if (configured.configurationError() != null || closing || startupTask != null || process != null) {
             return;
         }
         state = State.STAGING;
@@ -92,13 +77,16 @@ public final class RuntimeManager implements AutoCloseable {
         startupTask = startupExecutor.submit(() -> stageAndStart(worldRoot, executionPoolCapacity));
     }
 
-    /** Whether the managed Runtime can accept execution requests. */
+    /** Whether the Runtime can accept execution requests. */
     public synchronized boolean isReadyForExecutions() {
-        return !managesProcess || state == State.RUNNING;
+        return state == State.RUNNING;
     }
 
-    /** A player-facing explanation for a currently unavailable managed Runtime. */
+    /** A player-facing explanation for a currently unavailable Runtime. */
     public synchronized String unavailableReason() {
+        if (configured.configurationError() != null) {
+            return configured.configurationError();
+        }
         return switch (state) {
             case STAGING -> "Cobbleware Runtime is downloading or staging; try again shortly.";
             case STARTING -> "Cobbleware Runtime is starting; try again shortly.";
@@ -123,11 +111,9 @@ public final class RuntimeManager implements AutoCloseable {
             ProcessBuilder builder = new ProcessBuilder(runtimeCommand(artifacts, configured.runtimePort()));
             builder.redirectErrorStream(true);
             builder.environment().put("COBBLEWARE_GAME_DIR", worldRoot.toString());
-            builder.environment().put("COBBLEWARE_API_KEY", effective.mainWorkerApiKey());
+            builder.environment().put("COBBLEWARE_API_KEY", connection.apiKey());
             builder.environment()
-                    .put(
-                            "COBBLEWARE_MAIN_WORKER_URL",
-                            effective.mainWorkerBaseUri().toString());
+                    .put("COBBLEWARE_MAIN_WORKER_URL", connection.baseUri().toString());
             builder.environment()
                     .put(
                             "EDGE_RUNTIME_WORKER_POOL_SIZE",
@@ -149,7 +135,7 @@ public final class RuntimeManager implements AutoCloseable {
                 }
                 state = State.RUNNING;
             }
-            logger.info("Cobbleware managed Runtime is ready on loopback port {}", configured.runtimePort());
+            logger.info("Cobbleware Runtime is ready on loopback port {}", configured.runtimePort());
         } catch (IOException | RuntimeException exception) {
             failStartup(exception);
         }
@@ -160,7 +146,7 @@ public final class RuntimeManager implements AutoCloseable {
             process = null;
             if (!closing) {
                 state = State.FAILED;
-                logger.warn("Cobbleware managed Runtime exited with status {}", exited.exitValue());
+                logger.warn("Cobbleware Runtime exited with status {}", exited.exitValue());
             }
         }
     }
@@ -205,8 +191,7 @@ public final class RuntimeManager implements AutoCloseable {
         if (running != null) {
             running.destroy();
         }
-        String prefix = configured.runtimeMode() == RuntimeMode.AUTO ? "Could not start optional" : "Could not start";
-        logger.error("{} Cobbleware managed Runtime: {}", prefix, exception.getMessage());
+        logger.error("Could not start Cobbleware Runtime: {}", exception.getMessage());
     }
 
     static List<String> runtimeCommand(RuntimeDistribution.Artifacts artifacts, int runtimePort) {
@@ -285,7 +270,6 @@ public final class RuntimeManager implements AutoCloseable {
     }
 
     private enum State {
-        EXTERNAL,
         IDLE,
         STAGING,
         STARTING,

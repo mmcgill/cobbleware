@@ -1,6 +1,5 @@
 package io.github.mmcgill.cobbleware.runtime;
 
-import com.google.gson.JsonArray;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
@@ -20,9 +19,7 @@ import java.nio.file.StandardCopyOption;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.time.Duration;
-import java.util.ArrayList;
 import java.util.HexFormat;
-import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
@@ -80,25 +77,16 @@ final class RuntimeDistribution {
         this.logger = logger;
     }
 
-    boolean isBundled() {
-        try (InputStream stream = classLoader.getResourceAsStream(MANIFEST_RESOURCE)) {
-            return stream != null;
-        } catch (IOException exception) {
-            return false;
-        }
-    }
-
     Artifacts stage(Path worldRoot) throws IOException {
         DistributionSpec distribution = readDistribution();
         Path root = worldRoot.resolve("cobbleware-data").resolve("runtime").resolve(distribution.platform());
-        Path target = root.resolve(distribution.distributionId());
+        Path target = root.resolve(distribution.executable().sha256());
         Artifacts artifacts =
-                artifacts(target, distribution.executable(), distribution.mainWorker(), distribution.eventWorker());
+                artifacts(target, worldRoot.resolve("cobbleware-data").resolve("workers"));
+        extractWorkers(artifacts);
         if (Files.exists(target)) {
             try {
                 verifyExisting(artifacts.binary(), distribution.executable());
-                verifyExisting(artifacts.mainWorker(), distribution.mainWorker());
-                verifyExisting(artifacts.eventWorker(), distribution.eventWorker());
                 logInfo(
                         "Reusing verified Cobbleware Runtime {} ({}) from {}",
                         distribution.releaseTag(),
@@ -111,12 +99,9 @@ final class RuntimeDistribution {
         }
 
         Files.createDirectories(root);
-        Path temporary = root.resolve(distribution.distributionId() + ".tmp-" + UUID.randomUUID());
-        Files.createDirectories(temporary);
+        Path temporary = root.resolve(distribution.executable().sha256() + ".tmp-" + UUID.randomUUID());
         try {
-            Path binary = temporary
-                    .resolve("runtime")
-                    .resolve(distribution.executable().path());
+            Path binary = temporary;
             Files.createDirectories(binary.getParent());
             boolean downloaded = distribution.localBinary() == null;
             if (distribution.localBinary() == null) {
@@ -141,18 +126,6 @@ final class RuntimeDistribution {
                         distribution.releaseTag(),
                         distribution.platform());
             }
-            writeVerified(
-                    temporary
-                            .resolve("workers")
-                            .resolve(distribution.mainWorker().path()),
-                    WORKER_RESOURCE_PREFIX + distribution.mainWorker().path(),
-                    distribution.mainWorker());
-            writeVerified(
-                    temporary
-                            .resolve("workers")
-                            .resolve(distribution.eventWorker().path()),
-                    WORKER_RESOURCE_PREFIX + distribution.eventWorker().path(),
-                    distribution.eventWorker());
             if (!distribution.platform().startsWith("windows-")
                     && !binary.toFile().setExecutable(true, true)) {
                 throw new IOException("Could not mark Runtime executable as runnable");
@@ -170,8 +143,6 @@ final class RuntimeDistribution {
             }
         }
         verifyExisting(artifacts.binary(), distribution.executable());
-        verifyExisting(artifacts.mainWorker(), distribution.mainWorker());
-        verifyExisting(artifacts.eventWorker(), distribution.eventWorker());
         logInfo(
                 "Finished staging Cobbleware Runtime {} ({}) in {}",
                 distribution.releaseTag(),
@@ -188,7 +159,7 @@ final class RuntimeDistribution {
 
     private DistributionSpec readDistribution() throws IOException {
         JsonObject manifest = readManifest();
-        if (requiredInt(manifest, "schemaVersion") != 2) {
+        if (requiredInt(manifest, "schemaVersion") != 3) {
             throw new IOException("Unsupported Runtime manifest schema version");
         }
         JsonObject release = requiredObject(manifest, "release");
@@ -213,18 +184,7 @@ final class RuntimeDistribution {
         Path localBinary = localRuntime();
         FileSpec executable =
                 localBinary == null ? nativeFile(platformElement.getAsJsonObject()) : localFile(localBinary);
-        List<FileSpec> workerFiles = files(requiredArray(manifest, "workers"));
-        FileSpec mainWorker = find(workerFiles, "main-worker.eszip");
-        FileSpec eventWorker = find(workerFiles, "event-worker.eszip");
-        return new DistributionSpec(
-                repository,
-                releaseTag,
-                platform,
-                executable,
-                mainWorker,
-                eventWorker,
-                localBinary,
-                distributionId(repository, releaseTag, platform, executable, mainWorker, eventWorker));
+        return new DistributionSpec(repository, releaseTag, platform, executable, localBinary);
     }
 
     private JsonObject readManifest() throws IOException {
@@ -240,11 +200,8 @@ final class RuntimeDistribution {
         }
     }
 
-    private static Artifacts artifacts(Path root, FileSpec executable, FileSpec mainWorker, FileSpec eventWorker) {
-        return new Artifacts(
-                root.resolve("runtime").resolve(executable.path()),
-                root.resolve("workers").resolve(mainWorker.path()),
-                root.resolve("workers").resolve(eventWorker.path()));
+    private static Artifacts artifacts(Path binary, Path workers) {
+        return new Artifacts(binary, workers.resolve("main-worker.eszip"), workers.resolve("event-worker.eszip"));
     }
 
     private static URI downloadUri(DistributionSpec distribution) {
@@ -252,11 +209,13 @@ final class RuntimeDistribution {
                 + distribution.releaseTag() + "/" + distribution.executable().path());
     }
 
-    private void writeVerified(Path destination, String resource, FileSpec file) throws IOException {
+    private void extractWorkers(Artifacts artifacts) throws IOException {
+        writeResource(artifacts.mainWorker(), WORKER_RESOURCE_PREFIX + "main-worker.eszip");
+        writeResource(artifacts.eventWorker(), WORKER_RESOURCE_PREFIX + "event-worker.eszip");
+    }
+
+    private void writeResource(Path destination, String resource) throws IOException {
         byte[] bytes = readResource(resource);
-        if (!sha256(bytes).equals(file.sha256())) {
-            throw new IOException("Checksum mismatch for bundled Runtime worker " + resource);
-        }
         Files.createDirectories(destination.getParent());
         Files.write(destination, bytes);
     }
@@ -308,20 +267,6 @@ final class RuntimeDistribution {
         return new FileSpec(asset, sha256(local));
     }
 
-    private static List<FileSpec> files(JsonArray values) throws IOException {
-        List<FileSpec> result = new ArrayList<>();
-        for (JsonElement element : values) {
-            if (!element.isJsonObject()) {
-                throw new IOException("Runtime manifest worker entry must be an object");
-            }
-            JsonObject file = element.getAsJsonObject();
-            String path = requiredString(file, "path");
-            requireSafeSegment(path, "worker path");
-            result.add(new FileSpec(path, checksum(file)));
-        }
-        return result;
-    }
-
     private static String checksum(JsonObject object) throws IOException {
         String sha256 = requiredString(object, "sha256").toLowerCase(Locale.ROOT);
         if (!sha256.matches("[0-9a-f]{64}")) {
@@ -330,29 +275,12 @@ final class RuntimeDistribution {
         return sha256;
     }
 
-    private static FileSpec find(List<FileSpec> files, String expectedPath) throws IOException {
-        List<FileSpec> matches =
-                files.stream().filter(file -> file.path().equals(expectedPath)).toList();
-        if (matches.size() != 1) {
-            throw new IOException("Runtime manifest must contain exactly one worker " + expectedPath);
-        }
-        return matches.getFirst();
-    }
-
     private static JsonObject requiredObject(JsonObject object, String property) throws IOException {
         JsonElement value = object.get(property);
         if (value == null || !value.isJsonObject()) {
             throw new IOException("Runtime manifest " + property + " must be an object");
         }
         return value.getAsJsonObject();
-    }
-
-    private static JsonArray requiredArray(JsonObject object, String property) throws IOException {
-        JsonElement value = object.get(property);
-        if (value == null || !value.isJsonArray()) {
-            throw new IOException("Runtime manifest " + property + " must be an array");
-        }
-        return value.getAsJsonArray();
     }
 
     private static int requiredInt(JsonObject object, String property) throws IOException {
@@ -395,25 +323,6 @@ final class RuntimeDistribution {
             return "linux-x86_64";
         }
         throw new IOException("Unsupported Runtime platform " + os + "-" + arch);
-    }
-
-    private static String distributionId(
-            String repository,
-            String releaseTag,
-            String platform,
-            FileSpec executable,
-            FileSpec mainWorker,
-            FileSpec eventWorker)
-            throws IOException {
-        String identity = String.join(
-                "\n",
-                repository,
-                releaseTag,
-                platform,
-                executable.path() + ":" + executable.sha256(),
-                mainWorker.path() + ":" + mainWorker.sha256(),
-                eventWorker.path() + ":" + eventWorker.sha256());
-        return sha256(identity.getBytes(StandardCharsets.UTF_8));
     }
 
     private static String sha256(Path file) throws IOException {
@@ -512,12 +421,5 @@ final class RuntimeDistribution {
     private record FileSpec(String path, String sha256) {}
 
     private record DistributionSpec(
-            String repository,
-            String releaseTag,
-            String platform,
-            FileSpec executable,
-            FileSpec mainWorker,
-            FileSpec eventWorker,
-            Path localBinary,
-            String distributionId) {}
+            String repository, String releaseTag, String platform, FileSpec executable, Path localBinary) {}
 }

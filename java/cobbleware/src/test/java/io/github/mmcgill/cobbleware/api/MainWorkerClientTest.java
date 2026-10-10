@@ -70,9 +70,10 @@ class MainWorkerClientTest {
     }
 
     @Test
-    void doesNotMakeRequestsWhenApiKeyIsEmpty() throws Exception {
+    void doesNotMakeRequestsWhenConfigurationIsInvalid() throws Exception {
         MainWorkerClient client = new MainWorkerClient(
-                new CobblewareConfig(URI.create("http://127.0.0.1:1/"), "", 600, 10, 200, 200, 1024, 0, 0, null),
+                CobblewareConfig.disabled("invalid configuration"),
+                new MainWorkerConnection(URI.create("http://127.0.0.1:1/"), "key"),
                 HttpClient.newHttpClient(),
                 LOGGER);
 
@@ -80,7 +81,7 @@ class MainWorkerClientTest {
                 client.authenticate(request()).get();
 
         assertEquals(MainWorkerClient.Status.CONFIGURATION_ERROR, result.status());
-        assertEquals("mainWorkerApiKey is empty", result.detail());
+        assertEquals("invalid configuration", result.detail());
     }
 
     @Test
@@ -222,14 +223,19 @@ class MainWorkerClientTest {
     private MainWorkerClient client(String apiKey) {
         URI baseUri = URI.create("http://127.0.0.1:" + server.getAddress().getPort() + "/worker/");
         return new MainWorkerClient(
-                new CobblewareConfig(baseUri, apiKey, 600, 10, 200, 200, 1024, 0, 0, null),
+                config(),
+                new MainWorkerConnection(baseUri, apiKey),
                 HttpClient.newBuilder().connectTimeout(Duration.ofSeconds(1)).build(),
                 LOGGER);
     }
 
     private MainWorkerClient productionClient(String apiKey) {
         URI baseUri = URI.create("http://127.0.0.1:" + server.getAddress().getPort() + "/worker/");
-        return new MainWorkerClient(new CobblewareConfig(baseUri, apiKey, 600, 10, 200, 200, 1024, 0, 0, null), LOGGER);
+        return new MainWorkerClient(config(), new MainWorkerConnection(baseUri, apiKey), LOGGER);
+    }
+
+    private static CobblewareConfig config() {
+        return new CobblewareConfig(600, 10, 200, 200, 1024, 0, 0, 9000, null);
     }
 
     private static MainWorkerClient.AuthenticationRequest request() {

@@ -88,12 +88,8 @@ public final class CobblewareMod implements ModInitializer {
 
         CobblewareConfig configured = CobblewareConfigLoader.load(LOGGER);
         RuntimeManager runtimeManager = RuntimeManager.prepare(configured, LOGGER);
-        CobblewareConfig config = runtimeManager.effectiveConfig();
-        if (config.configurationError() == null && config.mainWorkerApiKey().isEmpty()) {
-            LOGGER.error("Cobbleware mainWorkerApiKey is empty; authentication commands are disabled until it is"
-                    + " configured");
-        }
-        MainWorkerClient mainWorkerClient = new MainWorkerClient(config, LOGGER);
+        MainWorkerClient mainWorkerClient = new MainWorkerClient(configured, runtimeManager.connection(), LOGGER);
+        CobblewareConfig config = configured;
         Instrumentation instrumentation = new Instrumentation(config.instrumentationWindowTicks());
         executionPoolManager = new ExecutionPoolManager(config.guaranteedPoolSize(), config.bestEffortPoolSize());
         executionDriver = new ExecutionDriver(

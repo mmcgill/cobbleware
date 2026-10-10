@@ -26,7 +26,7 @@ class RuntimeDistributionTest {
     Path temporaryDirectory;
 
     @Test
-    void downloadsStagesAndReusesThePinnedLinuxRuntime() throws Exception {
+    void downloadsStagesAndReusesThePinnedLinuxRuntimeWhileRefreshingWorkers() throws Exception {
         AtomicInteger downloads = new AtomicInteger();
         RuntimeDistribution distribution = distribution(
                 manifest(BINARY),
@@ -41,10 +41,16 @@ class RuntimeDistributionTest {
                 "amd64");
 
         RuntimeDistribution.Artifacts first = distribution.stage(temporaryDirectory);
+        Files.writeString(first.mainWorker(), "stale");
         RuntimeDistribution.Artifacts second = distribution.stage(temporaryDirectory);
 
         assertEquals(first, second);
         assertEquals(1, downloads.get());
+        assertEquals(
+                temporaryDirectory
+                        .resolve("cobbleware-data/runtime/linux-x86_64")
+                        .resolve(sha256(BINARY)),
+                first.binary());
         assertArrayEquals(BINARY, Files.readAllBytes(first.binary()));
         assertArrayEquals(MAIN_WORKER, Files.readAllBytes(first.mainWorker()));
         assertArrayEquals(EVENT_WORKER, Files.readAllBytes(first.eventWorker()));
@@ -71,7 +77,7 @@ class RuntimeDistributionTest {
     }
 
     @Test
-    void rejectsADownloadWhoseDigestDoesNotMatchThePin() throws Exception {
+    void rejectsADownloadWhoseDigestDoesNotMatchThePin() {
         RuntimeDistribution distribution = distribution(
                 manifest(BINARY),
                 (source, destination, expectedSha256) -> Files.writeString(destination, "tampered"),
@@ -79,13 +85,9 @@ class RuntimeDistributionTest {
                 "x86_64");
 
         assertThrows(java.io.IOException.class, () -> distribution.stage(temporaryDirectory));
-
-        Path runtimeRoot = temporaryDirectory.resolve("cobbleware-data/runtime");
-        if (Files.exists(runtimeRoot)) {
-            try (var paths = Files.walk(runtimeRoot)) {
-                assertFalse(paths.anyMatch(path -> path.getFileName().toString().equals("edge-runtime-linux-x86_64")));
-            }
-        }
+        assertFalse(Files.exists(temporaryDirectory
+                .resolve("cobbleware-data/runtime/linux-x86_64")
+                .resolve(sha256(BINARY))));
     }
 
     @Test
@@ -167,7 +169,7 @@ class RuntimeDistributionTest {
     private static String manifest(byte[] binary) {
         return """
                 {
-                  "schemaVersion": 2,
+                  "schemaVersion": 3,
                   "release": {
                     "repository": "mmcgill/cobbleware",
                     "tag": "test-release"
@@ -181,13 +183,9 @@ class RuntimeDistributionTest {
                       "asset": "edge-runtime-linux-x86_64",
                       "sha256": "%s"
                     }
-                  },
-                  "workers": [
-                    { "path": "main-worker.eszip", "sha256": "%s" },
-                    { "path": "event-worker.eszip", "sha256": "%s" }
-                  ]
+                  }
                 }
-                """.formatted(sha256(binary), sha256(binary), sha256(MAIN_WORKER), sha256(EVENT_WORKER));
+                """.formatted(sha256(binary), sha256(binary));
     }
 
     private static String sha256(byte[] bytes) {

@@ -7,7 +7,6 @@ import cobbleware.internal.ExecutionPoolTransitionLogEntry;
 import cobbleware.internal.ExecutionTransition;
 import cobbleware.internal.ExecutionTransitionLogEntry;
 import cobbleware.internal.LimitExceededLogEntry;
-import io.github.mmcgill.cobbleware.config.CobblewareConfig;
 import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.WebSocket;
@@ -32,7 +31,7 @@ final class ExecutionTransitionPublisher implements WebSocket.Listener {
     private static final long MAX_RECONNECT_MILLIS = 30_000;
     private static final int MAX_PENDING_LOG_ENTRIES = 10_000;
 
-    private final CobblewareConfig config;
+    private final MainWorkerConnection connection;
     private final HttpClient httpClient;
     private final Logger logger;
     private final Object lock = new Object();
@@ -50,8 +49,8 @@ final class ExecutionTransitionPublisher implements WebSocket.Listener {
     private boolean closed;
     private long nextReconnectMillis = INITIAL_RECONNECT_MILLIS;
 
-    ExecutionTransitionPublisher(CobblewareConfig config, HttpClient httpClient, Logger logger) {
-        this.config = config;
+    ExecutionTransitionPublisher(MainWorkerConnection connection, HttpClient httpClient, Logger logger) {
+        this.connection = connection;
         this.httpClient = httpClient;
         this.logger = logger;
     }
@@ -73,10 +72,6 @@ final class ExecutionTransitionPublisher implements WebSocket.Listener {
                 || totalExecutionStateLimit <= 0) {
             throw new IllegalArgumentException("execution transition is invalid");
         }
-        if (!config.isEnabled()) {
-            return;
-        }
-
         synchronized (lock) {
             if (closed) {
                 return;
@@ -93,9 +88,6 @@ final class ExecutionTransitionPublisher implements WebSocket.Listener {
                 || transition == ExecutionPoolTransition.UNRECOGNIZED) {
             throw new IllegalArgumentException("execution-pool transition is invalid");
         }
-        if (!config.isEnabled()) {
-            return;
-        }
         synchronized (lock) {
             if (closed) {
                 return;
@@ -111,9 +103,6 @@ final class ExecutionTransitionPublisher implements WebSocket.Listener {
     void offerLimitExceeded(UUID playerId, UUID executionId, String reason) {
         if (playerId == null || executionId == null || reason == null || reason.isEmpty()) {
             throw new IllegalArgumentException("limit-exceeded log entry is invalid");
-        }
-        if (!config.isEnabled()) {
-            return;
         }
         synchronized (lock) {
             if (closed) {
@@ -166,11 +155,11 @@ final class ExecutionTransitionPublisher implements WebSocket.Listener {
         if (closed || socket != null || connecting != null || (reconnect != null && !reconnect.isDone())) {
             return;
         }
-        URI endpoint = websocketUri(config.mainWorkerBaseUri().resolve("modapi/v1/logs"));
+        URI endpoint = websocketUri(connection.baseUri().resolve("modapi/v1/logs"));
         connecting = httpClient
                 .newWebSocketBuilder()
                 .connectTimeout(CONNECT_TIMEOUT)
-                .header("Authorization", "Bearer " + config.mainWorkerApiKey())
+                .header("Authorization", "Bearer " + connection.apiKey())
                 .buildAsync(endpoint, this);
         connecting.whenComplete((opened, failure) -> {
             synchronized (lock) {
