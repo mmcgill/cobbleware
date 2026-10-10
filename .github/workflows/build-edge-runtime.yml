@@ -1,5 +1,7 @@
 name: Build Edge Runtime
 
+run-name: Edge Runtime release ${{ github.sha }} by @${{ github.actor }}
+
 on:
   workflow_dispatch:
 
@@ -11,6 +13,13 @@ jobs:
     name: Build Windows x86_64 runtime
     runs-on: windows-2022
     timeout-minutes: 45
+    outputs:
+      artifact_name: ${{ steps.runtime.outputs.artifact_name }}
+      cobbleware_sha: ${{ steps.identity.outputs.cobbleware_sha }}
+      release_sha: ${{ steps.identity.outputs.release_sha }}
+      runtime_sha: ${{ steps.identity.outputs.runtime_sha }}
+      runtime_submodules: ${{ steps.identity.outputs.runtime_submodules }}
+      runner_image: ${{ steps.identity.outputs.runner_image }}
 
     steps:
       - name: Check out Cobbleware
@@ -32,6 +41,26 @@ jobs:
           git -C mc-edge-runtime/rusty_v8 submodule update --init --depth 1 v8
           git submodule status
           git -C mc-edge-runtime submodule status
+
+      - name: Record release source identity
+        id: identity
+        shell: pwsh
+        run: |
+          $runtimeSha = (git -C mc-edge-runtime rev-parse HEAD).Trim()
+          $expectedRuntimeSha = (git ls-tree $env:GITHUB_SHA -- mc-edge-runtime).Split()[2]
+          if ($runtimeSha -ne $expectedRuntimeSha) {
+            throw "Checked-out Runtime SHA $runtimeSha does not match Cobbleware gitlink $expectedRuntimeSha"
+          }
+
+          $runtimeSubmodules = (git -C mc-edge-runtime submodule status --recursive |
+            ForEach-Object { $_ -replace '^[ +\-]', '' }) -join "`n"
+          "cobbleware_sha=$env:GITHUB_SHA" >> $env:GITHUB_OUTPUT
+          "release_sha=$($env:GITHUB_SHA.Substring(0, 12))" >> $env:GITHUB_OUTPUT
+          "runtime_sha=$runtimeSha" >> $env:GITHUB_OUTPUT
+          "runner_image=$env:ImageOS/$env:ImageVersion" >> $env:GITHUB_OUTPUT
+          "runtime_submodules<<EOF" >> $env:GITHUB_OUTPUT
+          $runtimeSubmodules >> $env:GITHUB_OUTPUT
+          "EOF" >> $env:GITHUB_OUTPUT
 
       - name: Install Rust toolchain from manifest
         shell: pwsh
@@ -98,6 +127,13 @@ jobs:
     name: Build Linux x86_64 runtime
     runs-on: ubuntu-24.04
     timeout-minutes: 30
+    outputs:
+      artifact_name: ${{ steps.runtime.outputs.artifact_name }}
+      cobbleware_sha: ${{ steps.identity.outputs.cobbleware_sha }}
+      release_sha: ${{ steps.identity.outputs.release_sha }}
+      runtime_sha: ${{ steps.identity.outputs.runtime_sha }}
+      runtime_submodules: ${{ steps.identity.outputs.runtime_submodules }}
+      runner_image: ${{ steps.identity.outputs.runner_image }}
 
     steps:
       - name: Check out Cobbleware
@@ -120,6 +156,25 @@ jobs:
           git -C mc-edge-runtime/rusty_v8 submodule update --init --depth 1 v8
           git submodule status
           git -C mc-edge-runtime submodule status
+
+      - name: Record release source identity
+        id: identity
+        shell: bash
+        run: |
+          set -euo pipefail
+          runtime_sha="$(git -C mc-edge-runtime rev-parse HEAD)"
+          expected_runtime_sha="$(git ls-tree "$GITHUB_SHA" -- mc-edge-runtime | awk '{print $3}')"
+          test "$runtime_sha" = "$expected_runtime_sha"
+
+          {
+            echo "cobbleware_sha=$GITHUB_SHA"
+            echo "release_sha=${GITHUB_SHA:0:12}"
+            echo "runtime_sha=$runtime_sha"
+            echo "runner_image=$ImageOS/$ImageVersion"
+            echo "runtime_submodules<<EOF"
+            git -C mc-edge-runtime submodule status --recursive | sed 's/^[ +-]//'
+            echo "EOF"
+          } >> "$GITHUB_OUTPUT"
 
       - name: Install Linux build dependencies
         shell: bash
@@ -187,3 +242,203 @@ jobs:
           if-no-files-found: error
           retention-days: 14
           compression-level: 0
+
+  publish-release:
+    name: Publish Edge Runtime release
+    needs: [build-windows, build-linux]
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions:
+      actions: read
+      contents: write
+
+    steps:
+      - name: Verify release source identities
+        id: release
+        shell: bash
+        env:
+          WINDOWS_COBBLEWARE_SHA: ${{ needs.build-windows.outputs.cobbleware_sha }}
+          WINDOWS_RELEASE_SHA: ${{ needs.build-windows.outputs.release_sha }}
+          WINDOWS_RUNTIME_SHA: ${{ needs.build-windows.outputs.runtime_sha }}
+          LINUX_COBBLEWARE_SHA: ${{ needs.build-linux.outputs.cobbleware_sha }}
+          LINUX_RELEASE_SHA: ${{ needs.build-linux.outputs.release_sha }}
+          LINUX_RUNTIME_SHA: ${{ needs.build-linux.outputs.runtime_sha }}
+        run: |
+          set -euo pipefail
+          test "$WINDOWS_COBBLEWARE_SHA" = "$LINUX_COBBLEWARE_SHA"
+          test "$WINDOWS_RELEASE_SHA" = "$LINUX_RELEASE_SHA"
+          test "$WINDOWS_RUNTIME_SHA" = "$LINUX_RUNTIME_SHA"
+          test "$WINDOWS_RELEASE_SHA" = "${WINDOWS_COBBLEWARE_SHA:0:12}"
+
+          echo "tag=edge-runtime-$WINDOWS_RELEASE_SHA" >> "$GITHUB_OUTPUT"
+          echo "cobbleware_sha=$WINDOWS_COBBLEWARE_SHA" >> "$GITHUB_OUTPUT"
+          echo "runtime_sha=$WINDOWS_RUNTIME_SHA" >> "$GITHUB_OUTPUT"
+
+      - name: Check release tag is unused
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ steps.release.outputs.tag }}
+        run: |
+          set -euo pipefail
+          if gh release view "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            echo "A release already exists for $RELEASE_TAG" >&2
+            exit 1
+          fi
+          if gh api --silent "repos/$GITHUB_REPOSITORY/git/ref/tags/$RELEASE_TAG" >/dev/null 2>&1; then
+            echo "A tag already exists for $RELEASE_TAG" >&2
+            exit 1
+          fi
+
+      - name: Download Windows runtime
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: ${{ needs.build-windows.outputs.artifact_name }}
+          path: ${{ runner.temp }}/edge-runtime-release/windows
+
+      - name: Download Linux runtime
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: ${{ needs.build-linux.outputs.artifact_name }}
+          path: ${{ runner.temp }}/edge-runtime-release/linux
+
+      - name: Assemble release assets
+        id: assets
+        shell: bash
+        env:
+          RELEASE_TAG: ${{ steps.release.outputs.tag }}
+          COBBLEWARE_SHA: ${{ steps.release.outputs.cobbleware_sha }}
+          RUNTIME_SHA: ${{ steps.release.outputs.runtime_sha }}
+          RUNTIME_SUBMODULES: ${{ needs.build-windows.outputs.runtime_submodules }}
+          WINDOWS_RUNNER_IMAGE: ${{ needs.build-windows.outputs.runner_image }}
+          LINUX_RUNNER_IMAGE: ${{ needs.build-linux.outputs.runner_image }}
+        run: |
+          set -euo pipefail
+          release_dir="$RUNNER_TEMP/edge-runtime-release/assets"
+          mkdir --parents "$release_dir"
+          test -f "$RUNNER_TEMP/edge-runtime-release/windows/edge-runtime.exe"
+          test -f "$RUNNER_TEMP/edge-runtime-release/linux/edge-runtime"
+          cp "$RUNNER_TEMP/edge-runtime-release/windows/edge-runtime.exe" "$release_dir/edge-runtime-windows-x86_64.exe"
+          cp "$RUNNER_TEMP/edge-runtime-release/linux/edge-runtime" "$release_dir/edge-runtime-linux-x86_64"
+          (
+            cd "$release_dir"
+            sha256sum edge-runtime-windows-x86_64.exe edge-runtime-linux-x86_64 > SHA256SUMS
+            sha256sum --check SHA256SUMS
+          )
+
+          windows_sha="$(sha256sum "$release_dir/edge-runtime-windows-x86_64.exe" | cut -d ' ' -f 1)"
+          linux_sha="$(sha256sum "$release_dir/edge-runtime-linux-x86_64" | cut -d ' ' -f 1)"
+          windows_size="$(stat --format=%s "$release_dir/edge-runtime-windows-x86_64.exe")"
+          linux_size="$(stat --format=%s "$release_dir/edge-runtime-linux-x86_64")"
+          notes="$RUNNER_TEMP/edge-runtime-release/release-notes.md"
+          cat > "$notes" <<EOF
+          Runtime binaries built from Cobbleware commit \`$COBBLEWARE_SHA\` and Edge Runtime commit \`$RUNTIME_SHA\`.
+
+          Build profile: \`release-small\`
+          Enabled features: \`tracing\`
+
+          | Asset | Size (bytes) | SHA-256 | Runner image |
+          | --- | ---: | --- | --- |
+          | \`edge-runtime-windows-x86_64.exe\` | $windows_size | \`$windows_sha\` | \`$WINDOWS_RUNNER_IMAGE\` |
+          | \`edge-runtime-linux-x86_64\` | $linux_size | \`$linux_sha\` | \`$LINUX_RUNNER_IMAGE\` |
+
+          \`SHA256SUMS\` contains the same checksums in a format suitable for \`sha256sum --check\`.
+
+          ## Edge Runtime submodules
+
+          \`\`\`text
+          $RUNTIME_SUBMODULES
+          \`\`\`
+          EOF
+
+          echo "directory=$release_dir" >> "$GITHUB_OUTPUT"
+          echo "notes=$notes" >> "$GITHUB_OUTPUT"
+          echo "windows_sha=$windows_sha" >> "$GITHUB_OUTPUT"
+          echo "linux_sha=$linux_sha" >> "$GITHUB_OUTPUT"
+          echo "windows_size=$windows_size" >> "$GITHUB_OUTPUT"
+          echo "linux_size=$linux_size" >> "$GITHUB_OUTPUT"
+
+      - name: Create draft release
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ steps.release.outputs.tag }}
+          COBBLEWARE_SHA: ${{ steps.release.outputs.cobbleware_sha }}
+          RELEASE_DIRECTORY: ${{ steps.assets.outputs.directory }}
+          RELEASE_NOTES: ${{ steps.assets.outputs.notes }}
+        run: |
+          set -euo pipefail
+          gh release create "$RELEASE_TAG" \
+            --repo "$GITHUB_REPOSITORY" \
+            --target "$COBBLEWARE_SHA" \
+            --title "Edge Runtime $RELEASE_TAG" \
+            --notes-file "$RELEASE_NOTES" \
+            --draft \
+            --latest=false \
+            "$RELEASE_DIRECTORY/edge-runtime-windows-x86_64.exe" \
+            "$RELEASE_DIRECTORY/edge-runtime-linux-x86_64" \
+            "$RELEASE_DIRECTORY/SHA256SUMS"
+
+      - name: Verify draft release assets
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ steps.release.outputs.tag }}
+          COBBLEWARE_SHA: ${{ steps.release.outputs.cobbleware_sha }}
+          WINDOWS_SHA: ${{ steps.assets.outputs.windows_sha }}
+          LINUX_SHA: ${{ steps.assets.outputs.linux_sha }}
+          WINDOWS_SIZE: ${{ steps.assets.outputs.windows_size }}
+          LINUX_SIZE: ${{ steps.assets.outputs.linux_size }}
+        run: |
+          set -euo pipefail
+          release="$(gh release view "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" --json isDraft,targetCommitish,assets)"
+          test "$(jq --raw-output '.isDraft' <<< "$release")" = true
+          test "$(jq --raw-output '.targetCommitish' <<< "$release")" = "$COBBLEWARE_SHA"
+          test "$(jq '.assets | length' <<< "$release")" = 3
+          jq --exit-status \
+            --arg sha "sha256:$WINDOWS_SHA" \
+            --argjson size "$WINDOWS_SIZE" \
+            'any(.assets[]; .name == "edge-runtime-windows-x86_64.exe" and .size == $size and .digest == $sha)' \
+            <<< "$release" >/dev/null
+          jq --exit-status \
+            --arg sha "sha256:$LINUX_SHA" \
+            --argjson size "$LINUX_SIZE" \
+            'any(.assets[]; .name == "edge-runtime-linux-x86_64" and .size == $size and .digest == $sha)' \
+            <<< "$release" >/dev/null
+          jq --exit-status \
+            'any(.assets[]; .name == "SHA256SUMS")' \
+            <<< "$release" >/dev/null
+
+      - name: Publish release
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ steps.release.outputs.tag }}
+        run: |
+          set -euo pipefail
+          gh release edit "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" --draft=false --latest=false
+
+      - name: Write release summary
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ steps.release.outputs.tag }}
+          COBBLEWARE_SHA: ${{ steps.release.outputs.cobbleware_sha }}
+          RUNTIME_SHA: ${{ steps.release.outputs.runtime_sha }}
+          WINDOWS_SHA: ${{ steps.assets.outputs.windows_sha }}
+          LINUX_SHA: ${{ steps.assets.outputs.linux_sha }}
+          WINDOWS_SIZE: ${{ steps.assets.outputs.windows_size }}
+          LINUX_SIZE: ${{ steps.assets.outputs.linux_size }}
+        run: |
+          set -euo pipefail
+          release_url="$(gh release view "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" --json url --jq .url)"
+          {
+            echo "## Published Edge Runtime release"
+            echo
+            echo "- Release: [$RELEASE_TAG]($release_url)"
+            echo "- Cobbleware commit: \`$COBBLEWARE_SHA\`"
+            echo "- Edge Runtime commit: \`$RUNTIME_SHA\`"
+            echo "- Windows x86_64: $WINDOWS_SIZE bytes, SHA-256 \`$WINDOWS_SHA\`"
+            echo "- Linux x86_64: $LINUX_SIZE bytes, SHA-256 \`$LINUX_SHA\`"
+          } >> "$GITHUB_STEP_SUMMARY"
