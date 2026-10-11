@@ -1,6 +1,10 @@
 # Cobbleware TypeScript library
 
-The Cobbleware library is the Edge Runtime-compatible API exposed to Cobbleputer program authors.
+The Cobbleware library is the
+[Edge Runtime](https://github.com/supabase/edge-runtime/)-compatible API
+exposed to [Cobbleware](https://github.com/mmcgill/cobbleware) program authors.
+This package is intended for use specifically with the Edge Runtime
+(or Deno, for local testing). It is not compatible with Node.js.
 
 ## Writing a program
 
@@ -19,8 +23,8 @@ start({
 });
 ```
 
-See [`../examples/src/index.ts`](../examples/src/index.ts) for complete programs. When
-testing an entry point that calls `start`, wrap that call in `if (import.meta.main)`.
+See [examples](https://github.com/mmcgill/cobbleware/tree/main/typescript/examples)
+for example usage.
 
 ## Development
 

@@ -1,6 +1,6 @@
 {
   "name": "@cobbleware/core",
-  "version": "0.1.0",
+  "version": "0.0.1",
   "exports": {
     ".": "./src/mod.ts",
     "./internal": "./generated/internal_pb.ts"
@@ -9,7 +9,8 @@
     "test": "deno test --no-prompt",
     "check": "deno check src/mod.ts tests/**/*.ts",
     "fmt": "deno fmt --ignore=generated",
-    "generate": "deno run --allow-read --allow-write --allow-run scripts/generate.ts"
+    "generate": "deno run --allow-read --allow-write --allow-run scripts/generate.ts",
+    "pack": "deno run --allow-read --allow-write --allow-run scripts/pack.ts"
   },
   "fmt": {
     "useTabs": false,

@@ -1,3 +1,4 @@
 node_modules/
 *.eszip
+*.tgz
 main-worker/static/
