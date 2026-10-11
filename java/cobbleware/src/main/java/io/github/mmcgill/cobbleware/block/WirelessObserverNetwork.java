@@ -22,9 +22,8 @@ import net.minecraft.world.phys.Vec3;
 
 /** Indexes loaded observer pairings and draws their paths for players holding a paired Cobblemeter. */
 public final class WirelessObserverNetwork {
-    private static final int VISUALIZATION_INTERVAL_TICKS = 4;
-    private static final double PARTICLE_SPACING = 0.5;
-    private static final int MAX_PARTICLES_PER_PATH = 128;
+    private static final int VISUALIZATION_INTERVAL_TICKS = 2;
+    private static final double PARTICLE_SPEED_BLOCKS_PER_TICK = 1.0;
 
     private final Map<GlobalPos, Set<WirelessObserverBlockEntity>> observersByTarget = new HashMap<>();
     private final Map<WirelessObserverBlockEntity, GlobalPos> targetsByObserver = new IdentityHashMap<>();
@@ -165,11 +164,9 @@ public final class WirelessObserverNetwork {
     /** Per-tick processing of the Wirless Observer network. */
     public void tick(MinecraftServer server) {
         validatePairings(server);
-        if (server.overworld().getGameTime() % VISUALIZATION_INTERVAL_TICKS != 0) {
-            return;
-        }
+        long gameTime = server.overworld().getGameTime();
         for (ServerPlayer player : server.getPlayerList().getPlayers()) {
-            pairedMeterTarget(player).ifPresent(target -> drawPaths(player, target));
+            pairedMeterTarget(player).ifPresent(target -> drawPaths(player, target, gameTime));
         }
     }
 
@@ -213,7 +210,7 @@ public final class WirelessObserverNetwork {
                 : Optional.empty();
     }
 
-    private void drawPaths(ServerPlayer player, GlobalPos target) {
+    private void drawPaths(ServerPlayer player, GlobalPos target, long gameTime) {
         Level playerLevel = player.level();
         if (!(playerLevel instanceof ServerLevel level) || !level.dimension().equals(target.dimension())) {
             return;
@@ -229,8 +226,28 @@ public final class WirelessObserverNetwork {
                     || !(observer.getBlockState().getBlock() instanceof WirelessObserverBlock wirelessObserver)) {
                 continue;
             }
-            drawPath(level, player, target, observer, wirelessObserver);
+            if (shouldDrawPath(observer.observerId(), gameTime)) {
+                drawPath(level, player, target, observer, wirelessObserver, gameTime);
+            }
         }
+    }
+
+    static int visualizationTickOffset(UUID observerId) {
+        return Math.floorMod(observerId.hashCode(), VISUALIZATION_INTERVAL_TICKS);
+    }
+
+    static boolean shouldDrawPath(UUID observerId, long gameTime) {
+        return Math.floorMod(gameTime, VISUALIZATION_INTERVAL_TICKS) == visualizationTickOffset(observerId);
+    }
+
+    static Vec3 particlePosition(Vec3 observerPosition, Vec3 cobbleputerPosition, long gameTime) {
+        double distance = observerPosition.distanceTo(cobbleputerPosition);
+        if (distance == 0) {
+            return observerPosition;
+        }
+        double progress = gameTime * PARTICLE_SPEED_BLOCKS_PER_TICK / distance;
+        progress -= Math.floor(progress);
+        return observerPosition.lerp(cobbleputerPosition, progress);
     }
 
     private static void drawPath(
@@ -238,17 +255,13 @@ public final class WirelessObserverNetwork {
             ServerPlayer player,
             GlobalPos target,
             WirelessObserverBlockEntity observer,
-            WirelessObserverBlock wirelessObserver) {
-        Vec3 start = Vec3.atCenterOf(target.pos());
-        Vec3 end = Vec3.atCenterOf(observer.getBlockPos());
-        double distance = start.distanceTo(end);
-        int points = Math.min(MAX_PARTICLES_PER_PATH, Math.max(1, (int) Math.ceil(distance / PARTICLE_SPACING)));
+            WirelessObserverBlock wirelessObserver,
+            long gameTime) {
+        Vec3 start = Vec3.atCenterOf(observer.getBlockPos());
+        Vec3 end = Vec3.atCenterOf(target.pos());
+        Vec3 point = particlePosition(start, end, gameTime);
         DustParticleOptions particle =
                 new DustParticleOptions(wirelessObserver.color().getTextureDiffuseColor(), 1.0F);
-        for (int index = 0; index < points; index++) {
-            double progress = points == 1 ? 0.5 : (double) index / (points - 1);
-            Vec3 point = start.lerp(end, progress);
-            level.sendParticles(player, particle, false, false, point.x, point.y, point.z, 1, 0, 0, 0, 0);
-        }
+        level.sendParticles(player, particle, false, false, point.x, point.y, point.z, 1, 0, 0, 0, 0);
     }
 }
