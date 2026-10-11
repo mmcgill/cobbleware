@@ -41,6 +41,7 @@ try {
     url: 'git+https://github.com/mmcgill/cobbleware.git',
     directory: 'typescript/cobbleware',
   };
+  manifest.homepage = 'https://github.com/mmcgill/cobbleware/tree/main/typescript/cobbleware';
   await Deno.writeTextFile(manifestPath, `${JSON.stringify(manifest, null, 2)}\n`);
 
   await run('tar', ['-czf', repackedTarballPath, '-C', unpackedDirectory, 'package']);
