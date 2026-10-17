@@ -9,7 +9,7 @@ import {
   UuidSchema,
   Vec3iSchema,
 } from '../generated/common_pb.ts';
-import { EffectSchema, EmitBeepSchema, SetRedstonePowerSchema } from '../generated/effects_pb.ts';
+import { EffectSchema, SendChatSchema, SetRedstonePowerSchema } from '../generated/effects_pb.ts';
 import {
   type BlockInfo,
   BlockInfoSchema,
@@ -79,7 +79,7 @@ Deno.test('Program API decodes a step and encodes its result', async () => {
     JSON.stringify([4]),
     'handler should receive state',
   );
-  assertEquals(decoded.effects[0]?.effect.case, 'emitBeep', 'handler effects should round-trip');
+  assertEquals(decoded.effects[0]?.effect.case, 'sendChat', 'handler effects should round-trip');
   assertEquals(receivedEffectLimit, 7, 'handler should receive the effect limit');
   assertEquals(receivedStateSizeLimit, 42n, 'handler should receive the state-size limit');
   assertEquals(receivedBurstChatTokens, 3, 'handler should receive burst chat tokens');
@@ -337,7 +337,7 @@ const handle: Program = (state, event, context) => {
     state: new Uint8Array([state[0]! + 1]),
     effects: [
       create(EffectSchema, {
-        effect: { case: 'emitBeep', value: create(EmitBeepSchema, {}) },
+        effect: { case: 'sendChat', value: create(SendChatSchema, { msg: 'hello' }) },
       }),
     ],
   });

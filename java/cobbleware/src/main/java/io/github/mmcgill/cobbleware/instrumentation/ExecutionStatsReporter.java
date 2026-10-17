@@ -241,7 +241,6 @@ public final class ExecutionStatsReporter {
     private static InstrumentationEffectType effectType(Effect.EffectCase value) {
         return switch (value) {
             case SEND_CHAT -> InstrumentationEffectType.INSTRUMENTATION_EFFECT_TYPE_SEND_CHAT;
-            case EMIT_BEEP -> InstrumentationEffectType.INSTRUMENTATION_EFFECT_TYPE_EMIT_BEEP;
             case SET_REDSTONE_POWER -> InstrumentationEffectType.INSTRUMENTATION_EFFECT_TYPE_SET_REDSTONE_POWER;
             case EFFECT_NOT_SET -> throw new IllegalArgumentException("cannot report an unset effect type");
         };

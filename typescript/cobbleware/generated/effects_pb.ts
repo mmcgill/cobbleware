@@ -12,7 +12,7 @@ import type { Message } from "@bufbuild/protobuf";
  * Describes the file effects.proto.
  */
 export const file_effects: GenFile = /*@__PURE__*/
-  fileDesc("Cg1lZmZlY3RzLnByb3RvEhJjb2JibGV3YXJlLmVmZmVjdHMiFwoIU2VuZENoYXQSCwoDbXNnGAEgASgJIhoKCEVtaXRCZWVwEg4KBm1pbGxpcxgBIAEoDSKKAQoQU2V0UmVkc3RvbmVQb3dlchIsCgtvYnNlcnZlcl9pZBgBIAEoCzIXLmNvYmJsZXdhcmUuY29tbW9uLlV1aWQSMwoOb2JzZXJ2ZXJfY29sb3IYAyABKA4yGy5jb2JibGV3YXJlLmNvbW1vbi5EeWVDb2xvchITCgtwb3dlcl9sZXZlbBgCIAEoDSK8AQoGRWZmZWN0EjEKCXNlbmRfY2hhdBgBIAEoCzIcLmNvYmJsZXdhcmUuZWZmZWN0cy5TZW5kQ2hhdEgAEjEKCWVtaXRfYmVlcBgCIAEoCzIcLmNvYmJsZXdhcmUuZWZmZWN0cy5FbWl0QmVlcEgAEkIKEnNldF9yZWRzdG9uZV9wb3dlchgDIAEoCzIkLmNvYmJsZXdhcmUuZWZmZWN0cy5TZXRSZWRzdG9uZVBvd2VySABCCAoGZWZmZWN0YghlZGl0aW9uc3DpBw", [file_common]);
+  fileDesc("Cg1lZmZlY3RzLnByb3RvEhJjb2JibGV3YXJlLmVmZmVjdHMiFwoIU2VuZENoYXQSCwoDbXNnGAEgASgJIooBChBTZXRSZWRzdG9uZVBvd2VyEiwKC29ic2VydmVyX2lkGAEgASgLMhcuY29iYmxld2FyZS5jb21tb24uVXVpZBIzCg5vYnNlcnZlcl9jb2xvchgDIAEoDjIbLmNvYmJsZXdhcmUuY29tbW9uLkR5ZUNvbG9yEhMKC3Bvd2VyX2xldmVsGAIgASgNIokBCgZFZmZlY3QSMQoJc2VuZF9jaGF0GAEgASgLMhwuY29iYmxld2FyZS5lZmZlY3RzLlNlbmRDaGF0SAASQgoSc2V0X3JlZHN0b25lX3Bvd2VyGAMgASgLMiQuY29iYmxld2FyZS5lZmZlY3RzLlNldFJlZHN0b25lUG93ZXJIAEIICgZlZmZlY3RiCGVkaXRpb25zcOkH", [file_common]);
 
 /**
  * Sends a chat message to all players within range of an executing Cobbleputer.
@@ -43,23 +43,6 @@ export type SendChat = Message<"cobbleware.effects.SendChat"> & {
  */
 export const SendChatSchema: GenMessage<SendChat> = /*@__PURE__*/
   messageDesc(file_effects, 0);
-
-/**
- * @generated from message cobbleware.effects.EmitBeep
- */
-export type EmitBeep = Message<"cobbleware.effects.EmitBeep"> & {
-  /**
-   * @generated from field: uint32 millis = 1;
-   */
-  millis: number;
-};
-
-/**
- * Describes the message cobbleware.effects.EmitBeep.
- * Use `create(EmitBeepSchema)` to create a new message.
- */
-export const EmitBeepSchema: GenMessage<EmitBeep> = /*@__PURE__*/
-  messageDesc(file_effects, 1);
 
 /**
  * Set the redstone power level of one or more paired Wireless Observers.
@@ -96,7 +79,7 @@ export type SetRedstonePower = Message<"cobbleware.effects.SetRedstonePower"> & 
  * Use `create(SetRedstonePowerSchema)` to create a new message.
  */
 export const SetRedstonePowerSchema: GenMessage<SetRedstonePower> = /*@__PURE__*/
-  messageDesc(file_effects, 2);
+  messageDesc(file_effects, 1);
 
 /**
  * A single effect produced by a program step.
@@ -115,12 +98,6 @@ export type Effect = Message<"cobbleware.effects.Effect"> & {
     case: "sendChat";
   } | {
     /**
-     * @generated from field: cobbleware.effects.EmitBeep emit_beep = 2;
-     */
-    value: EmitBeep;
-    case: "emitBeep";
-  } | {
-    /**
      * @generated from field: cobbleware.effects.SetRedstonePower set_redstone_power = 3;
      */
     value: SetRedstonePower;
@@ -133,5 +110,5 @@ export type Effect = Message<"cobbleware.effects.Effect"> & {
  * Use `create(EffectSchema)` to create a new message.
  */
 export const EffectSchema: GenMessage<Effect> = /*@__PURE__*/
-  messageDesc(file_effects, 3);
+  messageDesc(file_effects, 2);
 

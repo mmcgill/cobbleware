@@ -1,6 +1,6 @@
 import { create, fromBinary, toBinary } from '@cobbleware/core';
 import { UuidSchema } from '@cobbleware/core/common';
-import { EffectSchema, EmitBeepSchema, SendChatSchema } from '@cobbleware/core/effects';
+import { EffectSchema, SendChatSchema } from '@cobbleware/core/effects';
 import { EventSchema, StartedSchema } from '@cobbleware/core/events';
 import {
   ErrorResponseSchema,
@@ -115,9 +115,6 @@ function encodeStepResponse(): Uint8Array {
         create(EffectSchema, {
           effect: { case: 'sendChat', value: create(SendChatSchema, { msg: 'hello' }) },
         }),
-        create(EffectSchema, {
-          effect: { case: 'emitBeep', value: create(EmitBeepSchema, { millis: 250 }) },
-        }),
       ],
     }),
   );
@@ -204,7 +201,6 @@ Deno.test('Player program step accepts binary input and returns ProtoJSON output
         state: 'CQg=',
         effects: [
           { sendChat: { msg: 'hello' } },
-          { emitBeep: { millis: 250 } },
         ],
       }),
       'StepResponse should use the canonical ProtoJSON form',
@@ -244,7 +240,6 @@ Deno.test('Player program step accepts and returns ProtoJSON', async () => {
         state: 'CQg=',
         effects: [
           { sendChat: { msg: 'hello' } },
-          { emitBeep: { millis: 250 } },
         ],
       }),
       'StepResponse should use the canonical ProtoJSON form',
@@ -278,7 +273,6 @@ Deno.test('Player program step returns ProtoJSON without an Accept header', asyn
         state: 'CQg=',
         effects: [
           { sendChat: { msg: 'hello' } },
-          { emitBeep: { millis: 250 } },
         ],
       }),
       'response should be ProtoJSON',

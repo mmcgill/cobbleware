@@ -1231,15 +1231,6 @@ public final class ExecutionDriver {
     private void applyEffect(Minecraft minecraft, CobbleputerBlockEntity blockEntity, Effect effect) {
         switch (effect.getEffectCase()) {
             case SET_REDSTONE_POWER -> applyRedstonePower(minecraft, blockEntity, effect.getSetRedstonePower());
-            case EMIT_BEEP -> {
-                if (Integer.compareUnsigned(effect.getEmitBeep().getMillis(), 65535) > 0) {
-                    logger.warn(
-                            "Ignoring EmitBeep with an invalid millis value at {}",
-                            blockEntity.getBlockPos().toShortString());
-                    return;
-                }
-                minecraft.sendNearbySystemMessage(blockEntity, Component.literal("beep"));
-            }
             case SEND_CHAT -> {
                 UUID owner = blockEntity.ownerPlayerId().orElse(null);
                 OptionalLong gameTime = minecraft.gameTime(blockEntity);

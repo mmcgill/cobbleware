@@ -12,7 +12,7 @@ import {
 import { StepRequestSchema } from '@cobbleware/core/program';
 import { createExampleProgramApiHandler, handle, startStates } from '../src/index.ts';
 
-Deno.test('hello start state greets on start and beeps on resume', () => {
+Deno.test('hello start state greets on start and is quiet on resume', () => {
   assertStep(
     startStates.hello,
     event('started', create(StartedSchema, { tick: 1n })),
@@ -24,7 +24,6 @@ Deno.test('hello start state greets on start and beeps on resume', () => {
     startStates.hello,
     event('resumed', create(ResumedSchema, { stopTick: 1n, resumeTick: 2n })),
     [1],
-    'emitBeep',
   );
 });
 
@@ -81,7 +80,7 @@ function assertStep(
   state: Uint8Array,
   input: Event,
   expectedState: number[],
-  expectedEffect: 'emitBeep' | 'sendChat',
+  expectedEffect?: 'sendChat',
   expectedMessage?: string,
 ): Uint8Array {
   const output = handle(state, input, {
@@ -92,7 +91,12 @@ function assertStep(
   });
 
   assertEquals([...output.state], expectedState, 'handler returned an unexpected state');
-  assertEquals(output.effects.length, 1, 'handler must emit one effect');
+  assertEquals(
+    output.effects.length,
+    expectedEffect === undefined ? 0 : 1,
+    'handler emitted effects unexpectedly',
+  );
+  if (expectedEffect === undefined) return output.state;
   assertEquals(
     output.effects[0]?.effect.case,
     expectedEffect,

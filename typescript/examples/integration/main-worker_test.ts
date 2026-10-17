@@ -60,7 +60,7 @@ Deno.test('Examples run through the Main Worker API', async () => {
       },
     },
     'AQ==',
-    [{ emitBeep: {} }],
+    [],
   );
 
   await assertStep(
@@ -107,7 +107,7 @@ async function assertExecutionSync(): Promise<void> {
     resultFor(completed, FIRST_EXECUTION_ID),
     FIRST_EXECUTION_ID,
     [1],
-    ['sendChat', 'emitBeep'],
+    ['sendChat'],
   );
   assertExecutionResult(
     resultFor(completed, SECOND_EXECUTION_ID),

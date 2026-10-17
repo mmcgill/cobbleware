@@ -28,13 +28,6 @@ export const helloHandler: Program = function handle(state, event) {
         value: create(Effects.SendChatSchema, { msg: 'Hello world' }),
       },
     })];
-  } else if (event.event.case === 'resumed') {
-    effects = [create(Effects.EffectSchema, {
-      effect: {
-        case: 'emitBeep',
-        value: create(Effects.EmitBeepSchema, {}),
-      },
-    })];
   }
   return create(program.StepResponseSchema, { state: state.slice(), effects });
 };

@@ -212,9 +212,8 @@ Cobbleputer, a crashed Cobbleputer restarting from its retained state, a Cobblep
 being admitted back to running, and a Player re-entering an execution pool. `Resumed` is placed ahead of ordinary
 pending work. If the owning Player's shared pending-event allowance is full, the oldest pending event for that Player
 is dropped to make room. The driver retains at most the configured number of pending events across a player's active
-Cobbleputers and offers each active Cobbleputer's full pending queue to the Runtime in each execution-sync request. Currently `EmitBeep` sends nearby players a
-`beep` system-chat message and `SendChat` sends its message to those same nearby players; neither effect
-has audio or durable delivery semantics yet.
+Cobbleputers and offers each active Cobbleputer's full pending queue to the Runtime in each execution-sync request. `SendChat` sends its message to nearby players;
+it has no durable delivery semantics.
 
 The heart of the Mod is the `ExecutionDriver` singleton. It is owned by the main server thread.
 

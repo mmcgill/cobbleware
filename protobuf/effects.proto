@@ -20,10 +20,6 @@ message SendChat {
   string msg = 1;
 }
 
-message EmitBeep {
-  uint32 millis = 1;
-}
-
 // Set the redstone power level of one or more paired Wireless Observers.
 // This effect only applies to paired Wireless Observers that are also
 // in currently loaded chunks.
@@ -40,7 +36,6 @@ message SetRedstonePower {
 message Effect {
   oneof effect {
     SendChat send_chat = 1;
-    EmitBeep emit_beep = 2;
     SetRedstonePower set_redstone_power = 3;
   }
 }

@@ -45,8 +45,7 @@ Deno.test('Execution sync runs uploaded programs in a real durable-store user wo
     const resumed = executionSnapshot(2n, new Uint8Array([1]), [resumedEvent(1n, 2n)]);
     const second = await syncUntilConsumed(baseUrl, resumed, 2n);
     assertBytes(second.finalState, [1], 'Resumed step changed the hello state');
-    assertEquals(second.length, 1, 'Resumed step did not produce its beep effect');
-    assertEffect(second.effects[0], 'emitBeep', 'Resumed step returned the wrong effect type');
+    assertEquals(second.length, 0, 'Resumed step unexpectedly produced an effect');
   } finally {
     if (runtime !== undefined) {
       try {
