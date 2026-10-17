@@ -1,5 +1,18 @@
-import { Common, create, Effects, Events, fromBinary, Program, toBinary } from '@cobbleware/core';
-import * as Internal from '@cobbleware/core/internal';
+import { create, fromBinary, toBinary } from '@cobbleware/core';
+import { Uuid, UuidSchema } from '@cobbleware/core/common';
+import { Effect, EffectSchema, SendChatSchema } from '@cobbleware/core/effects';
+import { Event, EventSchema, StartedSchema } from '@cobbleware/core/events';
+import {
+  ErrorResponseSchema,
+  ExecutionFailureReason,
+  ExecutionsRequest,
+  ExecutionsRequestSchema,
+  ExecutionState,
+  ExecutionStateSchema,
+  PlayerExecutionState,
+  PlayerExecutionStateSchema,
+} from '@cobbleware/core/internal';
+import { StepRequest, StepRequestSchema, StepResponseSchema } from '@cobbleware/core/program';
 import { configFromEnv } from '../src/config.ts';
 import { EXECUTIONS_CONTENT_TYPE, handleExecutions } from '../src/executions/handlers.ts';
 import { ExecutionManager, ExecutionRequestError } from '../src/executions/manager.ts';
@@ -36,7 +49,7 @@ class Deferred<T> {
 class TestWorker implements CobblewareUserWorker {
   private readonly closedDeferred = new Deferred<CobblewareUserWorkerClosed>();
   readonly closed = this.closedDeferred.promise;
-  readonly requests: Program.StepRequest[] = [];
+  readonly requests: StepRequest[] = [];
   readonly responses: Deferred<Response>[] = [];
   retireCalls = 0;
 
@@ -46,7 +59,7 @@ class TestWorker implements CobblewareUserWorker {
 
   async fetch(request: Request): Promise<Response> {
     const step = fromBinary(
-      Program.StepRequestSchema,
+      StepRequestSchema,
       new Uint8Array(await request.arrayBuffer()),
     );
     this.requests.push(step);
@@ -82,7 +95,7 @@ class TestProgramStore implements ProgramStore {
   readActive(playerId: string): Promise<ActiveProgram | null> {
     this.activeReadCalls += 1;
     return Promise.resolve(
-      this.active.has(playerId) ? this.active.get(playerId)! : program(PROGRAM_A),
+      this.active.has(playerId) ? this.active.get(playerId)! : fixtureProgram(PROGRAM_A),
     );
   }
 
@@ -93,7 +106,7 @@ class TestProgramStore implements ProgramStore {
   run(playerId: string): Promise<{ program: ActiveProgram; worker: CobblewareUserWorker }> {
     const activeProgram = this.active.has(playerId)
       ? this.active.get(playerId)!
-      : program(PROGRAM_A);
+      : fixtureProgram(PROGRAM_A);
     if (activeProgram === null) {
       return Promise.reject(new Error('player has no active program'));
     }
@@ -107,7 +120,7 @@ class TestProgramStore implements ProgramStore {
   }
 }
 
-function program(id: string): ActiveProgram {
+function fixtureProgram(id: string): ActiveProgram {
   return {
     metadata: { id, name: 'test', uploadedAt: '2026-10-02T00:00:00.000Z', sizeBytes: 1 },
     content: new Uint8Array([1]),
@@ -116,15 +129,15 @@ function program(id: string): ActiveProgram {
 
 function execution(
   options: Partial<{
-    executionId: Common.Uuid;
+    executionId: Uuid;
     initialState: Uint8Array;
-    events: Events.Event[];
+    events: Event[];
     eventSeqNum: bigint;
     stateSizeLimit: bigint;
     outboxLimit: number;
   }> = {},
-): Internal.ExecutionState {
-  return create(Internal.ExecutionStateSchema, {
+): ExecutionState {
+  return create(ExecutionStateSchema, {
     executionId: options.executionId ?? EXECUTION_A,
     initialState: options.initialState ?? new Uint8Array([1]),
     events: options.events ?? [event(1n)],
@@ -135,14 +148,14 @@ function execution(
 }
 
 function player(
-  playerId: Common.Uuid,
-  executions: Internal.ExecutionState[],
+  playerId: Uuid,
+  executions: ExecutionState[],
   outstandingEffectLimit = 20,
   totalExecutionStateLimit = 1024n,
   burstChatTokens = 10,
   slowChatTokens = 100,
-): Internal.PlayerExecutionState {
-  return create(Internal.PlayerExecutionStateSchema, {
+): PlayerExecutionState {
+  return create(PlayerExecutionStateSchema, {
     playerId,
     executions,
     outstandingEffectLimit,
@@ -153,29 +166,29 @@ function player(
 }
 
 function request(
-  players: Internal.PlayerExecutionState[],
+  players: PlayerExecutionState[],
   workerLimit = 4,
-): Internal.ExecutionsRequest {
-  return create(Internal.ExecutionsRequestSchema, { players, workerLimit });
+): ExecutionsRequest {
+  return create(ExecutionsRequestSchema, { players, workerLimit });
 }
 
-function event(tick: bigint): Events.Event {
-  return create(Events.EventSchema, {
-    event: { case: 'started', value: create(Events.StartedSchema, { tick }) },
+function event(tick: bigint): Event {
+  return create(EventSchema, {
+    event: { case: 'started', value: create(StartedSchema, { tick }) },
   });
 }
 
-function effect(message: string): Effects.Effect {
-  return create(Effects.EffectSchema, {
-    effect: { case: 'sendChat', value: create(Effects.SendChatSchema, { msg: message }) },
+function effect(message: string): Effect {
+  return create(EffectSchema, {
+    effect: { case: 'sendChat', value: create(SendChatSchema, { msg: message }) },
   });
 }
 
-function stepResponse(state: Uint8Array, effects: Effects.Effect[] = []): Response {
+function stepResponse(state: Uint8Array, effects: Effect[] = []): Response {
   return new Response(
     toBinary(
-      Program.StepResponseSchema,
-      create(Program.StepResponseSchema, {
+      StepResponseSchema,
+      create(StepResponseSchema, {
         state,
         effects,
       }),
@@ -249,7 +262,7 @@ Deno.test('Execution sync endpoint keeps protobuf success and error responses', 
   const store = new TestProgramStore();
   const manager = new ExecutionManager(store, 1024);
   const config = configFromEnv({ apiKey: 'test-key', storageDir: 'unused' });
-  const validBody = toBinary(Internal.ExecutionsRequestSchema, request([], 0));
+  const validBody = toBinary(ExecutionsRequestSchema, request([], 0));
   const success = await handleExecutions(
     new Request('http://localhost/modapi/v1/executions', {
       method: 'POST',
@@ -273,7 +286,7 @@ Deno.test('Execution sync endpoint keeps protobuf success and error responses', 
   );
   assertEquals(unauthorized.status, 401, 'missing bearer token is rejected');
   const error = fromBinary(
-    Internal.ErrorResponseSchema,
+    ErrorResponseSchema,
     new Uint8Array(await unauthorized.arrayBuffer()),
   );
   assertEquals(error.error === '', false, 'error body is protobuf with a message');
@@ -305,7 +318,7 @@ Deno.test('Execution sync validates snapshots before changing cached work', asyn
 
 Deno.test('Execution sync requires a positive total execution-state limit for each player', async () => {
   const manager = new ExecutionManager(new TestProgramStore(), 1024);
-  const missing = create(Internal.PlayerExecutionStateSchema, {
+  const missing = create(PlayerExecutionStateSchema, {
     playerId: PLAYER_A,
     executions: [execution()],
     outstandingEffectLimit: 20,
@@ -325,7 +338,7 @@ Deno.test('Execution sync requires a positive total execution-state limit for ea
 
 Deno.test('Execution sync requires in-range chat token counts for each player', async () => {
   const manager = new ExecutionManager(new TestProgramStore(), 1024);
-  const missing = create(Internal.PlayerExecutionStateSchema, {
+  const missing = create(PlayerExecutionStateSchema, {
     playerId: PLAYER_A,
     executions: [execution()],
     outstandingEffectLimit: 20,
@@ -461,7 +474,7 @@ Deno.test('Execution sync rejects an oversized program state before returning it
   assertEquals(result.executionFailed, true, 'oversized state fails the execution');
   assertEquals(
     result.failureReason,
-    Internal.ExecutionFailureReason.STATE_SIZE_LIMIT,
+    ExecutionFailureReason.STATE_SIZE_LIMIT,
     'oversized state identifies its failure reason',
   );
   assertBytes(result.finalState, [1], 'oversized state does not replace the current state');
@@ -481,7 +494,7 @@ Deno.test('Execution sync reports a program response larger than the total-state
   assertEquals(result.executionFailed, true, 'oversized response fails the execution');
   assertEquals(
     result.failureReason,
-    Internal.ExecutionFailureReason.STEP_RESPONSE_SIZE_LIMIT,
+    ExecutionFailureReason.STEP_RESPONSE_SIZE_LIMIT,
     'oversized response identifies its failure reason',
   );
   assertBytes(result.finalState, [1], 'oversized response does not replace the current state');
@@ -529,7 +542,7 @@ Deno.test('Active program changes retire workers and invalidate windows out of b
   await manager.sync(snapshot);
   assertEquals(store.activeReadCalls, 0, 'sync does not reread an active worker program');
 
-  store.active.set(uuidString(PLAYER_A), program(PROGRAM_B));
+  store.active.set(uuidString(PLAYER_A), fixtureProgram(PROGRAM_B));
   await manager.activeProgramChanged(uuidString(PLAYER_A), PROGRAM_B);
   assertEquals(worker.retireCalls, 1, 'program change retires worker');
   worker.complete(0, stepResponse(new Uint8Array([9])));
@@ -569,7 +582,7 @@ Deno.test('Initializing workers reserve capacity without holding the manager loc
   ], 1));
   assertEquals(store.created.length, 1, 'initializing worker occupies the worker limit');
 
-  startup.resolve({ program: program(PROGRAM_A), worker: initializingWorker });
+  startup.resolve({ program: fixtureProgram(PROGRAM_A), worker: initializingWorker });
   await settle();
   assertEquals(initializingWorker.retireCalls, 1, 'retired initialization closes its worker');
   initializingWorker.close();
@@ -586,7 +599,7 @@ Deno.test('Execution sync counts retired workers until their closed promise reso
   await manager.sync(first);
   const firstWorker = store.created[0]!.worker;
   await waitForRequests(firstWorker, 1);
-  store.active.set(uuidString(PLAYER_A), program(PROGRAM_B));
+  store.active.set(uuidString(PLAYER_A), fixtureProgram(PROGRAM_B));
   await manager.sync(first);
 
   const secondPlayer = request([
@@ -641,11 +654,11 @@ Deno.test('Execution sync drops windows missing from the authoritative request a
   );
 });
 
-function uuid(high: bigint, low: bigint): Common.Uuid {
-  return create(Common.UuidSchema, { high, low });
+function uuid(high: bigint, low: bigint): Uuid {
+  return create(UuidSchema, { high, low });
 }
 
-function uuidString(uuid: Common.Uuid): string {
+function uuidString(uuid: Uuid): string {
   const value = uuid.high.toString(16).padStart(16, '0') + uuid.low.toString(16).padStart(16, '0');
   return `${value.slice(0, 8)}-${value.slice(8, 12)}-${value.slice(12, 16)}-${
     value.slice(16, 20)

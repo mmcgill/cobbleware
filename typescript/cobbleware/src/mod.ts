@@ -8,10 +8,6 @@ import type { StepResponse } from '../generated/program_pb.ts';
 import * as ProgramMessages from '../generated/program_pb.ts';
 import { create, fromBinary, fromJson, toBinary, toJson } from '@bufbuild/protobuf';
 
-export * as Common from '../generated/common_pb.ts';
-export * as Events from '../generated/events_pb.ts';
-export * as Effects from '../generated/effects_pb.ts';
-export * as Program from '../generated/program_pb.ts';
 export { create, fromBinary, fromJson, toBinary, toJson };
 
 export type ProgramState = Uint8Array;

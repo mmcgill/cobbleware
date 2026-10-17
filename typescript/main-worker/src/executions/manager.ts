@@ -1,6 +1,10 @@
-import { Common, create, Effects, Events, fromBinary, Program, toBinary } from '@cobbleware/core';
+import { create, fromBinary, toBinary } from '@cobbleware/core';
+import * as Common from '@cobbleware/core/common';
+import * as Effects from '@cobbleware/core/effects';
+import * as Events from '@cobbleware/core/events';
 import { isFieldSet } from '@bufbuild/protobuf';
 import * as Internal from '@cobbleware/core/internal';
+import * as Program from '@cobbleware/core/program';
 import type { ProgramStore } from '../programs/types.ts';
 import { invokeNextState, StepResponseSizeLimitError } from '../programs/program-api.ts';
 

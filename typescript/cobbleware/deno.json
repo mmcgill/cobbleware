@@ -3,6 +3,10 @@
   "version": "0.0.2-alpha",
   "exports": {
     ".": "./src/mod.ts",
+    "./common": "./generated/common_pb.ts",
+    "./effects": "./generated/effects_pb.ts",
+    "./events": "./generated/events_pb.ts",
+    "./program": "./generated/program_pb.ts",
     "./internal": "./generated/internal_pb.ts"
   },
   "tasks": {

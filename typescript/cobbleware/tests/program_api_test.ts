@@ -1,14 +1,32 @@
+import { create, createProgramApiHandler, fromBinary, type Program, toBinary } from '../src/mod.ts';
 import {
-  Common,
-  create,
-  createProgramApiHandler,
-  Effects,
-  Events,
-  fromBinary,
-  Program,
-  type Program as EventProgram,
-  toBinary,
-} from '../src/mod.ts';
+  Direction,
+  DyeColor,
+  GlobalPos,
+  GlobalPosSchema,
+  IdentifierSchema,
+  Uuid,
+  UuidSchema,
+  Vec3iSchema,
+} from '../generated/common_pb.ts';
+import { EffectSchema, EmitBeepSchema, SetRedstonePowerSchema } from '../generated/effects_pb.ts';
+import {
+  BlockInfo,
+  BlockInfoSchema,
+  BlockStateChange,
+  BlockStateChangeSchema,
+  Event,
+  EventSchema,
+  ResumedSchema,
+  WirelessObserverPairedSchema,
+  WirelessObserverUnpairedSchema,
+} from '../generated/events_pb.ts';
+import {
+  ErrorResponseSchema,
+  StartStatesResponseSchema,
+  StepRequestSchema,
+  StepResponseSchema,
+} from '../generated/program_pb.ts';
 
 const binaryContentType = 'application/octet-stream';
 
@@ -22,7 +40,7 @@ Deno.test('Program API returns configured start states', async () => {
     'start states content type',
   );
   const decoded = fromBinary(
-    Program.StartStatesResponseSchema,
+    StartStatesResponseSchema,
     new Uint8Array(await response.arrayBuffer()),
   );
   assertEquals(
@@ -33,13 +51,13 @@ Deno.test('Program API returns configured start states', async () => {
 });
 
 Deno.test('Program API decodes a step and encodes its result', async () => {
-  const request = create(Program.StepRequestSchema, {
-    executionId: create(Common.UuidSchema, { high: 1n, low: 2n }),
+  const request = create(StepRequestSchema, {
+    executionId: create(UuidSchema, { high: 1n, low: 2n }),
     state: new Uint8Array([3]),
-    event: create(Events.EventSchema, {
+    event: create(EventSchema, {
       event: {
         case: 'resumed',
-        value: create(Events.ResumedSchema, { stopTick: 3n, resumeTick: 4n }),
+        value: create(ResumedSchema, { stopTick: 3n, resumeTick: 4n }),
       },
     }),
     effectLimit: 7,
@@ -48,12 +66,12 @@ Deno.test('Program API decodes a step and encodes its result', async () => {
     slowChatTokens: 87,
   });
   const response = await handler(
-    binaryRequest('/nextState', toBinary(Program.StepRequestSchema, request)),
+    binaryRequest('/nextState', toBinary(StepRequestSchema, request)),
   );
 
   assertEquals(response.status, 200, 'step should succeed');
   const decoded = fromBinary(
-    Program.StepResponseSchema,
+    StepResponseSchema,
     new Uint8Array(await response.arrayBuffer()),
   );
   assertEquals(
@@ -72,23 +90,23 @@ Deno.test('Program API round-trips ID-targeted and color-targeted SetRedstonePow
   const powerHandler = createProgramApiHandler({
     startStates: {},
     program: (state) =>
-      create(Program.StepResponseSchema, {
+      create(StepResponseSchema, {
         state,
         effects: [
-          create(Effects.EffectSchema, {
+          create(EffectSchema, {
             effect: {
               case: 'setRedstonePower',
-              value: create(Effects.SetRedstonePowerSchema, {
+              value: create(SetRedstonePowerSchema, {
                 observerId: observerId(),
                 powerLevel: 15,
               }),
             },
           }),
-          create(Effects.EffectSchema, {
+          create(EffectSchema, {
             effect: {
               case: 'setRedstonePower',
-              value: create(Effects.SetRedstonePowerSchema, {
-                observerColor: Common.DyeColor.LIGHT_BLUE,
+              value: create(SetRedstonePowerSchema, {
+                observerColor: DyeColor.LIGHT_BLUE,
                 powerLevel: 9,
               }),
             },
@@ -96,21 +114,21 @@ Deno.test('Program API round-trips ID-targeted and color-targeted SetRedstonePow
         ],
       }),
   });
-  const request = create(Program.StepRequestSchema, {
+  const request = create(StepRequestSchema, {
     state: new Uint8Array([3]),
-    event: create(Events.EventSchema, {
+    event: create(EventSchema, {
       event: {
         case: 'resumed',
-        value: create(Events.ResumedSchema, { stopTick: 3n, resumeTick: 4n }),
+        value: create(ResumedSchema, { stopTick: 3n, resumeTick: 4n }),
       },
     }),
   });
 
   const response = await powerHandler(
-    binaryRequest('/nextState', toBinary(Program.StepRequestSchema, request)),
+    binaryRequest('/nextState', toBinary(StepRequestSchema, request)),
   );
   const decoded = fromBinary(
-    Program.StepResponseSchema,
+    StepResponseSchema,
     new Uint8Array(await response.arrayBuffer()),
   );
 
@@ -143,7 +161,7 @@ Deno.test('Program API round-trips ID-targeted and color-targeted SetRedstonePow
   );
   assertEquals(
     decoded.effects[1].effect.value.observerColor,
-    Common.DyeColor.LIGHT_BLUE,
+    DyeColor.LIGHT_BLUE,
     'observer color should round-trip',
   );
   assertEquals(
@@ -154,24 +172,24 @@ Deno.test('Program API round-trips ID-targeted and color-targeted SetRedstonePow
 });
 
 Deno.test('Program API delivers a BlockStateChange to the event handler', async () => {
-  let received: Events.BlockStateChange | undefined;
+  let received: BlockStateChange | undefined;
   const blockStateHandler = createProgramApiHandler({
     startStates: {},
     program: (state, event) => {
       if (event.event.case !== 'blockStateChange') throw new Error('unexpected event');
       received = event.event.value;
-      return create(Program.StepResponseSchema, { state, effects: [] });
+      return create(StepResponseSchema, { state, effects: [] });
     },
   });
-  const request = create(Program.StepRequestSchema, {
+  const request = create(StepRequestSchema, {
     state: new Uint8Array([3]),
-    event: create(Events.EventSchema, {
+    event: create(EventSchema, {
       event: {
         case: 'blockStateChange',
-        value: create(Events.BlockStateChangeSchema, {
-          observerColor: Common.DyeColor.RED,
+        value: create(BlockStateChangeSchema, {
+          observerColor: DyeColor.RED,
           observerId: observerId(),
-          observerDir: Common.Direction.EAST,
+          observerDir: Direction.EAST,
           observerPos: globalPos(1, 64, 1),
           blockPos: globalPos(2, 64, 1),
           oldState: blockInfo('redstone_lamp', { lit: 'false' }),
@@ -182,52 +200,52 @@ Deno.test('Program API delivers a BlockStateChange to the event handler', async 
   });
 
   const response = await blockStateHandler(
-    binaryRequest('/nextState', toBinary(Program.StepRequestSchema, request)),
+    binaryRequest('/nextState', toBinary(StepRequestSchema, request)),
   );
 
   assertEquals(response.status, 200, 'block-state step should succeed');
   if (received === undefined) throw new Error('handler did not receive the BlockStateChange');
-  assertEquals(received.observerColor, Common.DyeColor.RED, 'observer color should reach handler');
+  assertEquals(received.observerColor, DyeColor.RED, 'observer color should reach handler');
   assertEquals(received.observerId?.high, 10n, 'observer id should reach handler');
   assertEquals(received.newState?.properties.lit, 'true', 'new state should reach handler');
 });
 
 Deno.test('Program API delivers Wireless Observer pairing lifecycle events', async () => {
-  const received: Events.Event[] = [];
+  const received: Event[] = [];
   const lifecycleHandler = createProgramApiHandler({
     startStates: {},
     program: (state, event) => {
       received.push(event);
-      return create(Program.StepResponseSchema, { state, effects: [] });
+      return create(StepResponseSchema, { state, effects: [] });
     },
   });
-  const paired = create(Events.EventSchema, {
+  const paired = create(EventSchema, {
     event: {
       case: 'wirelessObserverPaired',
-      value: create(Events.WirelessObserverPairedSchema, {
-        observerColor: Common.DyeColor.BLUE,
+      value: create(WirelessObserverPairedSchema, {
+        observerColor: DyeColor.BLUE,
         observerId: observerId(),
-        observerDir: Common.Direction.NORTH,
+        observerDir: Direction.NORTH,
         observerPos: globalPos(4, 65, -2),
       }),
     },
   });
-  const unpaired = create(Events.EventSchema, {
+  const unpaired = create(EventSchema, {
     event: {
       case: 'wirelessObserverUnpaired',
-      value: create(Events.WirelessObserverUnpairedSchema, {
-        observerColor: Common.DyeColor.BLUE,
+      value: create(WirelessObserverUnpairedSchema, {
+        observerColor: DyeColor.BLUE,
         observerId: observerId(),
-        observerDir: Common.Direction.NORTH,
+        observerDir: Direction.NORTH,
         observerPos: globalPos(4, 65, -2),
       }),
     },
   });
 
   for (const event of [paired, unpaired]) {
-    const request = create(Program.StepRequestSchema, { state: new Uint8Array(), event });
+    const request = create(StepRequestSchema, { state: new Uint8Array(), event });
     const response = await lifecycleHandler(
-      binaryRequest('/nextState', toBinary(Program.StepRequestSchema, request)),
+      binaryRequest('/nextState', toBinary(StepRequestSchema, request)),
     );
     assertEquals(response.status, 200, 'lifecycle step should succeed');
   }
@@ -275,16 +293,16 @@ Deno.test('Program API returns a binary ErrorResponse for invalid and failing st
       throw new Error('program exploded');
     },
   });
-  const request = create(Program.StepRequestSchema, {
-    event: create(Events.EventSchema, {
+  const request = create(StepRequestSchema, {
+    event: create(EventSchema, {
       event: {
         case: 'resumed',
-        value: create(Events.ResumedSchema, { stopTick: 12n, resumeTick: 15n }),
+        value: create(ResumedSchema, { stopTick: 12n, resumeTick: 15n }),
       },
     }),
   });
   const failed = await throwingHandler(
-    binaryRequest('/nextState', toBinary(Program.StepRequestSchema, request)),
+    binaryRequest('/nextState', toBinary(StepRequestSchema, request)),
   );
   await assertErrorResponse(failed, 'program exploded');
 });
@@ -309,17 +327,17 @@ let receivedStateSizeLimit: bigint | undefined;
 let receivedBurstChatTokens: number | undefined;
 let receivedSlowChatTokens: number | undefined;
 
-const handle: EventProgram = (state, event, context) => {
+const handle: Program = (state, event, context) => {
   if (event.event.case !== 'resumed') throw new Error('unexpected event');
   receivedEffectLimit = context.effectLimit;
   receivedStateSizeLimit = context.stateSizeLimit;
   receivedBurstChatTokens = context.burstChatTokens;
   receivedSlowChatTokens = context.slowChatTokens;
-  return create(Program.StepResponseSchema, {
+  return create(StepResponseSchema, {
     state: new Uint8Array([state[0]! + 1]),
     effects: [
-      create(Effects.EffectSchema, {
-        effect: { case: 'emitBeep', value: create(Effects.EmitBeepSchema, {}) },
+      create(EffectSchema, {
+        effect: { case: 'emitBeep', value: create(EmitBeepSchema, {}) },
       }),
     ],
   });
@@ -341,20 +359,20 @@ function binaryRequest(path: string, body: Uint8Array): Request {
   });
 }
 
-function globalPos(x: number, y: number, z: number): Common.GlobalPos {
-  return create(Common.GlobalPosSchema, {
-    dimension: create(Common.IdentifierSchema, { ns: 'minecraft', path: 'overworld' }),
-    position: create(Common.Vec3iSchema, { x, y, z }),
+function globalPos(x: number, y: number, z: number): GlobalPos {
+  return create(GlobalPosSchema, {
+    dimension: create(IdentifierSchema, { ns: 'minecraft', path: 'overworld' }),
+    position: create(Vec3iSchema, { x, y, z }),
   });
 }
 
-function observerId(): Common.Uuid {
-  return create(Common.UuidSchema, { high: 10n, low: 20n });
+function observerId(): Uuid {
+  return create(UuidSchema, { high: 10n, low: 20n });
 }
 
-function blockInfo(path: string, properties: Record<string, string>): Events.BlockInfo {
-  return create(Events.BlockInfoSchema, {
-    blockType: create(Common.IdentifierSchema, { ns: 'minecraft', path }),
+function blockInfo(path: string, properties: Record<string, string>): BlockInfo {
+  return create(BlockInfoSchema, {
+    blockType: create(IdentifierSchema, { ns: 'minecraft', path }),
     properties,
   });
 }
@@ -367,7 +385,7 @@ async function assertErrorResponse(response: Response, expectedError?: string): 
     'step failure content type',
   );
   const decoded = fromBinary(
-    Program.ErrorResponseSchema,
+    ErrorResponseSchema,
     new Uint8Array(await response.arrayBuffer()),
   );
   if (expectedError !== undefined) {

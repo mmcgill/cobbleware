@@ -1,5 +1,27 @@
-import { Common, create, fromBinary, toBinary } from '@cobbleware/core';
-import * as Internal from '@cobbleware/core/internal';
+import { create, fromBinary, toBinary } from '@cobbleware/core';
+import {
+  GlobalPosSchema,
+  IdentifierSchema,
+  Uuid,
+  UuidSchema,
+  Vec3iSchema,
+} from '@cobbleware/core/common';
+import {
+  ExecutionStatsTick,
+  ExecutionStatsTick_CobbleputerRefSchema,
+  ExecutionStatsTick_CobbleputerStateSchema,
+  ExecutionStatsTick_EffectMeasurementSchema,
+  ExecutionStatsTick_EventMeasurementSchema,
+  ExecutionStatsTick_EventsPerSyncMeasurementSchema,
+  ExecutionStatsTick_PlayerStatsSchema,
+  ExecutionStatsTickSchema,
+  InstrumentationEffectType,
+  InstrumentationEventType,
+  InstrumentationLifecycleState,
+  LogStats,
+  LogStatsSchema,
+  LogTokenBucketSchema,
+} from '@cobbleware/core/internal';
 
 const API_KEY = 'execution-stats-integration-key';
 const AUTH_CODE = 'STAT0001';
@@ -64,7 +86,7 @@ Deno.test('Execution statistics flow from the Mod API to a Player WebSocket', as
       '/modapi/v1/log-stats',
       { authorization: `Bearer ${API_KEY}` },
     );
-    await logStatsStream.sendBinary(toBinary(Internal.LogStatsSchema, logTokenEntry()));
+    await logStatsStream.sendBinary(toBinary(LogStatsSchema, logTokenEntry()));
     await delay(50);
 
     const report = executionStatsReport();
@@ -73,10 +95,10 @@ Deno.test('Execution statistics flow from the Mod API to a Player WebSocket', as
       '/modapi/v1/execution-stats',
       { authorization: `Bearer ${API_KEY}` },
     );
-    await modStream.sendBinary(toBinary(Internal.ExecutionStatsTickSchema, report));
+    await modStream.sendBinary(toBinary(ExecutionStatsTickSchema, report));
 
     const snapshot = fromBinary(
-      Internal.ExecutionStatsTickSchema,
+      ExecutionStatsTickSchema,
       await within(5_000, stream.readBinaryFrame(), 'execution-stats WebSocket frame'),
     );
     assertEquals(snapshot.sampledAtUnixMillis, report.sampledAtUnixMillis, 'sample time changed');
@@ -222,19 +244,19 @@ async function authenticatePlayer(baseUrl: string): Promise<string> {
   return cookie;
 }
 
-function executionStatsReport(): Internal.ExecutionStatsTick {
-  const cobbleputer = create(Internal.ExecutionStatsTick_CobbleputerRefSchema, {
+function executionStatsReport(): ExecutionStatsTick {
+  const cobbleputer = create(ExecutionStatsTick_CobbleputerRefSchema, {
     cobbleputerId: uuid(0n, 10n),
-    position: create(Common.GlobalPosSchema, {
-      dimension: create(Common.IdentifierSchema, { ns: 'minecraft', path: 'overworld' }),
-      position: create(Common.Vec3iSchema, { x: 1, y: 64, z: 2 }),
+    position: create(GlobalPosSchema, {
+      dimension: create(IdentifierSchema, { ns: 'minecraft', path: 'overworld' }),
+      position: create(Vec3iSchema, { x: 1, y: 64, z: 2 }),
     }),
   });
-  return create(Internal.ExecutionStatsTickSchema, {
+  return create(ExecutionStatsTickSchema, {
     sampledAtUnixMillis: 1_234_567_890n,
     tickSequence: 1n,
     players: [
-      create(Internal.ExecutionStatsTick_PlayerStatsSchema, {
+      create(ExecutionStatsTick_PlayerStatsSchema, {
         playerId: PLAYER_ID,
         burstChatTokens: 4,
         slowChatTokens: 96,
@@ -243,40 +265,40 @@ function executionStatsReport(): Internal.ExecutionStatsTick {
         runningExecutions: 1,
         maxRunningExecutions: 10,
         maxTotalExecutionStateBytes: 1024n,
-        events: [create(Internal.ExecutionStatsTick_EventMeasurementSchema, {
+        events: [create(ExecutionStatsTick_EventMeasurementSchema, {
           cobbleputer,
-          type: Internal.InstrumentationEventType.CHAT_MESSAGE,
+          type: InstrumentationEventType.CHAT_MESSAGE,
           accepted: 4n,
           dropped: 5n,
         })],
-        eventsPerSync: [create(Internal.ExecutionStatsTick_EventsPerSyncMeasurementSchema, {
+        eventsPerSync: [create(ExecutionStatsTick_EventsPerSyncMeasurementSchema, {
           cobbleputer,
           count: 2n,
           total: 3n,
           max: 2n,
         })],
-        effects: [create(Internal.ExecutionStatsTick_EffectMeasurementSchema, {
+        effects: [create(ExecutionStatsTick_EffectMeasurementSchema, {
           cobbleputer,
-          type: Internal.InstrumentationEffectType.SEND_CHAT,
+          type: InstrumentationEffectType.SEND_CHAT,
           attempted: 6n,
           failed: 1n,
           totalNanos: 7n,
           maxNanos: 4n,
         })],
-        cobbleputerStates: [create(Internal.ExecutionStatsTick_CobbleputerStateSchema, {
+        cobbleputerStates: [create(ExecutionStatsTick_CobbleputerStateSchema, {
           cobbleputer,
-          state: Internal.InstrumentationLifecycleState.RUNNING,
+          state: InstrumentationLifecycleState.RUNNING,
         })],
       }),
-      create(Internal.ExecutionStatsTick_PlayerStatsSchema, {
+      create(ExecutionStatsTick_PlayerStatsSchema, {
         playerId: OTHER_PLAYER_ID,
         maxBurstChatTokens: 10,
         maxSlowChatTokens: 100,
         maxRunningExecutions: 10,
         maxTotalExecutionStateBytes: 1024n,
-        events: [create(Internal.ExecutionStatsTick_EventMeasurementSchema, {
+        events: [create(ExecutionStatsTick_EventMeasurementSchema, {
           cobbleputer,
-          type: Internal.InstrumentationEventType.CHAT_MESSAGE,
+          type: InstrumentationEventType.CHAT_MESSAGE,
           accepted: 100n,
         })],
       }),
@@ -284,10 +306,10 @@ function executionStatsReport(): Internal.ExecutionStatsTick {
   });
 }
 
-function logTokenEntry(): Internal.LogStats {
-  return create(Internal.LogStatsSchema, {
+function logTokenEntry(): LogStats {
+  return create(LogStatsSchema, {
     playerId: PLAYER_ID,
-    logTokens: create(Internal.LogTokenBucketSchema, { available: 99.5, capacity: 100 }),
+    logTokens: create(LogTokenBucketSchema, { available: 99.5, capacity: 100 }),
   });
 }
 
@@ -448,13 +470,13 @@ class WebSocketConnection {
   }
 }
 
-function uuid(high: bigint, low: bigint): Common.Uuid {
-  return create(Common.UuidSchema, { high, low });
+function uuid(high: bigint, low: bigint): Uuid {
+  return create(UuidSchema, { high, low });
 }
 
 function assertUuidEquals(
-  actual: Common.Uuid | undefined,
-  expected: Common.Uuid,
+  actual: Uuid | undefined,
+  expected: Uuid,
   message: string,
 ): void {
   if (actual?.high !== expected.high || actual.low !== expected.low) {

@@ -1,5 +1,6 @@
 import { type AppConfig, configFromEnv } from '../src/config.ts';
-import { create, Program, toBinary } from '@cobbleware/core';
+import { create, toBinary } from '@cobbleware/core';
+import { StartStateSchema, StartStatesResponseSchema } from '@cobbleware/core/program';
 import { DurableAuthStore } from '../src/auth/store.ts';
 import { BYTES_PER_MEBIBYTE } from '../src/config.ts';
 import { createHandler } from '../src/index.ts';
@@ -107,10 +108,10 @@ class TransientWorker implements CobblewareUserWorker {
 
 function startStatesResponse(startStates: Record<string, number[]>): Response {
   const content = toBinary(
-    Program.StartStatesResponseSchema,
-    create(Program.StartStatesResponseSchema, {
+    StartStatesResponseSchema,
+    create(StartStatesResponseSchema, {
       startStates: Object.entries(startStates).map(([stateName, state]) =>
-        create(Program.StartStateSchema, { stateName, state: new Uint8Array(state) })
+        create(StartStateSchema, { stateName, state: new Uint8Array(state) })
       ),
     }),
   );

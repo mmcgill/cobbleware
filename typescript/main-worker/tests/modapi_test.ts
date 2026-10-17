@@ -1,4 +1,5 @@
-import { create, Program, toBinary } from '@cobbleware/core';
+import { create, toBinary } from '@cobbleware/core';
+import { StartStateSchema, StartStatesResponseSchema } from '@cobbleware/core/program';
 import { type AppConfig, configFromEnv } from '../src/config.ts';
 import { DurableAuthStore } from '../src/auth/store.ts';
 import { createHandler } from '../src/index.ts';
@@ -65,10 +66,10 @@ function worker(fetch: CobblewareUserWorker['fetch']): CobblewareUserWorker {
 
 function startStatesResponse(startStates: Record<string, number[]>): Response {
   const content = toBinary(
-    Program.StartStatesResponseSchema,
-    create(Program.StartStatesResponseSchema, {
+    StartStatesResponseSchema,
+    create(StartStatesResponseSchema, {
       startStates: Object.entries(startStates).map(([stateName, state]) =>
-        create(Program.StartStateSchema, { stateName, state: new Uint8Array(state) })
+        create(StartStateSchema, { stateName, state: new Uint8Array(state) })
       ),
     }),
   );

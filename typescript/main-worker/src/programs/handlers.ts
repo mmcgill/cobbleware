@@ -1,5 +1,6 @@
 import { emptyResponse, isJsonRequest, jsonError, jsonResponse, readJson } from '../auth/http.ts';
-import { fromBinary, fromJson, Program, toJson } from '@cobbleware/core';
+import { fromBinary, fromJson, toJson } from '@cobbleware/core';
+import * as Program from '@cobbleware/core/program';
 import type { JsonValue } from '@bufbuild/protobuf';
 import { requireSameOrigin } from '../auth/middleware.ts';
 import { invokeNextState, PROGRAM_BINARY_CONTENT_TYPE } from './program-api.ts';

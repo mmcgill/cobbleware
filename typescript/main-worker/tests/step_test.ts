@@ -1,4 +1,12 @@
-import { Common, create, Effects, Events, fromBinary, Program, toBinary } from '@cobbleware/core';
+import { create, fromBinary, toBinary } from '@cobbleware/core';
+import { UuidSchema } from '@cobbleware/core/common';
+import { EffectSchema, EmitBeepSchema, SendChatSchema } from '@cobbleware/core/effects';
+import { EventSchema, StartedSchema } from '@cobbleware/core/events';
+import {
+  ErrorResponseSchema,
+  StepRequestSchema,
+  StepResponseSchema,
+} from '@cobbleware/core/program';
 import { type AppConfig, configFromEnv } from '../src/config.ts';
 import { DurableAuthStore } from '../src/auth/store.ts';
 import { createHandler } from '../src/index.ts';
@@ -82,14 +90,14 @@ async function authenticatePlayerSession(handler: TestApp['handler']): Promise<s
 
 function encodeStepRequest(state = [1, 2, 3]): Uint8Array {
   return toBinary(
-    Program.StepRequestSchema,
-    create(Program.StepRequestSchema, {
-      executionId: create(Common.UuidSchema, { high: 1n, low: 2n }),
+    StepRequestSchema,
+    create(StepRequestSchema, {
+      executionId: create(UuidSchema, { high: 1n, low: 2n }),
       state: new Uint8Array(state),
-      event: create(Events.EventSchema, {
+      event: create(EventSchema, {
         event: {
           case: 'started',
-          value: create(Events.StartedSchema, {
+          value: create(StartedSchema, {
             tick: 42n,
           }),
         },
@@ -100,15 +108,15 @@ function encodeStepRequest(state = [1, 2, 3]): Uint8Array {
 
 function encodeStepResponse(): Uint8Array {
   return toBinary(
-    Program.StepResponseSchema,
-    create(Program.StepResponseSchema, {
+    StepResponseSchema,
+    create(StepResponseSchema, {
       state: new Uint8Array([9, 8]),
       effects: [
-        create(Effects.EffectSchema, {
-          effect: { case: 'sendChat', value: create(Effects.SendChatSchema, { msg: 'hello' }) },
+        create(EffectSchema, {
+          effect: { case: 'sendChat', value: create(SendChatSchema, { msg: 'hello' }) },
         }),
-        create(Effects.EffectSchema, {
-          effect: { case: 'emitBeep', value: create(Effects.EmitBeepSchema, { millis: 250 }) },
+        create(EffectSchema, {
+          effect: { case: 'emitBeep', value: create(EmitBeepSchema, { millis: 250 }) },
         }),
       ],
     }),
@@ -202,7 +210,7 @@ Deno.test('Player program step accepts binary input and returns ProtoJSON output
       'StepResponse should use the canonical ProtoJSON form',
     );
     if (receivedBody === undefined) throw new Error('worker should receive the request body');
-    const received = fromBinary(Program.StepRequestSchema, receivedBody);
+    const received = fromBinary(StepRequestSchema, receivedBody);
     assertEquals(received.executionId?.high, 1n, 'binary UUID high value should round trip');
     assertEquals(received.event?.event.case, 'started', 'binary event should round trip');
   } finally {
@@ -242,7 +250,7 @@ Deno.test('Player program step accepts and returns ProtoJSON', async () => {
       'StepResponse should use the canonical ProtoJSON form',
     );
     if (receivedBody === undefined) throw new Error('worker should receive the converted request');
-    const request = fromBinary(Program.StepRequestSchema, receivedBody);
+    const request = fromBinary(StepRequestSchema, receivedBody);
     assertEquals(request.executionId?.high, 1n, 'ProtoJSON UUID high value should convert');
     assertEquals(request.event?.event.case, 'started', 'ProtoJSON oneof should convert');
   } finally {
@@ -416,7 +424,7 @@ Deno.test('Player program step fails when the program response is malformed', as
 });
 
 function encodeErrorResponse(error: string): Uint8Array {
-  return toBinary(Program.ErrorResponseSchema, create(Program.ErrorResponseSchema, { error }));
+  return toBinary(ErrorResponseSchema, create(ErrorResponseSchema, { error }));
 }
 
 function binaryResponse(

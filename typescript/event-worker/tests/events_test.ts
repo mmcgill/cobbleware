@@ -1,4 +1,4 @@
-import * as Internal from '@cobbleware/core/internal';
+import { LogLevel } from '@cobbleware/core/internal';
 import {
   logStats,
   MAX_LOG_MESSAGE_BYTES,
@@ -47,7 +47,7 @@ Deno.test('Event Worker translates supported Runtime events', () => {
     metadata: { service_path: SERVICE_PATH },
   });
   if (log?.entry.inner.case !== 'log') throw new Error('log was not translated');
-  assertEquals(log.entry.inner.value.level, Internal.LogLevel.WARN, 'warning level changed');
+  assertEquals(log.entry.inner.value.level, LogLevel.WARN, 'warning level changed');
   assertEquals(log.isProgramLog, true, 'program log was not marked rate-limited');
 });
 

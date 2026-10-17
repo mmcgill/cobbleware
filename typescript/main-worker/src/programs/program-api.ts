@@ -1,4 +1,5 @@
-import { fromBinary, Program, toBinary } from '@cobbleware/core';
+import { fromBinary, toBinary } from '@cobbleware/core';
+import * as Program from '@cobbleware/core/program';
 import type { StartStates } from './types.ts';
 import { isFieldSet } from '@bufbuild/protobuf';
 
@@ -113,7 +114,9 @@ async function readResponseBytes(response: Response, limit?: bigint): Promise<Ui
       countedBytes += BigInt(value.byteLength);
       if (limit !== undefined && countedBytes > limit) {
         await reader.cancel().catch(() => {});
-        throw new StepResponseSizeLimitError('program response body exceeds the configured size limit');
+        throw new StepResponseSizeLimitError(
+          'program response body exceeds the configured size limit',
+        );
       }
       chunks.push(value);
       byteLength += value.byteLength;

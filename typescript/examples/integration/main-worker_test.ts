@@ -1,5 +1,21 @@
-import { Common, create, Events, fromBinary, toBinary } from '@cobbleware/core';
-import * as Internal from '@cobbleware/core/internal';
+import { create, fromBinary, toBinary } from '@cobbleware/core';
+import { Uuid, UuidSchema } from '@cobbleware/core/common';
+import {
+  ChatMessageSchema,
+  Event,
+  EventSchema,
+  ResumedSchema,
+  StartedSchema,
+} from '@cobbleware/core/events';
+import {
+  ExecutionResult,
+  ExecutionsRequestSchema,
+  ExecutionsResponse,
+  ExecutionsResponseSchema,
+  ExecutionState,
+  ExecutionStateSchema,
+  PlayerExecutionStateSchema,
+} from '@cobbleware/core/internal';
 
 const BASE_URL = 'http://localhost:9000';
 const MOD_API_KEY = 'secret';
@@ -74,7 +90,7 @@ async function assertExecutionSync(): Promise<void> {
     chatMessageEvent('Testing'),
   ]);
 
-  let completed: Internal.ExecutionsResponse | undefined;
+  let completed: ExecutionsResponse | undefined;
   for (let attempt = 0; attempt < 100; attempt += 1) {
     const response = await syncExecutions([first, second]);
     if (response.results.every((result) => result.eventSeqNum === 2n)) {
@@ -165,12 +181,12 @@ async function uploadProgram(cookie: string): Promise<ProgramMetadata> {
 }
 
 async function syncExecutions(
-  executions: Internal.ExecutionState[],
-): Promise<Internal.ExecutionsResponse> {
+  executions: ExecutionState[],
+): Promise<ExecutionsResponse> {
   const body = toBinary(
-    Internal.ExecutionsRequestSchema,
-    create(Internal.ExecutionsRequestSchema, {
-      players: [create(Internal.PlayerExecutionStateSchema, {
+    ExecutionsRequestSchema,
+    create(ExecutionsRequestSchema, {
+      players: [create(PlayerExecutionStateSchema, {
         playerId: PLAYER_ID,
         executions,
         outstandingEffectLimit: 20,
@@ -196,18 +212,18 @@ async function syncExecutions(
     );
   }
   return fromBinary(
-    Internal.ExecutionsResponseSchema,
+    ExecutionsResponseSchema,
     new Uint8Array(await response.arrayBuffer()),
   );
 }
 
 function executionState(
-  executionId: Common.Uuid,
+  executionId: Uuid,
   initialState: Uint8Array,
-  events: Events.Event[],
+  events: Event[],
   eventSeqNum = 1n,
-): Internal.ExecutionState {
-  return create(Internal.ExecutionStateSchema, {
+): ExecutionState {
+  return create(ExecutionStateSchema, {
     executionId,
     initialState,
     events,
@@ -217,33 +233,33 @@ function executionState(
   });
 }
 
-function startedEvent(): Events.Event {
-  return create(Events.EventSchema, {
+function startedEvent(): Event {
+  return create(EventSchema, {
     event: {
       case: 'started',
-      value: create(Events.StartedSchema, {
+      value: create(StartedSchema, {
         tick: 42n,
       }),
     },
   });
 }
 
-function resumedEvent(stopTick: bigint, resumeTick: bigint): Events.Event {
-  return create(Events.EventSchema, {
-    event: { case: 'resumed', value: create(Events.ResumedSchema, { resumeTick, stopTick }) },
+function resumedEvent(stopTick: bigint, resumeTick: bigint): Event {
+  return create(EventSchema, {
+    event: { case: 'resumed', value: create(ResumedSchema, { resumeTick, stopTick }) },
   });
 }
 
-function chatMessageEvent(message: string): Events.Event {
-  return create(Events.EventSchema, {
-    event: { case: 'chatMessage', value: create(Events.ChatMessageSchema, { message }) },
+function chatMessageEvent(message: string): Event {
+  return create(EventSchema, {
+    event: { case: 'chatMessage', value: create(ChatMessageSchema, { message }) },
   });
 }
 
 function resultFor(
-  response: Internal.ExecutionsResponse,
-  executionId: Common.Uuid,
-): Internal.ExecutionResult {
+  response: ExecutionsResponse,
+  executionId: Uuid,
+): ExecutionResult {
   const result = response.results.find((candidate) => sameUuid(candidate.executionId, executionId));
   if (result === undefined) {
     throw new Error(`missing result for execution ${executionId.high}:${executionId.low}`);
@@ -252,8 +268,8 @@ function resultFor(
 }
 
 function assertExecutionResult(
-  result: Internal.ExecutionResult,
-  executionId: Common.Uuid,
+  result: ExecutionResult,
+  executionId: Uuid,
   expectedState: number[],
   expectedEffects: string[],
 ): void {
@@ -274,11 +290,11 @@ function assertExecutionResult(
   );
 }
 
-function uuid(high: bigint, low: bigint): Common.Uuid {
-  return create(Common.UuidSchema, { high, low });
+function uuid(high: bigint, low: bigint): Uuid {
+  return create(UuidSchema, { high, low });
 }
 
-function sameUuid(left: Common.Uuid | undefined, right: Common.Uuid): boolean {
+function sameUuid(left: Uuid | undefined, right: Uuid): boolean {
   return left?.high === right.high && left.low === right.low;
 }
 

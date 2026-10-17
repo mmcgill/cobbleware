@@ -1,4 +1,23 @@
-import { Common, create, Effects, Events } from '@cobbleware/core';
+import { create } from '@cobbleware/core';
+import {
+  DyeColor,
+  GlobalPos,
+  GlobalPosSchema,
+  IdentifierSchema,
+  Uuid,
+  UuidSchema,
+  Vec3iSchema,
+} from '@cobbleware/core/common';
+import { Effect } from '@cobbleware/core/effects';
+import {
+  BlockInfoSchema,
+  BlockStateChangeSchema,
+  ChatMessageSchema,
+  Event,
+  EventSchema,
+  WirelessObserverPairedSchema,
+  WirelessObserverUnpairedSchema,
+} from '@cobbleware/core/events';
 import {
   type ConwayBoard,
   conwayHandler,
@@ -11,8 +30,6 @@ import {
   nextGeneration,
   randomizedAlive,
 } from '../src/conway.ts';
-
-const { DyeColor } = Common;
 
 Deno.test('Conway collects black observers during init and removes unpaired observers', () => {
   let state = conwayStartState;
@@ -253,7 +270,7 @@ Deno.test('Conway chat commands enter simulation, step it, and return to init', 
   assertChatEffect(initialized.effects[1], 'Conway: init mode');
 });
 
-function step(state: Uint8Array, event: Events.Event, effectLimit = 50) {
+function step(state: Uint8Array, event: Event, effectLimit = 50) {
   return conwayHandler(state, event, {
     effectLimit,
     stateSizeLimit: 1024n,
@@ -262,11 +279,11 @@ function step(state: Uint8Array, event: Events.Event, effectLimit = 50) {
   });
 }
 
-function paired(color: Common.DyeColor, id: number, x: number, y: number, z: number): Events.Event {
-  return create(Events.EventSchema, {
+function paired(color: DyeColor, id: number, x: number, y: number, z: number): Event {
+  return create(EventSchema, {
     event: {
       case: 'wirelessObserverPaired',
-      value: create(Events.WirelessObserverPairedSchema, {
+      value: create(WirelessObserverPairedSchema, {
         observerColor: color,
         observerId: uuid(id),
         observerPos: globalPos(x, y, z),
@@ -275,11 +292,11 @@ function paired(color: Common.DyeColor, id: number, x: number, y: number, z: num
   });
 }
 
-function unpaired(color: Common.DyeColor, id: number): Events.Event {
-  return create(Events.EventSchema, {
+function unpaired(color: DyeColor, id: number): Event {
+  return create(EventSchema, {
     event: {
       case: 'wirelessObserverUnpaired',
-      value: create(Events.WirelessObserverUnpairedSchema, {
+      value: create(WirelessObserverUnpairedSchema, {
         observerColor: color,
         observerId: uuid(id),
       }),
@@ -287,38 +304,38 @@ function unpaired(color: Common.DyeColor, id: number): Events.Event {
   });
 }
 
-function blockChange(color: Common.DyeColor, powered: boolean): Events.Event {
-  return create(Events.EventSchema, {
+function blockChange(color: DyeColor, powered: boolean): Event {
+  return create(EventSchema, {
     event: {
       case: 'blockStateChange',
-      value: create(Events.BlockStateChangeSchema, {
+      value: create(BlockStateChangeSchema, {
         observerColor: color,
-        newState: create(Events.BlockInfoSchema, { properties: { powered: String(powered) } }),
+        newState: create(BlockInfoSchema, { properties: { powered: String(powered) } }),
       }),
     },
   });
 }
 
-function blackBlockChange(id: number, blockPath: string): Events.Event {
-  return create(Events.EventSchema, {
+function blackBlockChange(id: number, blockPath: string): Event {
+  return create(EventSchema, {
     event: {
       case: 'blockStateChange',
-      value: create(Events.BlockStateChangeSchema, {
+      value: create(BlockStateChangeSchema, {
         observerColor: DyeColor.BLACK,
         observerId: uuid(id),
-        newState: create(Events.BlockInfoSchema, {
-          blockType: create(Common.IdentifierSchema, { ns: 'minecraft', path: blockPath }),
+        newState: create(BlockInfoSchema, {
+          blockType: create(IdentifierSchema, { ns: 'minecraft', path: blockPath }),
         }),
       }),
     },
   });
 }
 
-function chatMessage(message: string): Events.Event {
-  return create(Events.EventSchema, {
+function chatMessage(message: string): Event {
+  return create(EventSchema, {
     event: {
       case: 'chatMessage',
-      value: create(Events.ChatMessageSchema, { message }),
+      value: create(ChatMessageSchema, { message }),
     },
   });
 }
@@ -364,22 +381,22 @@ function sequenceRandom(values: number[]): () => number {
   return () => values[index++] ?? 1;
 }
 
-function uuid(id: number): Common.Uuid {
-  return create(Common.UuidSchema, { high: 0n, low: BigInt(id) });
+function uuid(id: number): Uuid {
+  return create(UuidSchema, { high: 0n, low: BigInt(id) });
 }
 
 function idKey(id: number): string {
   return id.toString(16).padStart(32, '0');
 }
 
-function globalPos(x: number, y: number, z: number): Common.GlobalPos {
-  return create(Common.GlobalPosSchema, {
-    dimension: create(Common.IdentifierSchema, { ns: 'minecraft', path: 'overworld' }),
-    position: create(Common.Vec3iSchema, { x, y, z }),
+function globalPos(x: number, y: number, z: number): GlobalPos {
+  return create(GlobalPosSchema, {
+    dimension: create(IdentifierSchema, { ns: 'minecraft', path: 'overworld' }),
+    position: create(Vec3iSchema, { x, y, z }),
   });
 }
 
-function assertClearEffect(effect: Effects.Effect | undefined): void {
+function assertClearEffect(effect: Effect | undefined): void {
   if (effect?.effect.case !== 'setRedstonePower') throw new Error('expected a redstone effect');
   assertEquals(
     effect.effect.value.observerColor,
@@ -389,13 +406,13 @@ function assertClearEffect(effect: Effects.Effect | undefined): void {
   assertEquals(effect.effect.value.powerLevel, 0, 'clear should turn observers off');
 }
 
-function assertChatEffect(effect: Effects.Effect | undefined, message: string): void {
+function assertChatEffect(effect: Effect | undefined, message: string): void {
   if (effect?.effect.case !== 'sendChat') throw new Error('expected a chat effect');
   assertEquals(effect.effect.value.msg, message, 'chat message');
 }
 
 function assertPowerEffect(
-  effect: Effects.Effect | undefined,
+  effect: Effect | undefined,
   id: number,
   powerLevel: number,
 ): void {

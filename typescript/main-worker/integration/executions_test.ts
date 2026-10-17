@@ -1,5 +1,15 @@
-import { Common, create, Effects, Events, fromBinary, toBinary } from '@cobbleware/core';
-import * as Internal from '@cobbleware/core/internal';
+import { create, fromBinary, toBinary } from '@cobbleware/core';
+import { Uuid, UuidSchema } from '@cobbleware/core/common';
+import { Effect, length } from '@cobbleware/core/effects';
+import { Event, EventSchema, ResumedSchema, StartedSchema } from '@cobbleware/core/events';
+import {
+  ExecutionResult,
+  ExecutionsRequest,
+  ExecutionsRequestSchema,
+  ExecutionsResponseSchema,
+  ExecutionStateSchema,
+  PlayerExecutionStateSchema,
+} from '@cobbleware/core/internal';
 
 const API_KEY = 'execution-sync-integration-key';
 const AUTH_CODE = 'SYNC0001';
@@ -22,7 +32,7 @@ Deno.test('Execution sync runs uploaded programs in a real durable-store user wo
     const started = executionSnapshot(1n, new Uint8Array([1]), [startedEvent(1n)]);
     const first = await syncUntilConsumed(baseUrl, started, 1n);
     assertBytes(first.finalState, [1], 'Started step changed the hello state');
-    assertEquals(first.effects.length, 1, 'Started step did not produce its chat effect');
+    assertEquals(first.length, 1, 'Started step did not produce its chat effect');
     assertEffect(first.effects[0], 'sendChat', 'Started step returned the wrong effect type');
     if (first.effects[0]?.effect.case === 'sendChat') {
       assertEquals(
@@ -35,7 +45,7 @@ Deno.test('Execution sync runs uploaded programs in a real durable-store user wo
     const resumed = executionSnapshot(2n, new Uint8Array([1]), [resumedEvent(1n, 2n)]);
     const second = await syncUntilConsumed(baseUrl, resumed, 2n);
     assertBytes(second.finalState, [1], 'Resumed step changed the hello state');
-    assertEquals(second.effects.length, 1, 'Resumed step did not produce its beep effect');
+    assertEquals(second.length, 1, 'Resumed step did not produce its beep effect');
     assertEffect(second.effects[0], 'emitBeep', 'Resumed step returned the wrong effect type');
   } finally {
     if (runtime !== undefined) {
@@ -53,12 +63,12 @@ Deno.test('Execution sync runs uploaded programs in a real durable-store user wo
 function executionSnapshot(
   eventSeqNum: bigint,
   initialState: Uint8Array,
-  events: Events.Event[],
-): Internal.ExecutionsRequest {
-  return create(Internal.ExecutionsRequestSchema, {
-    players: [create(Internal.PlayerExecutionStateSchema, {
+  events: Event[],
+): ExecutionsRequest {
+  return create(ExecutionsRequestSchema, {
+    players: [create(PlayerExecutionStateSchema, {
       playerId: PLAYER_ID,
-      executions: [create(Internal.ExecutionStateSchema, {
+      executions: [create(ExecutionStateSchema, {
         executionId: EXECUTION_ID,
         initialState,
         events,
@@ -77,21 +87,21 @@ function executionSnapshot(
 
 async function syncUntilConsumed(
   baseUrl: string,
-  snapshot: Internal.ExecutionsRequest,
+  snapshot: ExecutionsRequest,
   eventSeqNum: bigint,
-): Promise<Internal.ExecutionResult> {
+): Promise<ExecutionResult> {
   const deadline = Date.now() + 10_000;
   while (Date.now() < deadline) {
     const response = await fetch(`${baseUrl}/modapi/v1/executions`, {
       method: 'POST',
       headers: { authorization: `Bearer ${API_KEY}`, 'content-type': 'application/octet-stream' },
-      body: toBinary(Internal.ExecutionsRequestSchema, snapshot),
+      body: toBinary(ExecutionsRequestSchema, snapshot),
     });
     if (response.status !== 200) {
       throw new Error(`execution sync failed: HTTP ${response.status} ${await response.text()}`);
     }
     const decoded = fromBinary(
-      Internal.ExecutionsResponseSchema,
+      ExecutionsResponseSchema,
       new Uint8Array(await response.arrayBuffer()),
     );
     const result = decoded.results[0];
@@ -199,30 +209,30 @@ async function reservePort(): Promise<number> {
   }
 }
 
-function startedEvent(tick: bigint): Events.Event {
-  return create(Events.EventSchema, {
-    event: { case: 'started', value: create(Events.StartedSchema, { tick }) },
+function startedEvent(tick: bigint): Event {
+  return create(EventSchema, {
+    event: { case: 'started', value: create(StartedSchema, { tick }) },
   });
 }
 
-function resumedEvent(stopTick: bigint, resumeTick: bigint): Events.Event {
-  return create(Events.EventSchema, {
-    event: { case: 'resumed', value: create(Events.ResumedSchema, { stopTick, resumeTick }) },
+function resumedEvent(stopTick: bigint, resumeTick: bigint): Event {
+  return create(EventSchema, {
+    event: { case: 'resumed', value: create(ResumedSchema, { stopTick, resumeTick }) },
   });
 }
 
-function uuid(high: bigint, low: bigint): Common.Uuid {
-  return create(Common.UuidSchema, { high, low });
+function uuid(high: bigint, low: bigint): Uuid {
+  return create(UuidSchema, { high, low });
 }
 
-function uuidFromString(value: string): Common.Uuid {
+function uuidFromString(value: string): Uuid {
   const hex = value.replaceAll('-', '');
   return uuid(BigInt(`0x${hex.slice(0, 16)}`), BigInt(`0x${hex.slice(16)}`));
 }
 
 function assertEffect(
-  value: Effects.Effect | undefined,
-  expected: Effects.Effect['effect']['case'],
+  value: Effect | undefined,
+  expected: Effect['effect']['case'],
   message: string,
 ): void {
   assertEquals(value?.effect.case, expected, message);

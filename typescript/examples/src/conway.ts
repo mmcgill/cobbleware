@@ -1,11 +1,8 @@
-import {
-  Common,
-  create,
-  Effects,
-  Events,
-  Program,
-  type Program as EventProgram,
-} from '@cobbleware/core';
+import { create, type Program } from '@cobbleware/core';
+import * as Common from '@cobbleware/core/common';
+import * as Effects from '@cobbleware/core/effects';
+import * as Events from '@cobbleware/core/events';
+import * as program from '@cobbleware/core/program';
 
 const { DyeColor } = Common;
 
@@ -60,7 +57,7 @@ export type ConwayState = ConwayInitState | ConwaySimulationState;
 
 export const conwayStartState = encodeConwayState(emptyInitState());
 
-export const conwayHandler: EventProgram = (state, event, context) => {
+export const conwayHandler: Program = (state, event, context) => {
   const current = rememberBlackBlockState(decodeConwayState(state), event);
   const command = configurationCommand(event);
   if (command !== undefined) return configureBoard(current, command, context.effectLimit);
@@ -130,7 +127,7 @@ function handleInit(
   state: ConwayInitState,
   event: Events.Event,
   effectLimit: number,
-): Program.StepResponse {
+): program.StepResponse {
   if (
     event.event.case === 'wirelessObserverPaired' &&
     event.event.value.observerColor === DyeColor.BLACK
@@ -191,7 +188,7 @@ function handleSimulation(
   state: ConwaySimulationState,
   event: Events.Event,
   effectLimit: number,
-): Program.StepResponse {
+): program.StepResponse {
   if (
     (event.event.case === 'blockStateChange' &&
       event.event.value.observerColor === DyeColor.GREEN && isPowered(event.event.value, false)) ||
@@ -228,7 +225,7 @@ function configureBoard(
   state: ConwayState,
   command: ConfigurationCommand,
   effectLimit: number,
-): Program.StepResponse {
+): program.StepResponse {
   const board = state.mode === 'init' ? createBoard(state.observers) : boardFrom(state);
   const alive = command === 'clear'
     ? []
@@ -408,7 +405,7 @@ function changedCellOperations(
 function drainAndRespond<T extends ConwayState>(
   state: T,
   effectLimit: number,
-): Program.StepResponse {
+): program.StepResponse {
   const drained = drainPending(state, effectLimit);
   return response(drained.state, drained.effects);
 }
@@ -455,8 +452,8 @@ function effectForOperation(operation: PendingOperation): Effects.Effect {
   });
 }
 
-function response(state: ConwayState, effects: Effects.Effect[]): Program.StepResponse {
-  return create(Program.StepResponseSchema, { state: encodeConwayState(state), effects });
+function response(state: ConwayState, effects: Effects.Effect[]): program.StepResponse {
+  return create(program.StepResponseSchema, { state: encodeConwayState(state), effects });
 }
 
 function observerFromEvent(event: Events.WirelessObserverPaired): ConwayObserver | undefined {

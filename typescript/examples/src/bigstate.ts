@@ -1,5 +1,6 @@
-import { Program, type Program as EventProgram } from '@cobbleware/core';
+import { type Program } from '@cobbleware/core';
 import { create } from '@bufbuild/protobuf';
+import * as program from '@cobbleware/core/program';
 
 const STATE_INCREASE_SIZE_BYTES = 1024 * 10;
 
@@ -7,7 +8,7 @@ export const BIGSTATE = 5;
 
 export const bigstateStartState = new Uint8Array([BIGSTATE]);
 
-export const bigstateHandler: EventProgram = (state, e, _context) => {
+export const bigstateHandler: Program = (state, e, _context) => {
   const { event } = e;
   if (event.case === 'chatMessage' && event.value.message.toLowerCase() === 'bigger') {
     const biggerlength = state.length + STATE_INCREASE_SIZE_BYTES;
@@ -15,5 +16,5 @@ export const bigstateHandler: EventProgram = (state, e, _context) => {
     state = new Uint8Array(biggerlength);
     state[0] = BIGSTATE;
   }
-  return create(Program.StepResponseSchema, { state, effects: [] });
+  return create(program.StepResponseSchema, { state, effects: [] });
 };

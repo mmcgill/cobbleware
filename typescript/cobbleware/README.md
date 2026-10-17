@@ -12,10 +12,10 @@ Define a set of named initial states and an event handler, then call `start`. Th
 `Deno.serve` and implements the Program API endpoints for you.
 
 ```ts
-import { create, Program, type Program as EventHandler, start } from '@cobbleware/core';
+import { create, type Program as EventHandler, start } from '@cobbleware/core';
+import { StepResponseSchema } from '@cobbleware/core/program';
 
-const handler: EventHandler = (state, _event) =>
-  create(Program.StepResponseSchema, { state, effects: [] });
+const handler: EventHandler = (state, _event) => create(StepResponseSchema, { state, effects: [] });
 
 start({
   startStates: { initial: new Uint8Array() },
@@ -48,8 +48,9 @@ deno task generate
 `src/mod.ts` is the package entry point. It intentionally contains only portable
 TypeScript and can be imported directly by an Edge Function.
 
-`generated/internal_pb.ts` describes implementation details that are subject to breaking
-changes without warning.
+The generated protobuf modules are available through the `common`, `effects`, `events`, and
+`program` subpaths. The `internal` subpath describes implementation details that are subject to
+breaking changes without warning.
 
 ## Versioning and Releases
 

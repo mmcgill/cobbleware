@@ -1,4 +1,13 @@
-import { Common, create, Events, fromBinary, Program, toBinary } from '@cobbleware/core';
+import { create, fromBinary, toBinary } from '@cobbleware/core';
+import { UuidSchema } from '@cobbleware/core/common';
+import { EventSchema, StartedSchema } from '@cobbleware/core/events';
+import {
+  StartStateSchema,
+  StartStatesResponseSchema,
+  StepRequest,
+  StepRequestSchema,
+  StepResponseSchema,
+} from '@cobbleware/core/program';
 import {
   invokeNextState,
   invokeStartStates,
@@ -17,10 +26,10 @@ Deno.test('Program API startStates invokes the expected endpoint', async () => {
     received = request;
     return Promise.resolve(binaryResponse(
       toBinary(
-        Program.StartStatesResponseSchema,
-        create(Program.StartStatesResponseSchema, {
+        StartStatesResponseSchema,
+        create(StartStatesResponseSchema, {
           startStates: Object.entries(expected).map(([stateName, state]) =>
-            create(Program.StartStateSchema, { stateName, state: new Uint8Array(state) })
+            create(StartStateSchema, { stateName, state: new Uint8Array(state) })
           ),
         }),
       ),
@@ -36,16 +45,16 @@ Deno.test('Program API startStates invokes the expected endpoint', async () => {
 });
 
 Deno.test('Program API nextState serializes its request and deserializes its response', async () => {
-  const expectedRequest = create(Program.StepRequestSchema, {
-    executionId: create(Common.UuidSchema, { high: 1n, low: 2n }),
+  const expectedRequest = create(StepRequestSchema, {
+    executionId: create(UuidSchema, { high: 1n, low: 2n }),
     state: new Uint8Array([1, 2, 3]),
-    event: create(Events.EventSchema, {
-      event: { case: 'started', value: create(Events.StartedSchema, { tick: 42n }) },
+    event: create(EventSchema, {
+      event: { case: 'started', value: create(StartedSchema, { tick: 42n }) },
     }),
     effectLimit: 5,
     stateSizeLimit: 1024n,
   });
-  const expectedResponse = create(Program.StepResponseSchema, {
+  const expectedResponse = create(StepResponseSchema, {
     state: new Uint8Array([9, 8, 7]),
   });
   let received: Request | undefined;
@@ -53,7 +62,7 @@ Deno.test('Program API nextState serializes its request and deserializes its res
     worker((request) => {
       received = request;
       return Promise.resolve(
-        binaryResponse(toBinary(Program.StepResponseSchema, expectedResponse)),
+        binaryResponse(toBinary(StepResponseSchema, expectedResponse)),
       );
     }),
     expectedRequest,
@@ -66,7 +75,7 @@ Deno.test('Program API nextState serializes its request and deserializes its res
     throw new Error('nextState request has the wrong content type');
   }
   const request = fromBinary(
-    Program.StepRequestSchema,
+    StepRequestSchema,
     new Uint8Array(await received.arrayBuffer()),
   );
   if (JSON.stringify([...request.state]) !== JSON.stringify([...expectedRequest.state])) {
@@ -90,8 +99,8 @@ Deno.test('Program API nextState serializes its request and deserializes its res
 });
 
 Deno.test('Program API nextState accepts a streamed response at its size limit', async () => {
-  const expected = create(Program.StepResponseSchema, { state: new Uint8Array([9, 8, 7]) });
-  const body = toBinary(Program.StepResponseSchema, expected);
+  const expected = create(StepResponseSchema, { state: new Uint8Array([9, 8, 7]) });
+  const body = toBinary(StepResponseSchema, expected);
   const response = await invokeNextState(
     worker(() => Promise.resolve(streamingResponse([body.slice(0, 2), body.slice(2)]))),
     stepRequest(),
@@ -108,15 +117,17 @@ Deno.test('Program API nextState cancels an oversized streamed response', async 
   let error: unknown;
   try {
     await invokeNextState(
-      worker(() => Promise.resolve(streamingResponse(
-        [new Uint8Array([1, 2]), new Uint8Array([3])],
-        () => {
-          cancelled = true;
-        },
-        500,
-        false,
-        'text/plain',
-      ))),
+      worker(() =>
+        Promise.resolve(streamingResponse(
+          [new Uint8Array([1, 2]), new Uint8Array([3])],
+          () => {
+            cancelled = true;
+          },
+          500,
+          false,
+          'text/plain',
+        ))
+      ),
       stepRequest(),
       2n,
     );
@@ -134,12 +145,12 @@ Deno.test('Program API nextState cancels an oversized streamed response', async 
   if (!cancelled) throw new Error('oversized response stream was not cancelled');
 });
 
-function stepRequest(): Program.StepRequest {
-  return create(Program.StepRequestSchema, {
-    executionId: create(Common.UuidSchema, { high: 1n, low: 2n }),
+function stepRequest(): StepRequest {
+  return create(StepRequestSchema, {
+    executionId: create(UuidSchema, { high: 1n, low: 2n }),
     state: new Uint8Array([1]),
-    event: create(Events.EventSchema, {
-      event: { case: 'started', value: create(Events.StartedSchema, { tick: 1n }) },
+    event: create(EventSchema, {
+      event: { case: 'started', value: create(StartedSchema, { tick: 1n }) },
     }),
     effectLimit: 1,
     stateSizeLimit: 1n,
@@ -160,15 +171,18 @@ function streamingResponse(
   contentType = PROGRAM_BINARY_CONTENT_TYPE,
 ): Response {
   let index = 0;
-  return new Response(new ReadableStream({
-    pull(controller) {
-      const chunk = chunks[index++];
-      if (chunk === undefined) {
-        if (close) controller.close();
-      } else {
-        controller.enqueue(chunk);
-      }
-    },
-    cancel: onCancel,
-  }), { status, headers: { 'content-type': contentType } });
+  return new Response(
+    new ReadableStream({
+      pull(controller) {
+        const chunk = chunks[index++];
+        if (chunk === undefined) {
+          if (close) controller.close();
+        } else {
+          controller.enqueue(chunk);
+        }
+      },
+      cancel: onCancel,
+    }),
+    { status, headers: { 'content-type': contentType } },
+  );
 }

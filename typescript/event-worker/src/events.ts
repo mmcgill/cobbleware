@@ -1,5 +1,5 @@
 import { create } from '@cobbleware/core';
-import { Common } from '@cobbleware/core';
+import * as Common from '@cobbleware/core/common';
 import * as Internal from '@cobbleware/core/internal';
 import type { LogTokenBucketSnapshot } from './limiter.ts';
 

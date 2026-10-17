@@ -1,17 +1,28 @@
-import { create, Events, Program, toBinary } from '@cobbleware/core';
+import { create, toBinary } from '@cobbleware/core';
+import {
+  ChatMessage,
+  ChatMessageSchema,
+  Event,
+  EventSchema,
+  Resumed,
+  ResumedSchema,
+  Started,
+  StartedSchema,
+} from '@cobbleware/core/events';
+import { StepRequestSchema } from '@cobbleware/core/program';
 import { createExampleProgramApiHandler, handle, startStates } from '../src/index.ts';
 
 Deno.test('hello start state greets on start and beeps on resume', () => {
   assertStep(
     startStates.hello,
-    event('started', create(Events.StartedSchema, { tick: 1n })),
+    event('started', create(StartedSchema, { tick: 1n })),
     [1],
     'sendChat',
     'Hello world',
   );
   assertStep(
     startStates.hello,
-    event('resumed', create(Events.ResumedSchema, { stopTick: 1n, resumeTick: 2n })),
+    event('resumed', create(ResumedSchema, { stopTick: 1n, resumeTick: 2n })),
     [1],
     'emitBeep',
   );
@@ -20,14 +31,14 @@ Deno.test('hello start state greets on start and beeps on resume', () => {
 Deno.test('echo start state counts and echoes chat messages', () => {
   let state = assertStep(
     startStates.echo.slice(),
-    event('chatMessage', create(Events.ChatMessageSchema, { message: 'Testing' })),
+    event('chatMessage', create(ChatMessageSchema, { message: 'Testing' })),
     [2, 1],
     'sendChat',
     'Echo (1): Testing',
   );
   state = assertStep(
     state,
-    event('chatMessage', create(Events.ChatMessageSchema, { message: 'Again' })),
+    event('chatMessage', create(ChatMessageSchema, { message: 'Again' })),
     [2, 2],
     'sendChat',
     'Echo (2): Again',
@@ -37,16 +48,16 @@ Deno.test('echo start state counts and echoes chat messages', () => {
 
 Deno.test('bigresponse start state streams without completing for chat events', async () => {
   const handler = createExampleProgramApiHandler();
-  const request = create(Program.StepRequestSchema, {
+  const request = create(StepRequestSchema, {
     state: startStates.bigresponse,
-    event: event('chatMessage', create(Events.ChatMessageSchema, { message: 'Testing' })),
+    event: event('chatMessage', create(ChatMessageSchema, { message: 'Testing' })),
     effectLimit: 1,
     stateSizeLimit: 1n,
   });
   const response = await handler(
     new Request('http://cobbleware.local/nextState', {
       method: 'POST',
-      body: toBinary(Program.StepRequestSchema, request),
+      body: toBinary(StepRequestSchema, request),
     }),
   );
   const reader = response.body?.getReader();
@@ -61,14 +72,14 @@ Deno.test('bigresponse start state streams without completing for chat events', 
 
 function event(
   eventCase: 'started' | 'resumed' | 'chatMessage',
-  value: Events.Started | Events.Resumed | Events.ChatMessage,
-): Events.Event {
-  return create(Events.EventSchema, { event: { case: eventCase, value } as Events.Event['event'] });
+  value: Started | Resumed | ChatMessage,
+): Event {
+  return create(EventSchema, { event: { case: eventCase, value } as Event['event'] });
 }
 
 function assertStep(
   state: Uint8Array,
-  input: Events.Event,
+  input: Event,
   expectedState: number[],
   expectedEffect: 'emitBeep' | 'sendChat',
   expectedMessage?: string,

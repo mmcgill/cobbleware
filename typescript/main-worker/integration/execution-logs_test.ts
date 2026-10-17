@@ -1,5 +1,13 @@
-import { Common, create, fromBinary, toBinary } from '@cobbleware/core';
-import * as Internal from '@cobbleware/core/internal';
+import { create, fromBinary, toBinary } from '@cobbleware/core';
+import { Uuid, UuidSchema } from '@cobbleware/core/common';
+import {
+  ExecutionLogEntry,
+  ExecutionLogEntrySchema,
+  ExecutionPoolTransition,
+  ExecutionPoolTransitionLogEntrySchema,
+  LogLevel,
+  ProgramLogEntrySchema,
+} from '@cobbleware/core/internal';
 
 const API_KEY = 'execution-logs-integration-key';
 const AUTH_CODE_ONE = 'LOGS0001';
@@ -38,9 +46,9 @@ Deno.test('Execution logs flow from an authenticated producer only to the owning
 
     const expected = entry(uuidFromString(PLAYER_ONE_UUID));
     const received = nextBinary(firstPlayer);
-    producer.send(toBinary(Internal.ExecutionLogEntrySchema, expected));
+    producer.send(toBinary(ExecutionLogEntrySchema, expected));
     const actual = fromBinary(
-      Internal.ExecutionLogEntrySchema,
+      ExecutionLogEntrySchema,
       await within(
         5_000,
         received,
@@ -54,16 +62,16 @@ Deno.test('Execution logs flow from an authenticated producer only to the owning
 
     const poolExpected = poolEntry(uuidFromString(PLAYER_ONE_UUID));
     const poolReceived = nextBinary(firstPlayer);
-    producer.send(toBinary(Internal.ExecutionLogEntrySchema, poolExpected));
+    producer.send(toBinary(ExecutionLogEntrySchema, poolExpected));
     const poolActual = fromBinary(
-      Internal.ExecutionLogEntrySchema,
+      ExecutionLogEntrySchema,
       await within(5_000, poolReceived, 'owner pool-transition frame'),
     );
     assertEquals(poolActual.inner.case, 'poolTransition', 'wrong pool-transition entry type');
     if (poolActual.inner.case !== 'poolTransition') throw new Error('missing pool transition');
     assertEquals(
       poolActual.inner.value.transition,
-      Internal.ExecutionPoolTransition.WAITING,
+      ExecutionPoolTransition.WAITING,
       'pool transition changed',
     );
     await expectNoMessage(secondPlayer, 200);
@@ -192,34 +200,34 @@ async function waitForRuntime(baseUrl: string): Promise<void> {
   throw new Error('Edge Runtime did not become ready within 10 seconds');
 }
 
-function entry(playerId: Common.Uuid): Internal.ExecutionLogEntry {
-  return create(Internal.ExecutionLogEntrySchema, {
+function entry(playerId: Uuid): ExecutionLogEntry {
+  return create(ExecutionLogEntrySchema, {
     playerId,
     inner: {
       case: 'log',
-      value: create(Internal.ProgramLogEntrySchema, {
-        level: Internal.LogLevel.INFO,
+      value: create(ProgramLogEntrySchema, {
+        level: LogLevel.INFO,
         msg: 'hello from the Event Worker',
       }),
     },
   });
 }
 
-function poolEntry(playerId: Common.Uuid): Internal.ExecutionLogEntry {
-  return create(Internal.ExecutionLogEntrySchema, {
+function poolEntry(playerId: Uuid): ExecutionLogEntry {
+  return create(ExecutionLogEntrySchema, {
     playerId,
     inner: {
       case: 'poolTransition',
-      value: create(Internal.ExecutionPoolTransitionLogEntrySchema, {
-        transition: Internal.ExecutionPoolTransition.WAITING,
+      value: create(ExecutionPoolTransitionLogEntrySchema, {
+        transition: ExecutionPoolTransition.WAITING,
       }),
     },
   });
 }
 
-function uuidFromString(value: string): Common.Uuid {
+function uuidFromString(value: string): Uuid {
   const hex = value.replaceAll('-', '');
-  return create(Common.UuidSchema, {
+  return create(UuidSchema, {
     high: BigInt(`0x${hex.slice(0, 16)}`),
     low: BigInt(`0x${hex.slice(16)}`),
   });

@@ -1,11 +1,7 @@
-import {
-  Common,
-  create,
-  createProgramApiHandler,
-  Effects,
-  fromBinary,
-  Program,
-} from '@cobbleware/core';
+import { create, createProgramApiHandler, fromBinary, type Program } from '@cobbleware/core';
+import * as Common from '@cobbleware/core/common';
+import * as Effects from '@cobbleware/core/effects';
+import * as program from '@cobbleware/core/program';
 import { CONWAY, conwayHandler, conwayStartState } from './conway.ts';
 import { BIGSTATE, bigstateHandler, bigstateStartState } from './bigstate.ts';
 
@@ -34,7 +30,7 @@ export const helloHandler: Program = function handle(state, event) {
       },
     })];
   }
-  return create(Program.StepResponseSchema, { state: state.slice(), effects });
+  return create(program.StepResponseSchema, { state: state.slice(), effects });
 };
 
 export const echoHandler: Program = function handle(state, event) {
@@ -98,7 +94,7 @@ export const echoHandler: Program = function handle(state, event) {
       }));
     }
   }
-  return create(Program.StepResponseSchema, { state: state.slice(), effects });
+  return create(program.StepResponseSchema, { state: state.slice(), effects });
 };
 
 export const hangHandler: Program = function handle(state, event) {
@@ -108,7 +104,7 @@ export const hangHandler: Program = function handle(state, event) {
       // Intentionally never completes; used to test Main Worker robustness.
     }
   }
-  return create(Program.StepResponseSchema, { state: state.slice(), effects: [] });
+  return create(program.StepResponseSchema, { state: state.slice(), effects: [] });
 };
 
 export const handle: Program = function handle(state, event, context) {
@@ -124,7 +120,7 @@ export const handle: Program = function handle(state, event, context) {
     case BIGSTATE:
       return bigstateHandler(state, event, context);
     default:
-      return create(Program.StepResponseSchema, { state: state.slice(), effects: [] });
+      return create(program.StepResponseSchema, { state: state.slice(), effects: [] });
   }
 };
 
@@ -143,7 +139,7 @@ export function createExampleProgramApiHandler(): (request: Request) => Promise<
     if (request.method === 'POST' && new URL(request.url).pathname === '/nextState') {
       try {
         const step = fromBinary(
-          Program.StepRequestSchema,
+          program.StepRequestSchema,
           new Uint8Array(await request.clone().arrayBuffer()),
         );
         if (step.state[0] === BIGRESPONSE && step.event?.event.case === 'chatMessage') {

@@ -1,5 +1,5 @@
 import { fromBinary } from '@cobbleware/core';
-import * as Internal from '@cobbleware/core/internal';
+import { ExecutionLogEntrySchema } from '@cobbleware/core/internal';
 
 const API_KEY = 'event-worker-integration-key';
 const AUTH_CODE = 'EVENT001';
@@ -51,7 +51,7 @@ Deno.test('Event Worker relays a User Worker console log to its Player', async (
     }
 
     const entry = fromBinary(
-      Internal.ExecutionLogEntrySchema,
+      ExecutionLogEntrySchema,
       await within(5_000, received, 'Event Worker execution log'),
     );
     assertEquals(entry.inner.case, 'log', 'Event Worker did not relay a program log');

@@ -1,5 +1,10 @@
-import { Common, create } from '@cobbleware/core';
-import * as Internal from '@cobbleware/core/internal';
+import { create } from '@cobbleware/core';
+import { UuidSchema } from '@cobbleware/core/common';
+import {
+  ExceptionLogEntrySchema,
+  ExecutionLogEntry,
+  ExecutionLogEntrySchema,
+} from '@cobbleware/core/internal';
 import { eventWorkerProtocol, ExecutionLogRelay } from '../src/relay.ts';
 
 Deno.test('Execution log relay authenticates and sends only on an open socket', () => {
@@ -44,12 +49,12 @@ class FakeSocket {
   }
 }
 
-function entry(): Internal.ExecutionLogEntry {
-  return create(Internal.ExecutionLogEntrySchema, {
-    playerId: create(Common.UuidSchema, { high: 1n, low: 2n }),
+function entry(): ExecutionLogEntry {
+  return create(ExecutionLogEntrySchema, {
+    playerId: create(UuidSchema, { high: 1n, low: 2n }),
     inner: {
       case: 'exception',
-      value: create(Internal.ExceptionLogEntrySchema, { msg: 'boom' }),
+      value: create(ExceptionLogEntrySchema, { msg: 'boom' }),
     },
   });
 }
