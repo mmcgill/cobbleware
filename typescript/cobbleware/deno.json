@@ -10,7 +10,7 @@
     "./internal": "./generated/internal_pb.ts"
   },
   "tasks": {
-    "test": "deno test --no-prompt",
+    "test": "deno test --no-prompt && deno test --no-prompt --doc --no-run README.md",
     "check": "deno check src/mod.ts tests/**/*.ts && deno lint src/mod.ts tests/**/*.ts",
     "fmt": "deno fmt --ignore=generated",
     "generate": "deno run --allow-read --allow-write --allow-run scripts/generate.ts",

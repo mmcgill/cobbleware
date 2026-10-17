@@ -8,23 +8,65 @@ This package is intended for use specifically with the Edge Runtime
 
 ## Writing a program
 
-Define a set of named initial states and an event handler, then call `start`. The library runs
-`Deno.serve` and implements the Program API endpoints for you.
+Define a set of named initial states and a `Program` event handler, then call `start`.
 
 ```ts
-import { create, type Program as EventHandler, start } from '@cobbleware/core';
+import { create, type Program, start } from '@cobbleware/core';
+import { EffectSchema, SendChatSchema } from '@cobbleware/core/effects';
 import { StepResponseSchema } from '@cobbleware/core/program';
 
-const handler: EventHandler = (state, _event) => create(StepResponseSchema, { state, effects: [] });
+// Define your program's initial states here. When you
+// run your program on a Cobbleputer in Minecraft, you'll specify
+// a start state to execute from.
+const startStates = { initial: new Uint8Array() };
 
+// A Cobbleware Program is a state machine transition function.
+// It gets called for every event dispatched to an executing
+// Cobbleputer. A program step produces the next state along
+// with a collection of Effects to be applied to the Minecraft world.
+const handler: Program = (state, {event}, context) => {
+  let message: string | undefined;
+  switch (event.case) {
+    case 'started':
+    case 'resumed':
+      message = 'Hello, world!';
+      break;
+    case 'chatMessage':
+      if (context.burstChatTokens === 0) {
+        console.log('Chat echo rate limited: no burst chat tokens available.');
+        break;
+      }
+      message = `Echo: ${event.value.message}`;
+      break;
+  }
+
+  return create(StepResponseSchema, {
+    state,
+    effects: message === undefined ? [] : [chat(message)],
+  });
+};
+
+function chat(message: string) {
+  // Events and effects are represented with Protobufs.
+  // The `create` function and other key '@bufbuild/protobuf' functions are re-exported for convenience.
+  return create(EffectSchema, {
+    effect: { case: 'sendChat', value: create(SendChatSchema, { msg: message }) },
+  });
+}
+
+// Start makes your start states available 
 start({
-  startStates: { initial: new Uint8Array() },
+  startStates,
   program: handler,
 });
 ```
 
+The `start` function runs `Deno.serve` and serves the
+[Program API](https://github.com/mmcgill/cobbleware/blob/main/docs/program-api.md) endpoints for you.
+The Program API is the contract between the Mod and your program.
+
 See [examples](https://github.com/mmcgill/cobbleware/tree/main/typescript/examples)
-for example usage.
+for more involved examples.
 
 ## Development
 
