@@ -19,18 +19,22 @@ export const file_program: GenFile = /*@__PURE__*/
   fileDesc("Cg1wcm9ncmFtLnByb3RvEhJjb2JibGV3YXJlLnByb2dyYW0iLwoKU3RhcnRTdGF0ZRISCgpzdGF0ZV9uYW1lGAEgASgJEg0KBXN0YXRlGAIgASgMIksKE1N0YXJ0U3RhdGVzUmVzcG9uc2USNAoMc3RhcnRfc3RhdGVzGAEgAygLMh4uY29iYmxld2FyZS5wcm9ncmFtLlN0YXJ0U3RhdGUi2QEKC1N0ZXBSZXF1ZXN0Ei0KDGV4ZWN1dGlvbl9pZBgBIAEoCzIXLmNvYmJsZXdhcmUuY29tbW9uLlV1aWQSDQoFc3RhdGUYAiABKAwSJwoFZXZlbnQYAyABKAsyGC5jb2JibGV3YXJlLmV2ZW50cy5FdmVudBIUCgxlZmZlY3RfbGltaXQYBCABKA0SGAoQc3RhdGVfc2l6ZV9saW1pdBgFIAEoBBIZChFidXJzdF9jaGF0X3Rva2VucxgGIAEoDRIYChBzbG93X2NoYXRfdG9rZW5zGAcgASgNIkoKDFN0ZXBSZXNwb25zZRINCgVzdGF0ZRgBIAEoDBIrCgdlZmZlY3RzGAIgAygLMhouY29iYmxld2FyZS5lZmZlY3RzLkVmZmVjdCIeCg1FcnJvclJlc3BvbnNlEg0KBWVycm9yGAEgASgJYghlZGl0aW9uc3DpBw", [file_common, file_effects, file_events]);
 
 /**
+ * A named program starting state.
+ * The names are instrospectable by the mod, and used to select a start state
+ * when starting a Cobbleputer.
+ *
  * @generated from message cobbleware.program.StartState
  */
 export type StartState = Message<"cobbleware.program.StartState"> & {
   /**
-   * Required by the application contract.
+   * The player-visible name of the start state.
    *
    * @generated from field: string state_name = 1;
    */
   stateName: string;
 
   /**
-   * Required by the application contract.
+   * The state itself, as a byte array.
    *
    * @generated from field: bytes state = 2;
    */
@@ -45,10 +49,14 @@ export const StartStateSchema: GenMessage<StartState> = /*@__PURE__*/
   messageDesc(file_program, 0);
 
 /**
+ * A response to a Mod request for a program's start states.
+ *
  * @generated from message cobbleware.program.StartStatesResponse
  */
 export type StartStatesResponse = Message<"cobbleware.program.StartStatesResponse"> & {
   /**
+   * A sequence of start states provided by a program.
+   *
    * @generated from field: repeated cobbleware.program.StartState start_states = 1;
    */
   startStates: StartState[];
@@ -62,53 +70,70 @@ export const StartStatesResponseSchema: GenMessage<StartStatesResponse> = /*@__P
   messageDesc(file_program, 1);
 
 /**
+ * A Mod-initiated request to execute a single program step.
+ * An executing program is a state machine. The state machine
+ * takes a step for each event successfully dispatched to the program.
+ * The current state, event, and additional contextual information
+ * are supplied as inputs to the step. The program provides a StepResponse
+ * that describes the resulting state, along with the effects to be
+ * applied to the world.
+ *
  * @generated from message cobbleware.program.StepRequest
  */
 export type StepRequest = Message<"cobbleware.program.StepRequest"> & {
   /**
-   * Required by the application contract.
+   * The unique id of the program execution taking a step.
    *
    * @generated from field: cobbleware.common.Uuid execution_id = 1;
    */
   executionId?: Uuid | undefined;
 
   /**
-   * Required by the application contract.
+   * The current state of the program execution.
    *
    * @generated from field: bytes state = 2;
    */
   state: Uint8Array;
 
   /**
-   * Required by the application contract.
+   * The event that is triggering the program step.
    *
    * @generated from field: cobbleware.events.Event event = 3;
    */
   event?: Event | undefined;
 
   /**
-   * The maximum number of effects the Runtime will accept from this step.
+   * The maximum number of effects that this step can produce.
+   * When more effects are returned, the excess effects are silently dropped.
+   * Note that this value may be dynamically computed in the future.
+   * Programs that wish to reduce the
+   * likelihood of dropped effects should respect this limit by defering
+   * excess effects to later steps.
    *
    * @generated from field: uint32 effect_limit = 4;
    */
   effectLimit: number;
 
   /**
-   * The maximum size in bytes the Runtime will accept for the next execution state.
+   * The maximum size of the program state that can be returned. This value
+   * is dynamically calculated based on the stored states of all the owning
+   * player's executions. Returning a larger state crashes the execution.
    *
    * @generated from field: uint64 state_size_limit = 5;
    */
   stateSizeLimit: bigint;
 
   /**
-   * The Mod's current number of available per-player burst chat tokens.
+   * The current number of available "burst" chat tokens. If zero, chat effects
+   * will be dropped.
    *
    * @generated from field: uint32 burst_chat_tokens = 6;
    */
   burstChatTokens: number;
 
   /**
-   * The Mod's current number of available per-player slow chat tokens.
+   * The current number of available "slow" chat tokens. These are not consumed
+   * directly; rather, they are used to refill the "burst" chat bucket.
    *
    * @generated from field: uint32 slow_chat_tokens = 7;
    */
@@ -123,18 +148,21 @@ export const StepRequestSchema: GenMessage<StepRequest> = /*@__PURE__*/
   messageDesc(file_program, 2);
 
 /**
+ * A response to a StepRequest, giving the next program state and
+ * a collection of events to be applied to the world.
+ *
  * @generated from message cobbleware.program.StepResponse
  */
 export type StepResponse = Message<"cobbleware.program.StepResponse"> & {
   /**
-   * Required by the application contract.
+   * The new program state.
    *
    * @generated from field: bytes state = 1;
    */
   state: Uint8Array;
 
   /**
-   * Required by the application contract.
+   * The collection of effects to be applied to the world.
    *
    * @generated from field: repeated cobbleware.effects.Effect effects = 2;
    */
@@ -153,8 +181,6 @@ export const StepResponseSchema: GenMessage<StepResponse> = /*@__PURE__*/
  */
 export type ErrorResponse = Message<"cobbleware.program.ErrorResponse"> & {
   /**
-   * Required by the application contract.
-   *
    * @generated from field: string error = 1;
    */
   error: string;

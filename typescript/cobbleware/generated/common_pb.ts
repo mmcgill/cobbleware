@@ -13,7 +13,7 @@ export const file_common: GenFile = /*@__PURE__*/
   fileDesc("Cgxjb21tb24ucHJvdG8SEWNvYmJsZXdhcmUuY29tbW9uIicKBFZlYzMSCQoBeBgBIAEoARIJCgF5GAIgASgBEgkKAXoYAyABKAEiKAoFVmVjM2kSCQoBeBgBIAEoBRIJCgF5GAIgASgFEgkKAXoYAyABKAUiIAoIQ2h1bmtQb3MSCQoBeBgBIAEoBRIJCgF6GAIgASgFIiYKCklkZW50aWZpZXISCgoCbnMYASABKAkSDAoEcGF0aBgCIAEoCSJpCglHbG9iYWxQb3MSMAoJZGltZW5zaW9uGAEgASgLMh0uY29iYmxld2FyZS5jb21tb24uSWRlbnRpZmllchIqCghwb3NpdGlvbhgCIAEoCzIYLmNvYmJsZXdhcmUuY29tbW9uLlZlYzNpIiEKBFV1aWQSDAoEaGlnaBgBIAEoBBILCgNsb3cYAiABKAQqngEKCURpcmVjdGlvbhIZChVESVJFQ1RJT05fVU5TUEVDSUZJRUQQABISCg5ESVJFQ1RJT05fRE9XThABEhAKDERJUkVDVElPTl9VUBACEhMKD0RJUkVDVElPTl9OT1JUSBADEhMKD0RJUkVDVElPTl9TT1VUSBAEEhIKDkRJUkVDVElPTl9XRVNUEAUSEgoORElSRUNUSU9OX0VBU1QQBir9AgoIRHllQ29sb3ISGQoVRFlFX0NPTE9SX1VOU1BFQ0lGSUVEEAASEwoPRFlFX0NPTE9SX1dISVRFEAESFAoQRFlFX0NPTE9SX09SQU5HRRACEhUKEURZRV9DT0xPUl9NQUdFTlRBEAMSGAoURFlFX0NPTE9SX0xJR0hUX0JMVUUQBBIUChBEWUVfQ09MT1JfWUVMTE9XEAUSEgoORFlFX0NPTE9SX0xJTUUQBhISCg5EWUVfQ09MT1JfUElOSxAHEhIKDkRZRV9DT0xPUl9HUkFZEAgSGAoURFlFX0NPTE9SX0xJR0hUX0dSQVkQCRISCg5EWUVfQ09MT1JfQ1lBThAKEhQKEERZRV9DT0xPUl9QVVJQTEUQCxISCg5EWUVfQ09MT1JfQkxVRRAMEhMKD0RZRV9DT0xPUl9CUk9XThANEhMKD0RZRV9DT0xPUl9HUkVFThAOEhEKDURZRV9DT0xPUl9SRUQQDxITCg9EWUVfQ09MT1JfQkxBQ0sQEGIIZWRpdGlvbnNw6Qc");
 
 /**
- * Shared value types used by Cobbleware's public and internal APIs.
+ * Double-precision 3d point/vector.
  *
  * @generated from message cobbleware.common.Vec3
  */
@@ -42,6 +42,8 @@ export const Vec3Schema: GenMessage<Vec3> = /*@__PURE__*/
   messageDesc(file_common, 0);
 
 /**
+ * Integer 3d point/vector.
+ *
  * @generated from message cobbleware.common.Vec3i
  */
 export type Vec3i = Message<"cobbleware.common.Vec3i"> & {
@@ -69,6 +71,8 @@ export const Vec3iSchema: GenMessage<Vec3i> = /*@__PURE__*/
   messageDesc(file_common, 1);
 
 /**
+ * Two-dimensional chunk position, as (x,z).
+ *
  * @generated from message cobbleware.common.ChunkPos
  */
 export type ChunkPos = Message<"cobbleware.common.ChunkPos"> & {
@@ -91,6 +95,8 @@ export const ChunkPosSchema: GenMessage<ChunkPos> = /*@__PURE__*/
   messageDesc(file_common, 2);
 
 /**
+ * A namespace-qualified Minecraft path for identifying block types, dimensions, etc.
+ *
  * @generated from message cobbleware.common.Identifier
  */
 export type Identifier = Message<"cobbleware.common.Identifier"> & {
@@ -113,15 +119,21 @@ export const IdentifierSchema: GenMessage<Identifier> = /*@__PURE__*/
   messageDesc(file_common, 3);
 
 /**
+ * Globally identifies a block position via dimension and integer offsets.
+ *
  * @generated from message cobbleware.common.GlobalPos
  */
 export type GlobalPos = Message<"cobbleware.common.GlobalPos"> & {
   /**
+   * Minecraft server identifier for a dimension.
+   *
    * @generated from field: cobbleware.common.Identifier dimension = 1;
    */
   dimension?: Identifier | undefined;
 
   /**
+   * Position within the given dimension.
+   *
    * @generated from field: cobbleware.common.Vec3i position = 2;
    */
   position?: Vec3i | undefined;
@@ -135,17 +147,21 @@ export const GlobalPosSchema: GenMessage<GlobalPos> = /*@__PURE__*/
   messageDesc(file_common, 4);
 
 /**
+ * A UUID given as high and low longs.
+ *
  * @generated from message cobbleware.common.Uuid
  */
 export type Uuid = Message<"cobbleware.common.Uuid"> & {
   /**
-   * The upper and lower 64 bits of an opaque UUID value.
+   * The upper 64 bits of an opaque UUID value.
    *
    * @generated from field: uint64 high = 1;
    */
   high: bigint;
 
   /**
+   * The lower 64 bits of an opaque UUID value.
+   *
    * @generated from field: uint64 low = 2;
    */
   low: bigint;
@@ -159,6 +175,8 @@ export const UuidSchema: GenMessage<Uuid> = /*@__PURE__*/
   messageDesc(file_common, 5);
 
 /**
+ * The 6 Minecraft dimensions.
+ *
  * @generated from enum cobbleware.common.Direction
  */
 export enum Direction {
@@ -205,6 +223,8 @@ export const DirectionSchema: GenEnum<Direction> = /*@__PURE__*/
   enumDesc(file_common, 0);
 
 /**
+ * The 16 Minecraft Dye colors.
+ *
  * @generated from enum cobbleware.common.DyeColor
  */
 export enum DyeColor {

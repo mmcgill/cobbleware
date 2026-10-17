@@ -4,48 +4,96 @@ package cobbleware.events;
 
 import "common.proto";
 
-// The Program has started executing.
+// The first event dispatched to a new program execution.
 message Started {
   uint64 tick = 1;
 }
 
+// Dispatched whenever a previously stopped or crashed program execution transitions into the RUNNING state.
+// A program is considered stopped when its owner pauses it explicitly, or when the
+// chunk holding the execution's hosting Cobbleputer unloads. This event is dispatched
+// when a player resumes an execution explicitly, or when a Cobbleputer's chunk loads
+// and that Cobbleputer had been running when the chunk was unloaded.
 message Resumed {
+  // The game tick on which the resuming execution stopped.
   uint64 stop_tick = 1;
+  // The game tick on which the resuming execution was resumed by the server.
   uint64 resume_tick = 2;
 }
 
+// Dispatched whenever a player-issued chat message is sent within range of an
+// executing Cobbleputer or any of its paired Wireless Observers.
 message ChatMessage {
+  // The contents of the chat message sent by the player.
   string message = 1;
 }
 
+// A block type and block state.
 message BlockInfo {
-  // The block registry identifier and all serialized block-state properties.
+  // The block registry identifier for the block type.
   cobbleware.common.Identifier block_type = 1;
+
+  // All serialized block state properties. All keys and values are given as strings.
   map<string, string> properties = 2;
 }
 
 // Emitted by a Wireless Observer when the block it's facing undergoes a block state change.
 message BlockStateChange {
+  // The dye color of the Wireless Observer that observed the change.
   cobbleware.common.DyeColor observer_color = 1;
+
+  // The unique identifier of the Wireless Observer that observed the change.
   cobbleware.common.Uuid observer_id = 7;
+
+  // The direction the observing Wireless Observer was facing when the change was observed.
   cobbleware.common.Direction observer_dir = 2;
+
+  // The position of the observing Wireless Observer.
   cobbleware.common.GlobalPos observer_pos = 3;
+
+  // The position where the change was observed.
   cobbleware.common.GlobalPos block_pos = 4;
+
+  // The block type and state before the change.
   BlockInfo old_state = 5;
+
+  // The block type and state after the change.
   BlockInfo new_state = 6;
 }
 
+// Emitted when a Wireless Observer is paired with an executing Cobbleputer.
+// Note that events are not dispatched to Cobbleputers that aren't executing,
+// so this event will **not** be dispatched when e.g. an observer is paired to
+// a crashed Cobbleputer, even when it is resumed.
 message WirelessObserverPaired {
+  // The dye color of the paired Wireless Observer.
   cobbleware.common.DyeColor observer_color = 1;
+
+  // The unique identifier of the paired Wireless Observer.
   cobbleware.common.Uuid observer_id = 2;
+
+  // The direction in which the paired Wireless Observer is facing.
   cobbleware.common.Direction observer_dir = 3;
+
+  // The position of the paired Wireless Observer.
   cobbleware.common.GlobalPos observer_pos = 4;
 }
 
+// Emitted when a paired Wireless Observer is broken or otherwise unpaired from an executing Cobbleputer.
+// Note that events are not dispatched to Cobbleputers that aren't executing,
+// so this event will **not** be dispatched when e.g. an observer is paired to
+// a crashed Cobbleputer, even when it is resumed.
 message WirelessObserverUnpaired {
+  // The dye color of the unpaired Wireless Observer.
   cobbleware.common.DyeColor observer_color = 1;
+
+  // The unique identifier of the unpaired Wireless Observer.
   cobbleware.common.Uuid observer_id = 2;
+
+  // The direction in which the unpaired Wireless Observer is facing.
   cobbleware.common.Direction observer_dir = 3;
+
+  // The position of the unpaired Wireless Observer.
   cobbleware.common.GlobalPos observer_pos = 4;
 }
 

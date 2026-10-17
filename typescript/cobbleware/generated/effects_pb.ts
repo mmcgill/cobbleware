@@ -15,12 +15,23 @@ export const file_effects: GenFile = /*@__PURE__*/
   fileDesc("Cg1lZmZlY3RzLnByb3RvEhJjb2JibGV3YXJlLmVmZmVjdHMiFwoIU2VuZENoYXQSCwoDbXNnGAEgASgJIhoKCEVtaXRCZWVwEg4KBm1pbGxpcxgBIAEoDSKKAQoQU2V0UmVkc3RvbmVQb3dlchIsCgtvYnNlcnZlcl9pZBgBIAEoCzIXLmNvYmJsZXdhcmUuY29tbW9uLlV1aWQSMwoOb2JzZXJ2ZXJfY29sb3IYAyABKA4yGy5jb2JibGV3YXJlLmNvbW1vbi5EeWVDb2xvchITCgtwb3dlcl9sZXZlbBgCIAEoDSK8AQoGRWZmZWN0EjEKCXNlbmRfY2hhdBgBIAEoCzIcLmNvYmJsZXdhcmUuZWZmZWN0cy5TZW5kQ2hhdEgAEjEKCWVtaXRfYmVlcBgCIAEoCzIcLmNvYmJsZXdhcmUuZWZmZWN0cy5FbWl0QmVlcEgAEkIKEnNldF9yZWRzdG9uZV9wb3dlchgDIAEoCzIkLmNvYmJsZXdhcmUuZWZmZWN0cy5TZXRSZWRzdG9uZVBvd2VySABCCAoGZWZmZWN0YghlZGl0aW9uc3DpBw", [file_common]);
 
 /**
+ * Sends a chat message to all players within range of an executing Cobbleputer.
+ * To prevent programs from rendering chat unusable by players, chat messages
+ * are subject to a per-Player rate limit that applies across all that players'
+ * executing programs on the server.
+ *
+ * Chat rate limiting is done via the token bucket algorithm, with each player having two buckets.
+ * Each chat message consumes one token from the "burst" bucket, which is capped at 10 tokens
+ * and refills at one token every 5s. The "burst" bucket fills from a "slow" bucket capped at
+ * 100 tokens and refilling at one token every 20s.
+ *
+ * The current token counts for each bucket are delivered to an execution program
+ * each time it takes a step.
+ *
  * @generated from message cobbleware.effects.SendChat
  */
 export type SendChat = Message<"cobbleware.effects.SendChat"> & {
   /**
-   * Required by the application contract.
-   *
    * @generated from field: string msg = 1;
    */
   msg: string;
@@ -38,8 +49,6 @@ export const SendChatSchema: GenMessage<SendChat> = /*@__PURE__*/
  */
 export type EmitBeep = Message<"cobbleware.effects.EmitBeep"> & {
   /**
-   * The original FlatBuffers uint16 value. Values above 65535 are invalid.
-   *
    * @generated from field: uint32 millis = 1;
    */
   millis: number;
@@ -53,6 +62,10 @@ export const EmitBeepSchema: GenMessage<EmitBeep> = /*@__PURE__*/
   messageDesc(file_effects, 1);
 
 /**
+ * Set the redstone power level of one or more paired Wireless Observers.
+ * This effect only applies to paired Wireless Observers that are also
+ * in currently loaded chunks.
+ *
  * @generated from message cobbleware.effects.SetRedstonePower
  */
 export type SetRedstonePower = Message<"cobbleware.effects.SetRedstonePower"> & {

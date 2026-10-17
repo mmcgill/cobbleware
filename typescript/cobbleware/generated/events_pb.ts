@@ -15,7 +15,7 @@ export const file_events: GenFile = /*@__PURE__*/
   fileDesc("CgxldmVudHMucHJvdG8SEWNvYmJsZXdhcmUuZXZlbnRzIhcKB1N0YXJ0ZWQSDAoEdGljaxgBIAEoBCIxCgdSZXN1bWVkEhEKCXN0b3BfdGljaxgBIAEoBBITCgtyZXN1bWVfdGljaxgCIAEoBCIeCgtDaGF0TWVzc2FnZRIPCgdtZXNzYWdlGAEgASgJIrMBCglCbG9ja0luZm8SMQoKYmxvY2tfdHlwZRgBIAEoCzIdLmNvYmJsZXdhcmUuY29tbW9uLklkZW50aWZpZXISQAoKcHJvcGVydGllcxgCIAMoCzIsLmNvYmJsZXdhcmUuZXZlbnRzLkJsb2NrSW5mby5Qcm9wZXJ0aWVzRW50cnkaMQoPUHJvcGVydGllc0VudHJ5EgsKA2tleRgBIAEoCRINCgV2YWx1ZRgCIAEoCToCOAEi8AIKEEJsb2NrU3RhdGVDaGFuZ2USMwoOb2JzZXJ2ZXJfY29sb3IYASABKA4yGy5jb2JibGV3YXJlLmNvbW1vbi5EeWVDb2xvchIsCgtvYnNlcnZlcl9pZBgHIAEoCzIXLmNvYmJsZXdhcmUuY29tbW9uLlV1aWQSMgoMb2JzZXJ2ZXJfZGlyGAIgASgOMhwuY29iYmxld2FyZS5jb21tb24uRGlyZWN0aW9uEjIKDG9ic2VydmVyX3BvcxgDIAEoCzIcLmNvYmJsZXdhcmUuY29tbW9uLkdsb2JhbFBvcxIvCglibG9ja19wb3MYBCABKAsyHC5jb2JibGV3YXJlLmNvbW1vbi5HbG9iYWxQb3MSLwoJb2xkX3N0YXRlGAUgASgLMhwuY29iYmxld2FyZS5ldmVudHMuQmxvY2tJbmZvEi8KCW5ld19zdGF0ZRgGIAEoCzIcLmNvYmJsZXdhcmUuZXZlbnRzLkJsb2NrSW5mbyLjAQoWV2lyZWxlc3NPYnNlcnZlclBhaXJlZBIzCg5vYnNlcnZlcl9jb2xvchgBIAEoDjIbLmNvYmJsZXdhcmUuY29tbW9uLkR5ZUNvbG9yEiwKC29ic2VydmVyX2lkGAIgASgLMhcuY29iYmxld2FyZS5jb21tb24uVXVpZBIyCgxvYnNlcnZlcl9kaXIYAyABKA4yHC5jb2JibGV3YXJlLmNvbW1vbi5EaXJlY3Rpb24SMgoMb2JzZXJ2ZXJfcG9zGAQgASgLMhwuY29iYmxld2FyZS5jb21tb24uR2xvYmFsUG9zIuUBChhXaXJlbGVzc09ic2VydmVyVW5wYWlyZWQSMwoOb2JzZXJ2ZXJfY29sb3IYASABKA4yGy5jb2JibGV3YXJlLmNvbW1vbi5EeWVDb2xvchIsCgtvYnNlcnZlcl9pZBgCIAEoCzIXLmNvYmJsZXdhcmUuY29tbW9uLlV1aWQSMgoMb2JzZXJ2ZXJfZGlyGAMgASgOMhwuY29iYmxld2FyZS5jb21tb24uRGlyZWN0aW9uEjIKDG9ic2VydmVyX3BvcxgEIAEoCzIcLmNvYmJsZXdhcmUuY29tbW9uLkdsb2JhbFBvcyKLAwoFRXZlbnQSLQoHc3RhcnRlZBgBIAEoCzIaLmNvYmJsZXdhcmUuZXZlbnRzLlN0YXJ0ZWRIABItCgdyZXN1bWVkGAIgASgLMhouY29iYmxld2FyZS5ldmVudHMuUmVzdW1lZEgAEjYKDGNoYXRfbWVzc2FnZRgDIAEoCzIeLmNvYmJsZXdhcmUuZXZlbnRzLkNoYXRNZXNzYWdlSAASQQoSYmxvY2tfc3RhdGVfY2hhbmdlGAQgASgLMiMuY29iYmxld2FyZS5ldmVudHMuQmxvY2tTdGF0ZUNoYW5nZUgAEk0KGHdpcmVsZXNzX29ic2VydmVyX3BhaXJlZBgFIAEoCzIpLmNvYmJsZXdhcmUuZXZlbnRzLldpcmVsZXNzT2JzZXJ2ZXJQYWlyZWRIABJRChp3aXJlbGVzc19vYnNlcnZlcl91bnBhaXJlZBgGIAEoCzIrLmNvYmJsZXdhcmUuZXZlbnRzLldpcmVsZXNzT2JzZXJ2ZXJVbnBhaXJlZEgAQgcKBWV2ZW50YghlZGl0aW9uc3DpBw", [file_common]);
 
 /**
- * The Program has started executing.
+ * The first event dispatched to a new program execution.
  *
  * @generated from message cobbleware.events.Started
  */
@@ -34,15 +34,25 @@ export const StartedSchema: GenMessage<Started> = /*@__PURE__*/
   messageDesc(file_events, 0);
 
 /**
+ * Dispatched whenever a previously stopped or crashed program execution transitions into the RUNNING state.
+ * A program is considered stopped when its owner pauses it explicitly, or when the
+ * chunk holding the execution's hosting Cobbleputer unloads. This event is dispatched
+ * when a player resumes an execution explicitly, or when a Cobbleputer's chunk loads
+ * and that Cobbleputer had been running when the chunk was unloaded.
+ *
  * @generated from message cobbleware.events.Resumed
  */
 export type Resumed = Message<"cobbleware.events.Resumed"> & {
   /**
+   * The game tick on which the resuming execution stopped.
+   *
    * @generated from field: uint64 stop_tick = 1;
    */
   stopTick: bigint;
 
   /**
+   * The game tick on which the resuming execution was resumed by the server.
+   *
    * @generated from field: uint64 resume_tick = 2;
    */
   resumeTick: bigint;
@@ -56,10 +66,15 @@ export const ResumedSchema: GenMessage<Resumed> = /*@__PURE__*/
   messageDesc(file_events, 1);
 
 /**
+ * Dispatched whenever a player-issued chat message is sent within range of an
+ * executing Cobbleputer or any of its paired Wireless Observers.
+ *
  * @generated from message cobbleware.events.ChatMessage
  */
 export type ChatMessage = Message<"cobbleware.events.ChatMessage"> & {
   /**
+   * The contents of the chat message sent by the player.
+   *
    * @generated from field: string message = 1;
    */
   message: string;
@@ -73,17 +88,21 @@ export const ChatMessageSchema: GenMessage<ChatMessage> = /*@__PURE__*/
   messageDesc(file_events, 2);
 
 /**
+ * A block type and block state.
+ *
  * @generated from message cobbleware.events.BlockInfo
  */
 export type BlockInfo = Message<"cobbleware.events.BlockInfo"> & {
   /**
-   * The block registry identifier and all serialized block-state properties.
+   * The block registry identifier for the block type.
    *
    * @generated from field: cobbleware.common.Identifier block_type = 1;
    */
   blockType?: Identifier | undefined;
 
   /**
+   * All serialized block state properties. All keys and values are given as strings.
+   *
    * @generated from field: map<string, string> properties = 2;
    */
   properties: { [key: string]: string };
@@ -103,36 +122,50 @@ export const BlockInfoSchema: GenMessage<BlockInfo> = /*@__PURE__*/
  */
 export type BlockStateChange = Message<"cobbleware.events.BlockStateChange"> & {
   /**
+   * The dye color of the Wireless Observer that observed the change.
+   *
    * @generated from field: cobbleware.common.DyeColor observer_color = 1;
    */
   observerColor: DyeColor;
 
   /**
+   * The unique identifier of the Wireless Observer that observed the change.
+   *
    * @generated from field: cobbleware.common.Uuid observer_id = 7;
    */
   observerId?: Uuid | undefined;
 
   /**
+   * The direction the observing Wireless Observer was facing when the change was observed.
+   *
    * @generated from field: cobbleware.common.Direction observer_dir = 2;
    */
   observerDir: Direction;
 
   /**
+   * The position of the observing Wireless Observer.
+   *
    * @generated from field: cobbleware.common.GlobalPos observer_pos = 3;
    */
   observerPos?: GlobalPos | undefined;
 
   /**
+   * The position where the change was observed.
+   *
    * @generated from field: cobbleware.common.GlobalPos block_pos = 4;
    */
   blockPos?: GlobalPos | undefined;
 
   /**
+   * The block type and state before the change.
+   *
    * @generated from field: cobbleware.events.BlockInfo old_state = 5;
    */
   oldState?: BlockInfo | undefined;
 
   /**
+   * The block type and state after the change.
+   *
    * @generated from field: cobbleware.events.BlockInfo new_state = 6;
    */
   newState?: BlockInfo | undefined;
@@ -146,25 +179,38 @@ export const BlockStateChangeSchema: GenMessage<BlockStateChange> = /*@__PURE__*
   messageDesc(file_events, 4);
 
 /**
+ * Emitted when a Wireless Observer is paired with an executing Cobbleputer.
+ * Note that events are not dispatched to Cobbleputers that aren't executing,
+ * so this event will **not** be dispatched when e.g. an observer is paired to
+ * a crashed Cobbleputer, even when it is resumed.
+ *
  * @generated from message cobbleware.events.WirelessObserverPaired
  */
 export type WirelessObserverPaired = Message<"cobbleware.events.WirelessObserverPaired"> & {
   /**
+   * The dye color of the paired Wireless Observer.
+   *
    * @generated from field: cobbleware.common.DyeColor observer_color = 1;
    */
   observerColor: DyeColor;
 
   /**
+   * The unique identifier of the paired Wireless Observer.
+   *
    * @generated from field: cobbleware.common.Uuid observer_id = 2;
    */
   observerId?: Uuid | undefined;
 
   /**
+   * The direction in which the paired Wireless Observer is facing.
+   *
    * @generated from field: cobbleware.common.Direction observer_dir = 3;
    */
   observerDir: Direction;
 
   /**
+   * The position of the paired Wireless Observer.
+   *
    * @generated from field: cobbleware.common.GlobalPos observer_pos = 4;
    */
   observerPos?: GlobalPos | undefined;
@@ -178,25 +224,38 @@ export const WirelessObserverPairedSchema: GenMessage<WirelessObserverPaired> = 
   messageDesc(file_events, 5);
 
 /**
+ * Emitted when a paired Wireless Observer is broken or otherwise unpaired from an executing Cobbleputer.
+ * Note that events are not dispatched to Cobbleputers that aren't executing,
+ * so this event will **not** be dispatched when e.g. an observer is paired to
+ * a crashed Cobbleputer, even when it is resumed.
+ *
  * @generated from message cobbleware.events.WirelessObserverUnpaired
  */
 export type WirelessObserverUnpaired = Message<"cobbleware.events.WirelessObserverUnpaired"> & {
   /**
+   * The dye color of the unpaired Wireless Observer.
+   *
    * @generated from field: cobbleware.common.DyeColor observer_color = 1;
    */
   observerColor: DyeColor;
 
   /**
+   * The unique identifier of the unpaired Wireless Observer.
+   *
    * @generated from field: cobbleware.common.Uuid observer_id = 2;
    */
   observerId?: Uuid | undefined;
 
   /**
+   * The direction in which the unpaired Wireless Observer is facing.
+   *
    * @generated from field: cobbleware.common.Direction observer_dir = 3;
    */
   observerDir: Direction;
 
   /**
+   * The position of the unpaired Wireless Observer.
+   *
    * @generated from field: cobbleware.common.GlobalPos observer_pos = 4;
    */
   observerPos?: GlobalPos | undefined;

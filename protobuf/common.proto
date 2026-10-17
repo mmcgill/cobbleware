@@ -2,24 +2,27 @@ edition = "2024";
 
 package cobbleware.common;
 
-// Shared value types used by Cobbleware's public and internal APIs.
+// Double-precision 3d point/vector.
 message Vec3 {
   double x = 1;
   double y = 2;
   double z = 3;
 }
 
+// Integer 3d point/vector.
 message Vec3i {
   int32 x = 1;
   int32 y = 2;
   int32 z = 3;
 }
 
+// Two-dimensional chunk position, as (x,z).
 message ChunkPos {
   int32 x = 1;
   int32 z = 2;
 }
 
+// The 6 Minecraft dimensions.
 enum Direction {
   DIRECTION_UNSPECIFIED = 0;
   DIRECTION_DOWN = 1;
@@ -30,22 +33,29 @@ enum Direction {
   DIRECTION_EAST = 6;
 }
 
+// A namespace-qualified Minecraft path for identifying block types, dimensions, etc.
 message Identifier {
   string ns = 1;
   string path = 2;
 }
 
+// Globally identifies a block position via dimension and integer offsets.
 message GlobalPos {
+  // Minecraft server identifier for a dimension.
   Identifier dimension = 1;
+  // Position within the given dimension.
   Vec3i position = 2;
 }
 
+// A UUID given as high and low longs.
 message Uuid {
-  // The upper and lower 64 bits of an opaque UUID value.
+  // The upper 64 bits of an opaque UUID value.
   uint64 high = 1;
+  // The lower 64 bits of an opaque UUID value.
   uint64 low = 2;
 }
 
+// The 16 Minecraft Dye colors.
 enum DyeColor {
   DYE_COLOR_UNSPECIFIED = 0;
   DYE_COLOR_WHITE = 1;

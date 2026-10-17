@@ -4,16 +4,29 @@ package cobbleware.effects;
 
 import "common.proto";
 
+// Sends a chat message to all players within range of an executing Cobbleputer.
+// To prevent programs from rendering chat unusable by players, chat messages
+// are subject to a per-Player rate limit that applies across all that players'
+// executing programs on the server.
+// 
+// Chat rate limiting is done via the token bucket algorithm, with each player having two buckets.
+// Each chat message consumes one token from the "burst" bucket, which is capped at 10 tokens
+// and refills at one token every 5s. The "burst" bucket fills from a "slow" bucket capped at
+// 100 tokens and refilling at one token every 20s.
+//
+// The current token counts for each bucket are delivered to an execution program
+// each time it takes a step.
 message SendChat {
-  // Required by the application contract.
   string msg = 1;
 }
 
 message EmitBeep {
-  // The original FlatBuffers uint16 value. Values above 65535 are invalid.
   uint32 millis = 1;
 }
 
+// Set the redstone power level of one or more paired Wireless Observers.
+// This effect only applies to paired Wireless Observers that are also
+// in currently loaded chunks.
 message SetRedstonePower {
   // When set, identifies the specific observer whose power level is modified.
   cobbleware.common.Uuid observer_id = 1;
