@@ -9,7 +9,7 @@
   },
   "tasks": {
     "test": "deno task --cwd ../browser-ui build && deno test --no-prompt --allow-env --allow-read --allow-write tests",
-    "check": "deno task --cwd ../browser-ui check && deno check src/index.ts tests/**/*.ts",
+    "check": "deno task --cwd ../browser-ui check && deno check src/index.ts tests/**/*.ts && deno lint src/index.ts tests/**/*.ts",
     "fmt": "deno fmt",
     "bundle": "deno run --allow-env --allow-read --allow-run --allow-write scripts/bundle.ts",
     "start": "deno task bundle && deno task --cwd ../event-worker bundle && COBBLEWARE_API_KEY=secret deno run --allow-env --allow-run scripts/start.ts",

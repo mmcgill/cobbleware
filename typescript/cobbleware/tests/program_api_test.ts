@@ -2,20 +2,20 @@ import { create, createProgramApiHandler, fromBinary, type Program, toBinary } f
 import {
   Direction,
   DyeColor,
-  GlobalPos,
+  type GlobalPos,
   GlobalPosSchema,
   IdentifierSchema,
-  Uuid,
+  type Uuid,
   UuidSchema,
   Vec3iSchema,
 } from '../generated/common_pb.ts';
 import { EffectSchema, EmitBeepSchema, SetRedstonePowerSchema } from '../generated/effects_pb.ts';
 import {
-  BlockInfo,
+  type BlockInfo,
   BlockInfoSchema,
-  BlockStateChange,
+  type BlockStateChange,
   BlockStateChangeSchema,
-  Event,
+  type Event,
   EventSchema,
   ResumedSchema,
   WirelessObserverPairedSchema,

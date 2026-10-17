@@ -1,6 +1,6 @@
 {
   "tasks": {
-    "check": "deno check src/dashboard.ts src/auth.ts scripts/build.ts scripts/verify.ts",
+    "check": "deno check src/dashboard.ts src/auth.ts scripts/build.ts scripts/verify.ts && deno lint src/dashboard.ts src/auth.ts scripts/build.ts scripts/verify.ts",
     "build": "deno run --allow-read --allow-write --allow-run scripts/build.ts",
     "verify": "deno run --allow-env --allow-net=127.0.0.1 --allow-read --allow-run --allow-write scripts/verify.ts"
   },

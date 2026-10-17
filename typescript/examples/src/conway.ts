@@ -55,7 +55,7 @@ export type ConwaySimulationState = ConwayBoard & {
 
 export type ConwayState = ConwayInitState | ConwaySimulationState;
 
-export const conwayStartState = encodeConwayState(emptyInitState());
+export const conwayStartState: Uint8Array = encodeConwayState(emptyInitState());
 
 export const conwayHandler: Program = (state, event, context) => {
   const current = rememberBlackBlockState(decodeConwayState(state), event);

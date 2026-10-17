@@ -2,7 +2,7 @@ import { create, fromBinary, toBinary, toJson } from '../src/mod.ts';
 import {
   Direction,
   DyeColor,
-  GlobalPos,
+  type GlobalPos,
   GlobalPosSchema,
   IdentifierSchema,
   Vec3iSchema,

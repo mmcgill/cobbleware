@@ -1,4 +1,4 @@
-// @ts-nocheck
+// @ts-nocheck: This DOM-focused script relies on dynamic element lookups that are not typed yet.
 /// <reference lib="dom" />
 
 import './styles.css';
@@ -87,7 +87,6 @@ markBundledUi(document.documentElement);
     timeStyle: 'medium',
   });
   const STATS_RETENTION_TICKS = 600;
-  const STATS_GRAPH_HEIGHT = 200;
   const DUPLICATE_STATS_STREAM_CODE = 'execution-stats-stream-already-open';
   const LOG_RETENTION_EVENTS = 10000;
   const STATS_GRAPH_COLORS = {
@@ -111,7 +110,7 @@ markBundledUi(document.documentElement);
   let activeObservabilityTab = 'stats';
   let logsSocket = null;
   let logsClosingForLogout = false;
-  let logEntries = [];
+  const logEntries = [];
   let limits = null;
   let limitsLoading = false;
   let limitsReloadRequested = false;
@@ -148,7 +147,7 @@ markBundledUi(document.documentElement);
   }
 
   function redirectToAuthentication() {
-    window.location.assign('/auth.html');
+    globalThis.location.assign('/auth.html');
     throw makeError('Authentication required.', 401, true);
   }
 
@@ -649,7 +648,7 @@ markBundledUi(document.documentElement);
     const height = canvas.clientHeight;
     if (width === 0 || height === 0) return;
 
-    const devicePixelRatio = window.devicePixelRatio || 1;
+    const devicePixelRatio = globalThis.devicePixelRatio || 1;
     const backingWidth = Math.round(width * devicePixelRatio);
     const backingHeight = Math.round(height * devicePixelRatio);
     if (canvas.width !== backingWidth || canvas.height !== backingHeight) {
@@ -741,8 +740,8 @@ markBundledUi(document.documentElement);
     elements.statsGraphTooltip.hidden = false;
 
     const offset = 12;
-    const right = window.innerWidth - elements.statsGraphTooltip.offsetWidth - 8;
-    const bottom = window.innerHeight - elements.statsGraphTooltip.offsetHeight - 8;
+    const right = globalThis.innerWidth - elements.statsGraphTooltip.offsetWidth - 8;
+    const bottom = globalThis.innerHeight - elements.statsGraphTooltip.offsetHeight - 8;
     elements.statsGraphTooltip.style.left = `${Math.min(event.clientX + offset, right)}px`;
     elements.statsGraphTooltip.style.top = `${Math.min(event.clientY + offset, bottom)}px`;
   }
@@ -1059,7 +1058,8 @@ markBundledUi(document.documentElement);
     const maxTotalExecutionStateBytes = protoVarint(playerFields, 16);
     if (
       maxRunningExecutions <= 0 || runningExecutions > maxRunningExecutions ||
-      maxTotalExecutionStateBytes <= 0n || maxTotalExecutionStateBytes > BigInt(Number.MAX_SAFE_INTEGER) ||
+      maxTotalExecutionStateBytes <= 0n ||
+      maxTotalExecutionStateBytes > BigInt(Number.MAX_SAFE_INTEGER) ||
       maxBurstChatTokens <= 0 || maxSlowChatTokens <= 0 ||
       burstChatTokens > maxBurstChatTokens || slowChatTokens > maxSlowChatTokens
     ) {
@@ -1465,7 +1465,7 @@ markBundledUi(document.documentElement);
       logsClosingForLogout = true;
       statsSocket?.close();
       logsSocket?.close();
-      window.location.assign('/auth.html');
+      globalThis.location.assign('/auth.html');
     } catch (error) {
       displayError(error);
     } finally {
@@ -1526,7 +1526,7 @@ markBundledUi(document.documentElement);
   });
   elements.statsActivityGraph.addEventListener('pointermove', updateStatsGraphTooltip);
   elements.statsActivityGraph.addEventListener('pointerleave', hideStatsGraphTooltip);
-  window.addEventListener('resize', renderStatsGraphs);
+  globalThis.addEventListener('resize', renderStatsGraphs);
   render();
   loadPlayerIdentity().then((identityLoaded) => {
     if (identityLoaded) {

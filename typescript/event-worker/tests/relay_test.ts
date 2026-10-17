@@ -2,7 +2,7 @@ import { create } from '@cobbleware/core';
 import { UuidSchema } from '@cobbleware/core/common';
 import {
   ExceptionLogEntrySchema,
-  ExecutionLogEntry,
+  type ExecutionLogEntry,
   ExecutionLogEntrySchema,
 } from '@cobbleware/core/internal';
 import { eventWorkerProtocol, ExecutionLogRelay } from '../src/relay.ts';

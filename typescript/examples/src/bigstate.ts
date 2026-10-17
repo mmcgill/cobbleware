@@ -6,7 +6,7 @@ const STATE_INCREASE_SIZE_BYTES = 1024 * 10;
 
 export const BIGSTATE = 5;
 
-export const bigstateStartState = new Uint8Array([BIGSTATE]);
+export const bigstateStartState: Uint8Array = new Uint8Array([BIGSTATE]);
 
 export const bigstateHandler: Program = (state, e, _context) => {
   const { event } = e;

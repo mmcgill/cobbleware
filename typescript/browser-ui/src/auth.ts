@@ -1,4 +1,4 @@
-// @ts-nocheck
+// @ts-nocheck: This DOM-focused script relies on dynamic element lookups that are not typed yet.
 /// <reference lib="dom" />
 
 import './styles.css';
@@ -28,13 +28,13 @@ async function poll() {
       body: JSON.stringify({ code: authCode }),
     });
     if (response.status === 201) {
-      window.location.assign('/index.html');
+      globalThis.location.assign('/index.html');
       return;
     }
   } catch {
     // Retry on the next interval if the Runtime is temporarily unavailable.
   }
-  window.setTimeout(poll, 1000);
+  globalThis.setTimeout(poll, 1000);
 }
 
 poll();

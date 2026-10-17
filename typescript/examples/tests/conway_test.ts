@@ -1,19 +1,19 @@
 import { create } from '@cobbleware/core';
 import {
   DyeColor,
-  GlobalPos,
+  type GlobalPos,
   GlobalPosSchema,
   IdentifierSchema,
-  Uuid,
+  type Uuid,
   UuidSchema,
   Vec3iSchema,
 } from '@cobbleware/core/common';
-import { Effect } from '@cobbleware/core/effects';
+import type { Effect } from '@cobbleware/core/effects';
 import {
   BlockInfoSchema,
   BlockStateChangeSchema,
   ChatMessageSchema,
-  Event,
+  type Event,
   EventSchema,
   WirelessObserverPairedSchema,
   WirelessObserverUnpairedSchema,
@@ -243,7 +243,7 @@ Deno.test('Conway green-off resets simulation and unrelated events do not advanc
 });
 
 Deno.test('Conway chat commands enter simulation, step it, and return to init', () => {
-  let state = step(conwayStartState, paired(DyeColor.BLACK, 1, 0, 0, 0)).state;
+  const state = step(conwayStartState, paired(DyeColor.BLACK, 1, 0, 0, 0)).state;
   const simulated = step(state, chatMessage('sim'), 1);
   assertChatEffect(simulated.effects[0], 'Conway: simulate mode');
   assertEquals(

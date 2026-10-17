@@ -22,7 +22,7 @@ Deno.test('Player limits endpoint returns the cached player-statistics snapshot'
   }, 'limits response should preserve the authoritative snapshot');
 });
 
-Deno.test('Player limits endpoint reports unavailable until player statistics arrive', async () => {
+Deno.test('Player limits endpoint reports unavailable until player statistics arrive', () => {
   const unavailable = handlePlayerLimits(
     new Request('http://localhost/playerapi/v1/limits'),
     'player-a',

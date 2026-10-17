@@ -1,18 +1,18 @@
 import { create, fromBinary, toBinary } from '@cobbleware/core';
-import { Uuid, UuidSchema } from '@cobbleware/core/common';
+import { type Uuid, UuidSchema } from '@cobbleware/core/common';
 import {
   ChatMessageSchema,
-  Event,
+  type Event,
   EventSchema,
   ResumedSchema,
   StartedSchema,
 } from '@cobbleware/core/events';
 import {
-  ExecutionResult,
+  type ExecutionResult,
   ExecutionsRequestSchema,
-  ExecutionsResponse,
+  type ExecutionsResponse,
   ExecutionsResponseSchema,
-  ExecutionState,
+  type ExecutionState,
   ExecutionStateSchema,
   PlayerExecutionStateSchema,
 } from '@cobbleware/core/internal';

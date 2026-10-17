@@ -6,7 +6,7 @@
   },
   "tasks": {
     "test": "deno test --no-prompt tests",
-    "check": "deno check src/index.ts tests/**/*.ts integration/**/*.ts",
+    "check": "deno check src/index.ts tests/**/*.ts integration/**/*.ts && deno lint src/index.ts tests/**/*.ts integration/**/*.ts",
     "fmt": "deno fmt",
     "bundle": "deno run --allow-env --allow-read --allow-run --allow-write scripts/bundle.ts",
     "serve": "deno task bundle && deno run --allow-read=examples.eszip --allow-net=127.0.0.1:8000 scripts/serve.ts",

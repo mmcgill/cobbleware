@@ -1,4 +1,10 @@
-import { create, createProgramApiHandler, fromBinary, type Program } from '@cobbleware/core';
+import {
+  create,
+  createProgramApiHandler,
+  fromBinary,
+  type Program,
+  type StartStates,
+} from '@cobbleware/core';
 import * as Common from '@cobbleware/core/common';
 import * as Effects from '@cobbleware/core/effects';
 import * as program from '@cobbleware/core/program';
@@ -124,7 +130,7 @@ export const handle: Program = function handle(state, event, context) {
   }
 };
 
-export const startStates = {
+export const startStates: StartStates = {
   hello: new Uint8Array([HELLO]),
   echo: new Uint8Array([ECHO, 0]),
   hang: new Uint8Array([HANG]),

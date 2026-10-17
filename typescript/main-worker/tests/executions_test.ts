@@ -1,18 +1,18 @@
 import { create, fromBinary, toBinary } from '@cobbleware/core';
-import { Uuid, UuidSchema } from '@cobbleware/core/common';
-import { Effect, EffectSchema, SendChatSchema } from '@cobbleware/core/effects';
-import { Event, EventSchema, StartedSchema } from '@cobbleware/core/events';
+import { type Uuid, UuidSchema } from '@cobbleware/core/common';
+import { type Effect, EffectSchema, SendChatSchema } from '@cobbleware/core/effects';
+import { type Event, EventSchema, StartedSchema } from '@cobbleware/core/events';
 import {
   ErrorResponseSchema,
   ExecutionFailureReason,
-  ExecutionsRequest,
+  type ExecutionsRequest,
   ExecutionsRequestSchema,
-  ExecutionState,
+  type ExecutionState,
   ExecutionStateSchema,
-  PlayerExecutionState,
+  type PlayerExecutionState,
   PlayerExecutionStateSchema,
 } from '@cobbleware/core/internal';
-import { StepRequest, StepRequestSchema, StepResponseSchema } from '@cobbleware/core/program';
+import { type StepRequest, StepRequestSchema, StepResponseSchema } from '@cobbleware/core/program';
 import { configFromEnv } from '../src/config.ts';
 import { EXECUTIONS_CONTENT_TYPE, handleExecutions } from '../src/executions/handlers.ts';
 import { ExecutionManager, ExecutionRequestError } from '../src/executions/manager.ts';

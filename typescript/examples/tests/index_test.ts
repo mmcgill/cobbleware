@@ -1,12 +1,12 @@
 import { create, toBinary } from '@cobbleware/core';
 import {
-  ChatMessage,
+  type ChatMessage,
   ChatMessageSchema,
-  Event,
+  type Event,
   EventSchema,
-  Resumed,
+  type Resumed,
   ResumedSchema,
-  Started,
+  type Started,
   StartedSchema,
 } from '@cobbleware/core/events';
 import { StepRequestSchema } from '@cobbleware/core/program';

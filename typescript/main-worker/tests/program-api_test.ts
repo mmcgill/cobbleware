@@ -4,7 +4,7 @@ import { EventSchema, StartedSchema } from '@cobbleware/core/events';
 import {
   StartStateSchema,
   StartStatesResponseSchema,
-  StepRequest,
+  type StepRequest,
   StepRequestSchema,
   StepResponseSchema,
 } from '@cobbleware/core/program';
