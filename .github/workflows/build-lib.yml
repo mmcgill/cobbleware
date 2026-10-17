@@ -374,3 +374,121 @@ jobs:
             echo "- Commit: \`$GITHUB_SHA\`"
             echo "- Artifact: \`$TARBALL_NAME\` ($EXPECTED_SIZE bytes, SHA-256 \`$EXPECTED_SHA256\`)"
           } >> "$GITHUB_STEP_SUMMARY"
+
+  build-reference-docs:
+    name: Build versioned API reference
+    needs: publish-release
+    if: github.ref == 'refs/heads/main' && needs.publish-release.result == 'success'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    permissions:
+      contents: read
+      pages: write
+      id-token: write
+    concurrency:
+      group: github-pages
+      cancel-in-progress: false
+
+    steps:
+      - name: Check out Cobbleware and release tags
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+          submodules: false
+
+      - name: Set up Deno
+        uses: denoland/setup-deno@v2
+        with:
+          deno-version: v2.9.5
+
+      - name: Generate versioned API reference
+        id: reference
+        shell: bash
+        run: |
+          set -euo pipefail
+          git fetch --force --tags
+
+          site_directory="$RUNNER_TEMP/cobbleware-reference-site"
+          mkdir --parents "$site_directory/reference"
+
+          mapfile -t tags < <(git tag --list 'cobbleware-core-*' --sort=v:refname)
+          test "${#tags[@]}" -gt 0
+
+          versions=()
+          for tag in "${tags[@]}"; do
+            version="${tag#cobbleware-core-}"
+            if [[ ! "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+(-alpha\.[0-9]+)?$ ]]; then
+              echo "Unexpected Cobbleware core release tag: $tag" >&2
+              exit 1
+            fi
+
+            source_directory="$RUNNER_TEMP/cobbleware-core-$version"
+            git worktree add --detach "$source_directory" "$tag"
+            (
+              cd "$source_directory/typescript/cobbleware"
+              deno doc --html --name="Cobbleware $version" \
+                --output="$site_directory/reference/$version" \
+                src/mod.ts \
+                generated/common_pb.ts \
+                generated/effects_pb.ts \
+                generated/events_pb.ts \
+                generated/program_pb.ts
+            )
+            git worktree remove --force "$source_directory"
+            versions+=("$version")
+          done
+
+          latest_version="${versions[${#versions[@]} - 1]}"
+          {
+            printf '%s\n' '<!doctype html>'
+            printf '%s\n' '<html lang="en">'
+            printf '%s\n' '  <head>'
+            printf '%s\n' '    <meta charset="utf-8">'
+            printf '%s\n' '    <meta name="viewport" content="width=device-width, initial-scale=1">'
+            printf '%s\n' '    <title>Cobbleware API reference</title>'
+            printf '%s\n' '  </head>'
+            printf '%s\n' '  <body>'
+            printf '%s\n' '    <h1>Cobbleware API reference</h1>'
+            printf '%s\n' '    <p>Reference documentation for published <code>@cobbleware/core</code> versions.</p>'
+            printf '%s\n' '    <ul>'
+            for version in "${versions[@]}"; do
+              printf '      <li><a href="./%s/">%s</a></li>\n' "$version" "$version"
+            done
+            printf '%s\n' '    </ul>'
+            printf '%s\n' '  </body>'
+            printf '%s\n' '</html>'
+          } > "$site_directory/reference/index.html"
+
+          printf '<!doctype html><meta http-equiv="refresh" content="0; url=reference/%s/">\n' \
+            "$latest_version" > "$site_directory/index.html"
+          printf 'site_directory=%s\n' "$site_directory" >> "$GITHUB_OUTPUT"
+          printf 'latest_version=%s\n' "$latest_version" >> "$GITHUB_OUTPUT"
+
+      - name: Configure GitHub Pages
+        uses: actions/configure-pages@983d7736d9b0ae728b0d6a46457a944ea5d86e41 # v5.0.0
+
+      - name: Upload Pages artifact
+        uses: actions/upload-pages-artifact@56afc609e74202658d3ffba0e8f6dda462b719fa # v4.6.0
+        with:
+          path: ${{ steps.reference.outputs.site_directory }}
+
+  deploy-reference-docs:
+    name: Deploy API reference
+    needs: build-reference-docs
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    concurrency:
+      group: github-pages
+      cancel-in-progress: false
+
+    steps:
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@d6db9d30eaebc49d90d78e2b1e91c14c02b22c7b # v4.0.5

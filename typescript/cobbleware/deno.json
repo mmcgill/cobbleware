@@ -13,6 +13,7 @@
     "test": "deno test --no-prompt && deno test --no-prompt --doc --no-run README.md",
     "check": "deno check src/mod.ts tests/**/*.ts && deno lint src/mod.ts tests/**/*.ts",
     "fmt": "deno fmt --ignore=generated",
+    "doc": "deno doc --html --name=Cobbleware --output=reference-docs src/mod.ts generated/common_pb.ts generated/effects_pb.ts generated/events_pb.ts generated/program_pb.ts",
     "generate": "deno run --allow-read --allow-write --allow-run scripts/generate.ts",
     "pack": "deno run --allow-read --allow-write --allow-run scripts/pack.ts"
   },
