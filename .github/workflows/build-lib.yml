@@ -1,0 +1,13 @@
+name: Build Cobbleware TypeScript library
+
+on:
+  workflow_dispatch:
+
+jobs:
+  placeholder:
+    name: Placeholder
+    runs-on: ubuntu-24.04
+
+    steps:
+      - name: Placeholder
+        run: echo "Cobbleware TypeScript library release workflow placeholder"
