@@ -30,17 +30,17 @@ Deno.test('hello start state greets on start and is quiet on resume', () => {
 Deno.test('echo start state counts and echoes chat messages', () => {
   let state = assertStep(
     startStates.echo.slice(),
-    event('chatMessage', create(ChatMessageSchema, { message: 'Testing' })),
+    event('chatMessage', create(ChatMessageSchema, { message: 'Testing', playerName: 'Alex' })),
     [2, 1],
     'sendChat',
-    'Echo (1): Testing',
+    'Echo (1) Alex: Testing',
   );
   state = assertStep(
     state,
-    event('chatMessage', create(ChatMessageSchema, { message: 'Again' })),
+    event('chatMessage', create(ChatMessageSchema, { message: 'Again', playerName: 'Sam' })),
     [2, 2],
     'sendChat',
-    'Echo (2): Again',
+    'Echo (2) Sam: Again',
   );
   assertEquals([...state], [2, 2], 'echo counter must persist in state');
 });

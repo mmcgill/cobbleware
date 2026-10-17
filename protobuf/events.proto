@@ -26,6 +26,12 @@ message Resumed {
 message ChatMessage {
   // The contents of the chat message sent by the player.
   string message = 1;
+
+  // The name of the sending player.
+  string player_name = 2;
+
+  // The unique stable UUID of the sending player.
+  cobbleware.common.Uuid player_uuid = 3;
 }
 
 // A block type and block state.

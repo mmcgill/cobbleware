@@ -475,7 +475,10 @@ public final class ExecutionDriver {
     /** Delivers raw player chat to every eligible active Cobbleputer in range of its host or a paired observer. */
     public void dispatchChatMessage(ServerPlayer sender, String message) {
         Event event = Event.newBuilder()
-                .setChatMessage(ChatMessage.newBuilder().setMessage(message))
+                .setChatMessage(ChatMessage.newBuilder()
+                        .setMessage(message)
+                        .setPlayerName(sender.getGameProfile().name())
+                        .setPlayerUuid(protoUuid(sender.getUUID())))
                 .build();
         Level senderLevel = sender.level();
         Vec3 senderPosition = sender.position();

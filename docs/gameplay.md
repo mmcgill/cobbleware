@@ -252,7 +252,8 @@ in the `RUNNING` state, which are Cobbleputers with associated executions).
 When a chat message is sent by a player within 16 units of the Cobbleputer or a paired Wireless Observer,
 a `ChatMessage` event is queued for the associated Cobbleputer. At most one event per Cobbleputer
 is queued per chat message; in other words, multiple observers paired to the same 'puter
-and in range of the chat message do not produce separate events.
+and in range of the chat message do not produce separate events. The event includes the message,
+the sending player's profile name, and their stable UUID.
 
 ### Block State Changes
 

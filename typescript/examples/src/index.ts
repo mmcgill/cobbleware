@@ -61,7 +61,7 @@ export const echoHandler: Program = function handle(state, event) {
         effect: {
           case: 'sendChat',
           value: create(Effects.SendChatSchema, {
-            msg: `Echo (${state[1]}): ${event.event.value.message}`,
+            msg: `Echo (${state[1]}) ${event.event.value.playerName}: ${event.event.value.message}`,
           }),
         },
       })];
