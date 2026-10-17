@@ -24,7 +24,7 @@ const startStates = { initial: new Uint8Array() };
 // It gets called for every event dispatched to an executing
 // Cobbleputer. A program step produces the next state along
 // with a collection of Effects to be applied to the Minecraft world.
-const handler: Program = (state, {event}, context) => {
+const handler: Program = (state, { event }, context) => {
   let message: string | undefined;
   switch (event.case) {
     case 'started':
@@ -54,7 +54,7 @@ function chat(message: string) {
   });
 }
 
-// Start makes your start states available 
+// Start makes your start states available
 start({
   startStates,
   program: handler,
@@ -76,7 +76,11 @@ This package uses Deno:
 deno task test
 deno task check
 deno task fmt
+deno task doc
 ```
+
+`deno task doc` generates a searchable API reference in `reference-docs/` for the public package
+entry points. The directory is ignored by Git.
 
 Protobuf bindings are generated from the repository-wide schemas in `protobuf/`.
 Generation uses the installed `protoc` compiler and the pinned `@bufbuild/protoc-gen-es` plugin:
