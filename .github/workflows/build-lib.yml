@@ -57,6 +57,11 @@ jobs:
         with:
           deno-version: v2.9.5
 
+      - name: Check formatting
+        working-directory: typescript/cobbleware
+        shell: bash
+        run: deno fmt --check --ignore=generated
+
       - name: Check library
         working-directory: typescript/cobbleware
         shell: bash
