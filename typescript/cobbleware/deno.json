@@ -1,6 +1,6 @@
 {
   "name": "@cobbleware/core",
-  "version": "0.0.1",
+  "version": "0.0.2-alpha",
   "exports": {
     ".": "./src/mod.ts",
     "./internal": "./generated/internal_pb.ts"

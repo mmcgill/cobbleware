@@ -1,16 +1,11 @@
 const packageDirectory = new URL('../', import.meta.url);
 const packageDirectoryPath = filesystemPath(packageDirectory);
-const packArguments = new Set(Deno.args);
-
-if (packArguments.size > 1 || (packArguments.size === 1 && !packArguments.has('--allow-dirty'))) {
-  throw new Error('Usage: deno task pack [--allow-dirty]');
-}
-
-const allowDirty = packArguments.has('--allow-dirty');
+const { allowDirty, versionOverride } = parsePackArguments(Deno.args);
 const config = await readPackageConfig();
+const packageVersion = versionOverride ?? config.version;
 const tarballPath = joinPath(
   packageDirectoryPath,
-  `${config.name.replace(/^@/, '').replaceAll('/', '-')}-${config.version}.tgz`,
+  `${config.name.replace(/^@/, '').replaceAll('/', '-')}-${packageVersion}.tgz`,
 );
 const temporaryDirectory = await Deno.makeTempDir({
   dir: packageDirectoryPath,
@@ -28,6 +23,7 @@ try {
     '--no-source-maps',
     '--output',
     packedTarballPath,
+    ...(versionOverride === undefined ? [] : ['--set-version', versionOverride]),
     ...(allowDirty ? ['--allow-dirty'] : []),
   ]);
 
@@ -46,12 +42,35 @@ try {
 
   await run('tar', ['-czf', repackedTarballPath, '-C', unpackedDirectory, 'package']);
   await replaceFile(repackedTarballPath, tarballPath);
-  console.log(`Packed ${config.name} with repository metadata: ${tarballPath}`);
+  console.log(`Packed ${config.name}@${packageVersion} with repository metadata: ${tarballPath}`);
 } finally {
   await Deno.remove(temporaryDirectory, { recursive: true }).catch((error: unknown) => {
     if (error instanceof Deno.errors.NotFound) return;
     throw error;
   });
+}
+
+function parsePackArguments(args: string[]): { allowDirty: boolean; versionOverride?: string } {
+  let allowDirty = false;
+  let versionOverride: string | undefined;
+
+  for (let index = 0; index < args.length; index++) {
+    const argument = args[index];
+    if (argument === '--allow-dirty' && !allowDirty) {
+      allowDirty = true;
+      continue;
+    }
+    if (argument === '--version' && versionOverride === undefined) {
+      versionOverride = args[++index];
+      if (!isSafeVersion(versionOverride)) {
+        throw new Error('The --version value must be a valid, safe SemVer version.');
+      }
+      continue;
+    }
+    throw new Error('Usage: deno task pack [--allow-dirty] [--version <version>]');
+  }
+
+  return { allowDirty, versionOverride };
 }
 
 async function readPackageConfig(): Promise<{ name: string; version: string }> {
@@ -97,4 +116,10 @@ function joinPath(...parts: string[]): string {
 function filesystemPath(url: URL): string {
   const path = decodeURIComponent(url.pathname);
   return Deno.build.os === 'windows' ? path.replace(/^\/([A-Za-z]:)/, '$1') : path;
+}
+
+function isSafeVersion(version: string | undefined): version is string {
+  return version !== undefined &&
+    /^(?:0|[1-9]\d*)\.(?:0|[1-9]\d*)\.(?:0|[1-9]\d*)(?:-[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*)?(?:\+[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*)?$/
+      .test(version);
 }

@@ -50,3 +50,13 @@ TypeScript and can be imported directly by an Edge Function.
 
 `generated/internal_pb.ts` describes implementation details that are subject to breaking
 changes without warning.
+
+## Versioning and Releases
+
+Pre-release and release versions are staged for publication to NPM. Pre-release
+versions are written in [deno.json](deno.json) as `X.Y.Z-alpha`, and published with
+an appended build number and the `alpha` [dist tag](https://docs.npmjs.com/adding-dist-tags-to-packages).
+
+The [build-lib.yml](../../.github/workflows/build-lib.yml) workflow, manually run from `main`,
+stages the package using npm trusted publishing. A maintainer must approve the
+staged package in npm before it is publicly installable.
