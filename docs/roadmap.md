@@ -48,6 +48,7 @@ Here's a rough sketch of the current plan to getting something releasable as an 
   * [x] Lazy downloading/unpacking at mod execution time as necessary
   * [x] Putting the Mod in charge of the Runtime process 
   * [x] Preserving a good Development workflow
+  * [ ] Explicit consent for downloading/unpacking runtime
 * [x] Mod build/release process
 * [x] NPM package and release process for `@cobbleware/core`
 * [ ] Docs
