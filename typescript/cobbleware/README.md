@@ -68,6 +68,28 @@ The Program API is the contract between the Mod and your program.
 See [examples](https://github.com/mmcgill/cobbleware/tree/main/typescript/examples)
 for more involved examples.
 
+## Multiplexing programs
+
+`muxedProgram` combines several named handlers into one program. Each name becomes a start-state
+name and its handler initially receives an empty state. The helper retains routing information in a
+20-byte suffix of every returned state, so delegates receive and return only their own state bytes.
+Those 20 bytes count against the execution state-size limit.
+
+```ts
+import { create, muxedProgram, type Program, start } from '@cobbleware/core';
+import { StepResponseSchema } from '@cobbleware/core/program';
+
+const counterProgram: Program = (state) => create(StepResponseSchema, { state, effects: [] });
+const clockProgram: Program = (state) => create(StepResponseSchema, { state, effects: [] });
+
+start(
+  await muxedProgram({
+    counter: counterProgram,
+    clock: clockProgram,
+  }),
+);
+```
+
 ## Development
 
 This package uses Deno:

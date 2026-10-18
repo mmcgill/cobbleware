@@ -77,6 +77,22 @@
  * See [examples](https://github.com/mmcgill/cobbleware/tree/main/typescript/examples)
  * for more involved examples.
  *
+ * ## Multiplexing programs
+ *
+ * `muxedProgram` combines named `Program` handlers into one program. Each name becomes a start-state
+ * name, and its handler receives an empty state on its first invocation. The helper appends its own
+ * 20-byte routing tag to every returned state; that overhead counts against the execution state limit.
+ *
+ * ```ts
+ * import { create, muxedProgram, type Program, start } from '@cobbleware/core';
+ * import { StepResponseSchema } from '@cobbleware/core/program';
+ *
+ * const counter: Program = (state) => create(StepResponseSchema, { state, effects: [] });
+ * const clock: Program = (state) => create(StepResponseSchema, { state, effects: [] });
+ *
+ * start(await muxedProgram({ counter, clock }));
+ * ```
+ *
  * @module
  */
 
@@ -94,7 +110,11 @@ import type {
 } from './program_api.ts';
 
 import { defaultStepHandler, start } from './program_api.ts';
+import { muxedProgram } from './mux.ts';
+
+import type { NamedPrograms } from './mux.ts';
 
 export type { Program, ProgramState, StartOpts, StartStates, StepContext, StepHandler };
+export type { NamedPrograms };
 
-export { defaultStepHandler, start };
+export { defaultStepHandler, muxedProgram, start };
