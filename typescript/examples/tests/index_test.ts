@@ -1,4 +1,4 @@
-import { create, toBinary } from '@cobbleware/core';
+import { create } from '@cobbleware/core';
 import {
   type ChatMessage,
   ChatMessageSchema,
@@ -10,7 +10,7 @@ import {
   StartedSchema,
 } from '@cobbleware/core/events';
 import { StepRequestSchema } from '@cobbleware/core/program';
-import { createExampleProgramApiHandler, program, startStates } from '../src/index.ts';
+import { program, startStates, stepHandler } from '../src/index.ts';
 
 Deno.test('hello start state greets on start and is quiet on resume', () => {
   assertStep(
@@ -46,19 +46,13 @@ Deno.test('echo start state counts and echoes chat messages', () => {
 });
 
 Deno.test('bigresponse start state streams without completing for chat events', async () => {
-  const handler = createExampleProgramApiHandler();
   const request = create(StepRequestSchema, {
     state: startStates.bigresponse,
     event: event('chatMessage', create(ChatMessageSchema, { message: 'Testing' })),
     effectLimit: 1,
     stateSizeLimit: 1n,
   });
-  const response = await handler(
-    new Request('http://cobbleware.local/nextState', {
-      method: 'POST',
-      body: toBinary(StepRequestSchema, request),
-    }),
-  );
+  const response = await stepHandler(request);
   const reader = response.body?.getReader();
   if (reader === undefined) throw new Error('bigresponse did not return a response stream');
 

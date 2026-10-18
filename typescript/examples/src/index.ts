@@ -1,8 +1,8 @@
 import {
   create,
-  createProgramApiHandler,
-  fromBinary,
+  defaultStepHandler,
   type Program,
+  start,
   type StartStates,
 } from '@cobbleware/core';
 import { DyeColor } from '@cobbleware/core/common';
@@ -12,7 +12,7 @@ import {
   SendChatSchema,
   SetRedstonePowerSchema,
 } from '@cobbleware/core/effects';
-import { StepRequestSchema, StepResponseSchema } from '@cobbleware/core/program';
+import { type StepRequest, StepResponseSchema } from '@cobbleware/core/program';
 import { CONWAY, conwayHandler, conwayStartState } from './conway.ts';
 import { BIGSTATE, bigstateHandler, bigstateStartState } from './bigstate.ts';
 
@@ -135,26 +135,18 @@ export const startStates: StartStates = {
   bigresponse: new Uint8Array([BIGRESPONSE]),
 };
 
-export function createExampleProgramApiHandler(): (request: Request) => Promise<Response> {
-  const handler = createProgramApiHandler({ program, startStates });
-  return async (request) => {
-    if (request.method === 'POST' && new URL(request.url).pathname === '/nextState') {
-      try {
-        const step = fromBinary(
-          StepRequestSchema,
-          new Uint8Array(await request.clone().arrayBuffer()),
-        );
-        if (step.state[0] === BIGRESPONSE && step.event?.event.case === 'chatMessage') {
-          return new Response(unboundedResponseBytes(), {
-            headers: { 'content-type': 'application/octet-stream' },
-          });
-        }
-      } catch {
-        // Let the standard Program API handler report malformed requests.
-      }
-    }
-    return await handler(request);
-  };
+const baseStepHandler = defaultStepHandler(program);
+
+export function stepHandler(request: StepRequest): Promise<Response> {
+  const { state, event } = request;
+  if (state[0] === BIGRESPONSE && event?.event.case === 'chatMessage') {
+    return Promise.resolve(
+      new Response(unboundedResponseBytes(), {
+        headers: { 'content-type': 'application/octet-stream' },
+      }),
+    );
+  }
+  return baseStepHandler(request);
 }
 
 function unboundedResponseBytes(): ReadableStream<Uint8Array> {
@@ -166,5 +158,5 @@ function unboundedResponseBytes(): ReadableStream<Uint8Array> {
 }
 
 if (import.meta.main) {
-  Deno.serve(createExampleProgramApiHandler());
+  start({ startStates, stepHandler });
 }

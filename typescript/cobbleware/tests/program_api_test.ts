@@ -1,4 +1,4 @@
-import { create, createProgramApiHandler, fromBinary, type Program, toBinary } from '../src/mod.ts';
+import { create, fromBinary, toBinary } from '../src/mod.ts';
 import {
   Direction,
   DyeColor,
@@ -27,6 +27,7 @@ import {
   StepRequestSchema,
   StepResponseSchema,
 } from '../generated/program_pb.ts';
+import { createProgramApiHandler, type Program } from '../src/program_api.ts';
 
 const binaryContentType = 'application/octet-stream';
 
