@@ -1,6 +1,7 @@
 import {
   create,
   defaultStepHandler,
+  muxedProgram,
   type Program,
   start,
   type StartStates,
@@ -13,12 +14,9 @@ import {
   SetRedstonePowerSchema,
 } from '@cobbleware/core/effects';
 import { type StepRequest, StepResponseSchema } from '@cobbleware/core/program';
-import { CONWAY, conwayHandler, conwayStartState } from './conway.ts';
-import { BIGSTATE, bigstateHandler, bigstateStartState } from './bigstate.ts';
+import { conwayHandler } from './conway.ts';
+import { bigstateHandler } from './bigstate.ts';
 
-const HELLO = 1;
-const ECHO = 2;
-const HANG = 3;
 const BIGRESPONSE = 6;
 const BIGRESPONSE_CHUNK_BYTES = 64 * 1024;
 
@@ -37,8 +35,10 @@ export const helloHandler: Program = function handle(state, { event }) {
 
 export const echoHandler: Program = function handle(state, { event }) {
   let effects: Effect[] = [];
+  let nextState = state.slice();
   if (event.case === 'chatMessage') {
-    state[1]++;
+    const messageCount = (state[0] ?? 0) + 1;
+    nextState = new Uint8Array([messageCount]);
     if (event.value.message == 'off') {
       effects = [create(EffectSchema, {
         effect: {
@@ -64,7 +64,7 @@ export const echoHandler: Program = function handle(state, { event }) {
         effect: {
           case: 'sendChat',
           value: create(SendChatSchema, {
-            msg: `Echo (${state[1]}) ${event.value.playerName}: ${event.value.message}`,
+            msg: `Echo (${messageCount}) ${event.value.playerName}: ${event.value.message}`,
           }),
         },
       })];
@@ -96,7 +96,7 @@ export const echoHandler: Program = function handle(state, { event }) {
       }));
     }
   }
-  return create(StepResponseSchema, { state: state.slice(), effects });
+  return create(StepResponseSchema, { state: nextState, effects });
 };
 
 export const hangHandler: Program = function handle(state, event) {
@@ -109,44 +109,39 @@ export const hangHandler: Program = function handle(state, event) {
   return create(StepResponseSchema, { state: state.slice(), effects: [] });
 };
 
-export const program: Program = function handle(state, event, context) {
-  switch (state[0]) {
-    case HELLO:
-      return helloHandler(state, event, context);
-    case ECHO:
-      return echoHandler(state, event, context);
-    case HANG:
-      return hangHandler(state, event, context);
-    case CONWAY:
-      return conwayHandler(state, event, context);
-    case BIGSTATE:
-      return bigstateHandler(state, event, context);
-    default:
-      return create(StepResponseSchema, { state: state.slice(), effects: [] });
-  }
-};
+const muxed = await muxedProgram({
+  hello: helloHandler,
+  echo: echoHandler,
+  hang: hangHandler,
+  conway: conwayHandler,
+  bigstate: bigstateHandler,
+});
 
+export const program: Program = muxed.program;
 export const startStates: StartStates = {
-  hello: new Uint8Array([HELLO]),
-  echo: new Uint8Array([ECHO, 0]),
-  hang: new Uint8Array([HANG]),
-  conway: conwayStartState,
-  bigstate: bigstateStartState,
+  ...muxed.startStates,
   bigresponse: new Uint8Array([BIGRESPONSE]),
 };
 
-const baseStepHandler = defaultStepHandler(program);
+const muxedStepHandler = defaultStepHandler(program);
+const bigresponseStepHandler = defaultStepHandler((state) =>
+  create(StepResponseSchema, { state: state.slice(), effects: [] })
+);
 
 export function stepHandler(request: StepRequest): Promise<Response> {
   const { state, event } = request;
-  if (state[0] === BIGRESPONSE && event?.event.case === 'chatMessage') {
+  if (isBigResponseState(state) && event?.event.case === 'chatMessage') {
     return Promise.resolve(
       new Response(unboundedResponseBytes(), {
         headers: { 'content-type': 'application/octet-stream' },
       }),
     );
   }
-  return baseStepHandler(request);
+  return isBigResponseState(state) ? bigresponseStepHandler(request) : muxedStepHandler(request);
+}
+
+function isBigResponseState(state: Uint8Array): boolean {
+  return state.byteLength === 1 && state[0] === BIGRESPONSE;
 }
 
 function unboundedResponseBytes(): ReadableStream<Uint8Array> {

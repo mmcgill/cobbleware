@@ -16,14 +16,14 @@ Deno.test('hello start state greets on start and is quiet on resume', () => {
   assertStep(
     startStates.hello,
     event('started', create(StartedSchema, { tick: 1n })),
-    [1],
+    [...startStates.hello],
     'sendChat',
     'Hello world',
   );
   assertStep(
     startStates.hello,
     event('resumed', create(ResumedSchema, { stopTick: 1n, resumeTick: 2n })),
-    [1],
+    [...startStates.hello],
   );
 });
 
@@ -31,18 +31,22 @@ Deno.test('echo start state counts and echoes chat messages', () => {
   let state = assertStep(
     startStates.echo.slice(),
     event('chatMessage', create(ChatMessageSchema, { message: 'Testing', playerName: 'Alex' })),
-    [2, 1],
+    taggedState([1], startStates.echo),
     'sendChat',
     'Echo (1) Alex: Testing',
   );
   state = assertStep(
     state,
     event('chatMessage', create(ChatMessageSchema, { message: 'Again', playerName: 'Sam' })),
-    [2, 2],
+    taggedState([2], startStates.echo),
     'sendChat',
     'Echo (2) Sam: Again',
   );
-  assertEquals([...state], [2, 2], 'echo counter must persist in state');
+  assertEquals(
+    [...state],
+    taggedState([2], startStates.echo),
+    'echo counter must persist in state',
+  );
 });
 
 Deno.test('bigresponse start state streams without completing for chat events', async () => {
@@ -106,6 +110,10 @@ function assertStep(
   }
 
   return output.state;
+}
+
+function taggedState(payload: number[], tag: Uint8Array): number[] {
+  return [...payload, ...tag];
 }
 
 function assertEquals<T>(actual: T, expected: T, message: string): void {

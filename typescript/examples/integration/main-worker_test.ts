@@ -16,6 +16,7 @@ import {
   ExecutionStateSchema,
   PlayerExecutionStateSchema,
 } from '@cobbleware/core/internal';
+import { startStates } from '../src/index.ts';
 
 const BASE_URL = 'http://localhost:9000';
 const MOD_API_KEY = 'secret';
@@ -34,18 +35,20 @@ type ProgramMetadata = {
 Deno.test('Examples run through the Main Worker API', async () => {
   const cookie = await authenticatePlayer();
   const program = await uploadProgram(cookie);
+  const helloState = base64(startStates.hello);
+  const echoState = base64(startStates.echo);
 
   await assertStep(
     program.id,
     cookie,
     {
       executionId: { high: '1', low: '2' },
-      state: 'AQ==',
+      state: helloState,
       event: {
         started: { tick: '1' },
       },
     },
-    'AQ==',
+    helloState,
     [{ sendChat: { msg: 'Hello world' } }],
   );
 
@@ -54,12 +57,12 @@ Deno.test('Examples run through the Main Worker API', async () => {
     cookie,
     {
       executionId: { high: '1', low: '2' },
-      state: 'AQ==',
+      state: helloState,
       event: {
         resumed: { stopTick: '123', resumeTick: '124' },
       },
     },
-    'AQ==',
+    helloState,
     [],
   );
 
@@ -68,12 +71,12 @@ Deno.test('Examples run through the Main Worker API', async () => {
     cookie,
     {
       executionId: { high: '1', low: '2' },
-      state: 'AgA=',
+      state: echoState,
       event: {
         chatMessage: { message: 'Testing' },
       },
     },
-    'AgE=',
+    base64(taggedState(new Uint8Array([1]), startStates.echo)),
     [{ sendChat: { msg: 'Echo (1): Testing' } }],
   );
 
@@ -81,11 +84,11 @@ Deno.test('Examples run through the Main Worker API', async () => {
 });
 
 async function assertExecutionSync(): Promise<void> {
-  const first = executionState(FIRST_EXECUTION_ID, new Uint8Array([1]), [
+  const first = executionState(FIRST_EXECUTION_ID, startStates.hello, [
     startedEvent(),
     resumedEvent(10n, 11n),
   ]);
-  const second = executionState(SECOND_EXECUTION_ID, new Uint8Array([2, 0]), [
+  const second = executionState(SECOND_EXECUTION_ID, startStates.echo, [
     resumedEvent(20n, 22n),
     chatMessageEvent('Testing'),
   ]);
@@ -106,19 +109,24 @@ async function assertExecutionSync(): Promise<void> {
   assertExecutionResult(
     resultFor(completed, FIRST_EXECUTION_ID),
     FIRST_EXECUTION_ID,
-    [1],
+    [...startStates.hello],
     ['sendChat'],
   );
   assertExecutionResult(
     resultFor(completed, SECOND_EXECUTION_ID),
     SECOND_EXECUTION_ID,
-    [2, 1],
+    [...taggedState(new Uint8Array([1]), startStates.echo)],
     ['sendChat'],
   );
 
   const acknowledged = await syncExecutions([
-    executionState(FIRST_EXECUTION_ID, new Uint8Array([1]), [], 3n),
-    executionState(SECOND_EXECUTION_ID, new Uint8Array([2, 1]), [], 3n),
+    executionState(FIRST_EXECUTION_ID, startStates.hello, [], 3n),
+    executionState(
+      SECOND_EXECUTION_ID,
+      taggedState(new Uint8Array([1]), startStates.echo),
+      [],
+      3n,
+    ),
   ]);
   for (const result of acknowledged.results) {
     assertEquals(result.eventSeqNum, 2n, 'acknowledgement must retain the consumed event sequence');
@@ -231,6 +239,17 @@ function executionState(
     stateSizeLimit: 1024n,
     outboxLimit: 20,
   });
+}
+
+function taggedState(payload: Uint8Array, tag: Uint8Array): Uint8Array {
+  const state = new Uint8Array(payload.byteLength + tag.byteLength);
+  state.set(payload);
+  state.set(tag, payload.byteLength);
+  return state;
+}
+
+function base64(bytes: Uint8Array): string {
+  return btoa(String.fromCodePoint(...bytes));
 }
 
 function startedEvent(): Event {
