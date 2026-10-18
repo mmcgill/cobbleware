@@ -5,13 +5,16 @@ import {
   type Program,
   type StartStates,
 } from '@cobbleware/core';
-import * as Common from '@cobbleware/core/common';
-import * as Effects from '@cobbleware/core/effects';
-import * as program from '@cobbleware/core/program';
+import { DyeColor } from '@cobbleware/core/common';
+import {
+  type Effect,
+  EffectSchema,
+  SendChatSchema,
+  SetRedstonePowerSchema,
+} from '@cobbleware/core/effects';
+import { StepRequestSchema, StepResponseSchema } from '@cobbleware/core/program';
 import { CONWAY, conwayHandler, conwayStartState } from './conway.ts';
 import { BIGSTATE, bigstateHandler, bigstateStartState } from './bigstate.ts';
-
-const { DyeColor } = Common;
 
 const HELLO = 1;
 const ECHO = 2;
@@ -19,73 +22,73 @@ const HANG = 3;
 const BIGRESPONSE = 6;
 const BIGRESPONSE_CHUNK_BYTES = 64 * 1024;
 
-export const helloHandler: Program = function handle(state, event) {
-  let effects: Effects.Effect[] = [];
-  if (event.event.case === 'started') {
-    effects = [create(Effects.EffectSchema, {
+export const helloHandler: Program = function handle(state, { event }) {
+  let effects: Effect[] = [];
+  if (event.case === 'started') {
+    effects = [create(EffectSchema, {
       effect: {
         case: 'sendChat',
-        value: create(Effects.SendChatSchema, { msg: 'Hello world' }),
+        value: create(SendChatSchema, { msg: 'Hello world' }),
       },
     })];
   }
-  return create(program.StepResponseSchema, { state: state.slice(), effects });
+  return create(StepResponseSchema, { state: state.slice(), effects });
 };
 
-export const echoHandler: Program = function handle(state, event) {
-  let effects: Effects.Effect[] = [];
-  if (event.event.case === 'chatMessage') {
+export const echoHandler: Program = function handle(state, { event }) {
+  let effects: Effect[] = [];
+  if (event.case === 'chatMessage') {
     state[1]++;
-    if (event.event.value.message == 'off') {
-      effects = [create(Effects.EffectSchema, {
+    if (event.value.message == 'off') {
+      effects = [create(EffectSchema, {
         effect: {
           case: 'setRedstonePower',
-          value: create(Effects.SetRedstonePowerSchema, {
+          value: create(SetRedstonePowerSchema, {
             observerColor: DyeColor.BLACK,
             powerLevel: 0,
           }),
         },
       })];
-    } else if (event.event.value.message == 'on') {
-      effects = [create(Effects.EffectSchema, {
+    } else if (event.value.message == 'on') {
+      effects = [create(EffectSchema, {
         effect: {
           case: 'setRedstonePower',
-          value: create(Effects.SetRedstonePowerSchema, {
+          value: create(SetRedstonePowerSchema, {
             observerColor: DyeColor.BLACK,
             powerLevel: 15,
           }),
         },
       })];
     } else {
-      effects = [create(Effects.EffectSchema, {
+      effects = [create(EffectSchema, {
         effect: {
           case: 'sendChat',
-          value: create(Effects.SendChatSchema, {
-            msg: `Echo (${state[1]}) ${event.event.value.playerName}: ${event.event.value.message}`,
+          value: create(SendChatSchema, {
+            msg: `Echo (${state[1]}) ${event.value.playerName}: ${event.value.message}`,
           }),
         },
       })];
     }
-  } else if (event.event.case === 'blockStateChange') {
-    const v = event.event.value;
+  } else if (event.case === 'blockStateChange') {
+    const v = event.value;
     const props = JSON.stringify(v.newState?.properties);
     const msg =
       `Observer colored ${v.observerColor} saw block change: ${v.newState?.blockType?.path} ${props}`;
     console.info(msg);
   } else if (
-    event.event.case === 'wirelessObserverPaired' || event.event.case == 'wirelessObserverUnpaired'
+    event.case === 'wirelessObserverPaired' || event.case == 'wirelessObserverUnpaired'
   ) {
-    const ev = event.event.value;
-    const msg = `${event.event.case}: ${ev.observerId} ${ev.observerColor} ${
+    const ev = event.value;
+    const msg = `${event.case}: ${ev.observerId} ${ev.observerColor} ${
       JSON.stringify(ev.observerPos)
     }`;
     console.info(msg);
-    if (event.event.case === 'wirelessObserverPaired' && ev.observerColor === DyeColor.BLACK) {
-      const { observerId } = event.event.value;
-      effects.push(create(Effects.EffectSchema, {
+    if (event.case === 'wirelessObserverPaired' && ev.observerColor === DyeColor.BLACK) {
+      const { observerId } = event.value;
+      effects.push(create(EffectSchema, {
         effect: {
           case: 'setRedstonePower',
-          value: create(Effects.SetRedstonePowerSchema, {
+          value: create(SetRedstonePowerSchema, {
             observerId,
             powerLevel: 15,
           }),
@@ -93,7 +96,7 @@ export const echoHandler: Program = function handle(state, event) {
       }));
     }
   }
-  return create(program.StepResponseSchema, { state: state.slice(), effects });
+  return create(StepResponseSchema, { state: state.slice(), effects });
 };
 
 export const hangHandler: Program = function handle(state, event) {
@@ -103,10 +106,10 @@ export const hangHandler: Program = function handle(state, event) {
       // Intentionally never completes; used to test Main Worker robustness.
     }
   }
-  return create(program.StepResponseSchema, { state: state.slice(), effects: [] });
+  return create(StepResponseSchema, { state: state.slice(), effects: [] });
 };
 
-export const handle: Program = function handle(state, event, context) {
+export const program: Program = function handle(state, event, context) {
   switch (state[0]) {
     case HELLO:
       return helloHandler(state, event, context);
@@ -119,7 +122,7 @@ export const handle: Program = function handle(state, event, context) {
     case BIGSTATE:
       return bigstateHandler(state, event, context);
     default:
-      return create(program.StepResponseSchema, { state: state.slice(), effects: [] });
+      return create(StepResponseSchema, { state: state.slice(), effects: [] });
   }
 };
 
@@ -133,12 +136,12 @@ export const startStates: StartStates = {
 };
 
 export function createExampleProgramApiHandler(): (request: Request) => Promise<Response> {
-  const handler = createProgramApiHandler({ program: handle, startStates });
+  const handler = createProgramApiHandler({ program, startStates });
   return async (request) => {
     if (request.method === 'POST' && new URL(request.url).pathname === '/nextState') {
       try {
         const step = fromBinary(
-          program.StepRequestSchema,
+          StepRequestSchema,
           new Uint8Array(await request.clone().arrayBuffer()),
         );
         if (step.state[0] === BIGRESPONSE && step.event?.event.case === 'chatMessage') {

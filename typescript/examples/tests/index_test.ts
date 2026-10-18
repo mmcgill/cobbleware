@@ -10,7 +10,7 @@ import {
   StartedSchema,
 } from '@cobbleware/core/events';
 import { StepRequestSchema } from '@cobbleware/core/program';
-import { createExampleProgramApiHandler, handle, startStates } from '../src/index.ts';
+import { createExampleProgramApiHandler, program, startStates } from '../src/index.ts';
 
 Deno.test('hello start state greets on start and is quiet on resume', () => {
   assertStep(
@@ -83,7 +83,7 @@ function assertStep(
   expectedEffect?: 'sendChat',
   expectedMessage?: string,
 ): Uint8Array {
-  const output = handle(state, input, {
+  const output = program(state, input, {
     effectLimit: 50,
     stateSizeLimit: 1024n,
     burstChatTokens: 10,

@@ -1,10 +1,13 @@
 import { create, type Program } from '@cobbleware/core';
-import * as Common from '@cobbleware/core/common';
-import * as Effects from '@cobbleware/core/effects';
-import * as Events from '@cobbleware/core/events';
-import * as program from '@cobbleware/core/program';
-
-const { DyeColor } = Common;
+import { DyeColor, type Uuid, UuidSchema } from '@cobbleware/core/common';
+import {
+  type Effect,
+  EffectSchema,
+  SendChatSchema,
+  SetRedstonePowerSchema,
+} from '@cobbleware/core/effects';
+import type { BlockStateChange, Event, WirelessObserverPaired } from '@cobbleware/core/events';
+import { type StepResponse, StepResponseSchema } from '@cobbleware/core/program';
 
 export const CONWAY = 4;
 const STATE_VERSION = 1;
@@ -125,14 +128,14 @@ export function createSimulationState(
 
 function handleInit(
   state: ConwayInitState,
-  event: Events.Event,
+  { event }: Event,
   effectLimit: number,
-): program.StepResponse {
+): StepResponse {
   if (
-    event.event.case === 'wirelessObserverPaired' &&
-    event.event.value.observerColor === DyeColor.BLACK
+    event.case === 'wirelessObserverPaired' &&
+    event.value.observerColor === DyeColor.BLACK
   ) {
-    const observer = observerFromEvent(event.event.value);
+    const observer = observerFromEvent(event.value);
     if (observer !== undefined) {
       const observers = state.observers.filter((candidate) => candidate.id !== observer.id);
       observers.push(observer);
@@ -150,10 +153,10 @@ function handleInit(
   }
 
   if (
-    event.event.case === 'wirelessObserverUnpaired' &&
-    event.event.value.observerColor === DyeColor.BLACK
+    event.case === 'wirelessObserverUnpaired' &&
+    event.value.observerColor === DyeColor.BLACK
   ) {
-    const id = uuidKey(event.event.value.observerId);
+    const id = uuidKey(event.value.observerId);
     if (id !== undefined) {
       const lastSeenBlocks = { ...state.lastSeenBlocks };
       delete lastSeenBlocks[id];
@@ -167,9 +170,9 @@ function handleInit(
   }
 
   if (
-    (event.event.case === 'blockStateChange' &&
-      event.event.value.observerColor === DyeColor.GREEN && isPowered(event.event.value, true)) ||
-    (event.event.case === 'chatMessage' && event.event.value.message === 'sim')
+    (event.case === 'blockStateChange' &&
+      event.value.observerColor === DyeColor.GREEN && isPowered(event.value, true)) ||
+    (event.case === 'chatMessage' && event.value.message === 'sim')
   ) {
     const simulation = state.board === undefined
       ? createSimulationState(state.observers, state.lastSeenBlocks)
@@ -186,13 +189,13 @@ function handleInit(
 
 function handleSimulation(
   state: ConwaySimulationState,
-  event: Events.Event,
+  { event }: Event,
   effectLimit: number,
-): program.StepResponse {
+): StepResponse {
   if (
-    (event.event.case === 'blockStateChange' &&
-      event.event.value.observerColor === DyeColor.GREEN && isPowered(event.event.value, false)) ||
-    (event.event.case === 'chatMessage' && event.event.value.message === 'init')
+    (event.case === 'blockStateChange' &&
+      event.value.observerColor === DyeColor.GREEN && isPowered(event.value, false)) ||
+    (event.case === 'chatMessage' && event.value.message === 'init')
   ) {
     return drainAndRespond({
       ...emptyInitState(),
@@ -202,9 +205,9 @@ function handleSimulation(
     }, effectLimit);
   }
 
-  const steps = (event.event.case === 'blockStateChange' &&
-    event.event.value.observerColor === DyeColor.BLUE) ||
-    (event.event.case === 'chatMessage' && event.event.value.message === 'step');
+  const steps = (event.case === 'blockStateChange' &&
+    event.value.observerColor === DyeColor.BLUE) ||
+    (event.case === 'chatMessage' && event.value.message === 'step');
   if (!steps) return drainAndRespond(state, effectLimit);
 
   const drained = drainPending(state, effectLimit);
@@ -225,7 +228,7 @@ function configureBoard(
   state: ConwayState,
   command: ConfigurationCommand,
   effectLimit: number,
-): program.StepResponse {
+): StepResponse {
   const board = state.mode === 'init' ? createBoard(state.observers) : boardFrom(state);
   const alive = command === 'clear'
     ? []
@@ -308,14 +311,14 @@ function displayOperations(board: ConwayBoard): PendingOperation[] {
   return [{ type: 'clear' }, ...changedCellOperations(board.cells, [], board.alive)];
 }
 
-function rememberBlackBlockState<T extends ConwayState>(state: T, event: Events.Event): T {
+function rememberBlackBlockState<T extends ConwayState>(state: T, { event }: Event): T {
   if (
-    event.event.case !== 'blockStateChange' || event.event.value.observerColor !== DyeColor.BLACK
+    event.case !== 'blockStateChange' || event.value.observerColor !== DyeColor.BLACK
   ) {
     return state;
   }
-  const id = uuidKey(event.event.value.observerId);
-  const blockType = blockTypeFromEvent(event.event.value);
+  const id = uuidKey(event.value.observerId);
+  const blockType = blockTypeFromEvent(event.value);
   if (
     id === undefined || blockType === undefined ||
     !state.observers.some((observer) => observer.id === id)
@@ -325,13 +328,13 @@ function rememberBlackBlockState<T extends ConwayState>(state: T, event: Events.
   return { ...state, lastSeenBlocks: { ...state.lastSeenBlocks, [id]: blockType } };
 }
 
-function configurationCommand(event: Events.Event): ConfigurationCommand | undefined {
-  if (event.event.case !== 'chatMessage') return undefined;
-  switch (event.event.value.message) {
+function configurationCommand({ event }: Event): ConfigurationCommand | undefined {
+  if (event.case !== 'chatMessage') return undefined;
+  switch (event.value.message) {
     case 'clear':
     case 'randomize':
     case 'template':
-      return event.event.value.message;
+      return event.value.message;
     default:
       return undefined;
   }
@@ -405,7 +408,7 @@ function changedCellOperations(
 function drainAndRespond<T extends ConwayState>(
   state: T,
   effectLimit: number,
-): program.StepResponse {
+): StepResponse {
   const drained = drainPending(state, effectLimit);
   return response(drained.state, drained.effects);
 }
@@ -413,7 +416,7 @@ function drainAndRespond<T extends ConwayState>(
 function drainPending<T extends { pending: PendingOperation[] }>(
   state: T,
   effectLimit: number,
-): { state: T; effects: Effects.Effect[] } {
+): { state: T; effects: Effect[] } {
   const count = Math.min(state.pending.length, Math.max(0, Math.floor(effectLimit)));
   return {
     state: { ...state, pending: state.pending.slice(count) },
@@ -421,12 +424,12 @@ function drainPending<T extends { pending: PendingOperation[] }>(
   };
 }
 
-function effectForOperation(operation: PendingOperation): Effects.Effect {
+function effectForOperation(operation: PendingOperation): Effect {
   if (operation.type === 'clear') {
-    return create(Effects.EffectSchema, {
+    return create(EffectSchema, {
       effect: {
         case: 'setRedstonePower',
-        value: create(Effects.SetRedstonePowerSchema, {
+        value: create(SetRedstonePowerSchema, {
           observerColor: DyeColor.BLACK,
           powerLevel: 0,
         }),
@@ -434,17 +437,17 @@ function effectForOperation(operation: PendingOperation): Effects.Effect {
     });
   }
   if (operation.type === 'chat') {
-    return create(Effects.EffectSchema, {
+    return create(EffectSchema, {
       effect: {
         case: 'sendChat',
-        value: create(Effects.SendChatSchema, { msg: operation.message }),
+        value: create(SendChatSchema, { msg: operation.message }),
       },
     });
   }
-  return create(Effects.EffectSchema, {
+  return create(EffectSchema, {
     effect: {
       case: 'setRedstonePower',
-      value: create(Effects.SetRedstonePowerSchema, {
+      value: create(SetRedstonePowerSchema, {
         observerId: uuidFromKey(operation.observerId),
         powerLevel: operation.powered ? 15 : 0,
       }),
@@ -452,11 +455,11 @@ function effectForOperation(operation: PendingOperation): Effects.Effect {
   });
 }
 
-function response(state: ConwayState, effects: Effects.Effect[]): program.StepResponse {
-  return create(program.StepResponseSchema, { state: encodeConwayState(state), effects });
+function response(state: ConwayState, effects: Effect[]): StepResponse {
+  return create(StepResponseSchema, { state: encodeConwayState(state), effects });
 }
 
-function observerFromEvent(event: Events.WirelessObserverPaired): ConwayObserver | undefined {
+function observerFromEvent(event: WirelessObserverPaired): ConwayObserver | undefined {
   const id = uuidKey(event.observerId);
   const position = event.observerPos?.position;
   const dimension = event.observerPos?.dimension;
@@ -468,7 +471,7 @@ function observerFromEvent(event: Events.WirelessObserverPaired): ConwayObserver
   };
 }
 
-function blockTypeFromEvent(event: Events.BlockStateChange): BlockType | undefined {
+function blockTypeFromEvent(event: BlockStateChange): BlockType | undefined {
   const blockType = event.newState?.blockType;
   if (
     blockType === undefined || typeof blockType.ns !== 'string' ||
@@ -479,17 +482,17 @@ function blockTypeFromEvent(event: Events.BlockStateChange): BlockType | undefin
   return { ns: blockType.ns, path: blockType.path };
 }
 
-function isPowered(event: Events.BlockStateChange, powered: boolean): boolean {
+function isPowered(event: BlockStateChange, powered: boolean): boolean {
   return event.newState?.properties.powered === String(powered);
 }
 
-function uuidKey(uuid: Common.Uuid | undefined): string | undefined {
+function uuidKey(uuid: Uuid | undefined): string | undefined {
   if (uuid === undefined) return undefined;
   return `${uuid.high.toString(16).padStart(16, '0')}${uuid.low.toString(16).padStart(16, '0')}`;
 }
 
-function uuidFromKey(key: string): Common.Uuid {
-  return create(Common.UuidSchema, {
+function uuidFromKey(key: string): Uuid {
+  return create(UuidSchema, {
     high: BigInt(`0x${key.slice(0, 16)}`),
     low: BigInt(`0x${key.slice(16)}`),
   });

@@ -1,4 +1,4 @@
-import { type Program } from '@cobbleware/core';
+import type { Program } from '@cobbleware/core';
 import { create } from '@bufbuild/protobuf';
 import * as program from '@cobbleware/core/program';
 
@@ -8,8 +8,7 @@ export const BIGSTATE = 5;
 
 export const bigstateStartState: Uint8Array = new Uint8Array([BIGSTATE]);
 
-export const bigstateHandler: Program = (state, e, _context) => {
-  const { event } = e;
+export const bigstateHandler: Program = (state, { event }, _context) => {
   if (event.case === 'chatMessage' && event.value.message.toLowerCase() === 'bigger') {
     const biggerlength = state.length + STATE_INCREASE_SIZE_BYTES;
     console.log(`Enlarging state from ${state.length} bytes to ${biggerlength} bytes`);
