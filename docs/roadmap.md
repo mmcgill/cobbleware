@@ -1,6 +1,6 @@
 # Tentative Implementation Roadmap
 
-Here's a rough sketch of the current plan to getting something working end-to-end:
+Here's a rough sketch of the current plan to getting something releasable as an Alpha:
 
 * [x] Get Mod authentication and the `/modapi/v1/authentication` endpoint implemented.
 * [x] Get the `/playerapi/v1/authenticate` endpoint implemented.
@@ -32,13 +32,34 @@ Here's a rough sketch of the current plan to getting something working end-to-en
   * [x] Per-player chat rate limit
   * [x] Per-player log rate limit
   * [x] Per-step response size limit
-* [ ] Cobbleputer art assets
-* [ ] Wireless Observer art assets
-* [ ] Bundling the runtime in the Mod
-  * [ ] Bundling: getting the runtime and workers into the Mod Jar
+* [ ] Art assets
+  * [ ] Cobbleputer
+  * [ ] Wireless Observer
+  * [ ] Cobblemeter
+* [ ] Recipies
+  * [ ] Cobbleputer
+  * [ ] Wireless Observer
+  * [ ] Cobblemeter
+* [ ] Runtime distribution
+  * [ ] Build/release for forked runtime
     * [x] Windows
-    * [ ] Linux
+    * [x] Linux
     * [ ] Mac
-  * [ ] Lazy unpacking at mod execution time as necessary
-  * [ ] Putting the Mod in charge of the Runtime process 
-  * [ ] Preserving a good Development workflow
+  * [x] Lazy downloading/unpacking at mod execution time as necessary
+  * [x] Putting the Mod in charge of the Runtime process 
+  * [x] Preserving a good Development workflow
+* [x] Mod build/release process
+* [x] NPM package and release process for `@cobbleware/core`
+* [ ] Docs
+  * [ ] Mod admin guide
+  * [ ] Programming guide
+  * [x] Generated reference docs
+* [ ] Curseforge / Modrinth submissions
+
+
+Post-alpha features:
+
+* [ ] IDE integrated in Browser UI
+* [ ] Outbound network connectivity
+  * [ ] Per-player quotas on connections/bandwidth
+  * [ ] Admin control over allow/deny lists, abuse protection
